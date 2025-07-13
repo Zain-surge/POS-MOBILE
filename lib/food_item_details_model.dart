@@ -1,3 +1,5 @@
+// lib/food_item_details_model.dart
+
 import 'package:flutter/material.dart';
 import 'package:epos/models/food_item.dart';
 import 'package:epos/models/cart_item.dart';
@@ -30,28 +32,24 @@ class FoodItemDetailsModal extends StatefulWidget {
 }
 
 class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
-  late double _currentPrice;
+  late double _calculatedPricePerUnit;
   int _quantity = 1;
-  String _selectedOptionCategory = 'Toppings'; // Default selected category
+  String _selectedOptionCategory = 'Toppings';
 
-  // Pizza/Garlic Bread specific
   String? _selectedSize;
   Set<String> _selectedToppings = {};
   String? _selectedBase;
   String? _selectedCrust;
   Set<String> _selectedSauces = {};
 
-  // Shawarma/Wraps/Burgers specific
   bool _makeItAMeal = false;
   String? _selectedDrink;
 
-  // Burgers specific
   bool _noSalad = false;
   bool _noSauce = false;
 
   final TextEditingController _reviewNotesController = TextEditingController();
 
-  // All possible options
   final List<String> _allToppings = [
     "Mushrooms", "Artichoke", "Carcioffi", "Onion", "Red onion", "Green chillies",
     "Red pepper", "Pepper", "Rocket", "Spinach", "Parsley", "Fresh cherry tomatoes",
@@ -67,19 +65,16 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     "Coca Cola", "7Up", "Diet Coca Cola", "Fanta", "Pepsi", "Sprite",
   ];
 
-  // New state variables for quantity button press feedback
   bool _isRemoveButtonPressed = false;
   bool _isAddButtonPressed = false;
-
 
   @override
   void initState() {
     super.initState();
     if (widget.foodItem.price.isNotEmpty) {
       _selectedSize = widget.foodItem.price.keys.first;
-      _currentPrice = widget.foodItem.price[_selectedSize] ?? 0.0;
     } else {
-      _currentPrice = 0.0;
+      _selectedSize = null;
     }
 
     if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads') {
@@ -89,7 +84,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       debugPrint("Default Toppings from FoodItem: ${widget.foodItem.defaultToppings}");
       debugPrint("Default Cheese from FoodItem: ${widget.foodItem.defaultCheese}");
 
-      // Populate _selectedToppings with default toppings and cheese
       if (widget.foodItem.defaultToppings != null) {
         _selectedToppings.addAll(widget.foodItem.defaultToppings!);
       }
@@ -97,9 +91,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         _selectedToppings.addAll(widget.foodItem.defaultCheese!);
       }
     }
-    _calculatePrice();
+    _calculatedPricePerUnit = _calculatePricePerUnit();
   }
-
 
   @override
   void dispose() {
@@ -107,13 +100,13 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     super.dispose();
   }
 
-  void _calculatePrice() {
+  double _calculatePricePerUnit() {
     double price = 0.0;
 
     if (_selectedSize != null && widget.foodItem.price.containsKey(_selectedSize)) {
-      price += widget.foodItem.price[_selectedSize] ?? 0.0;
+      price = widget.foodItem.price[_selectedSize] ?? 0.0;
     } else if (widget.foodItem.price.isNotEmpty) {
-      price += widget.foodItem.price.values.firstOrNull ?? 0.0;
+      price = widget.foodItem.price.values.firstOrNull ?? 0.0;
     }
 
     if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads') {
@@ -162,8 +155,12 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       }
     }
 
+    return price;
+  }
+
+  void _updatePriceDisplay() {
     setState(() {
-      _currentPrice = price * _quantity;
+      _calculatedPricePerUnit = _calculatePricePerUnit();
     });
   }
 
@@ -206,7 +203,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       if (_noSauce) selectedOptions.add('No Sauce');
     }
 
-
     final String userComment = _reviewNotesController.text.trim();
 
     final cartItem = CartItem(
@@ -214,6 +210,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       quantity: _quantity,
       selectedOptions: selectedOptions.isEmpty ? null : selectedOptions,
       comment: userComment.isNotEmpty ? userComment : null,
+      pricePerUnit: _calculatedPricePerUnit,
     );
 
     widget.onAddToCart(cartItem);
@@ -222,7 +219,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
 
   @override
   Widget build(BuildContext context) {
-
     final List<String> reorderedToppings = List.from(_allToppings);
     reorderedToppings.sort((a, b) {
       final isDefaultA = (widget.foodItem.defaultToppings ?? []).contains(a) ||
@@ -251,7 +247,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       ),
       child: Column(
         children: [
-          // Modal Header - Item Name
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
             decoration: const BoxDecoration(
@@ -296,7 +291,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
             ),
           ),
 
-          // Modal Content
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
@@ -304,16 +298,20 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Size Selection with Quantity Controls
-                  if (['Pizza', 'Garlic Breads', 'Shawarmas', 'Wraps', 'Burgers'].contains(widget.foodItem.category) &&
-                      widget.foodItem.price.keys.length > 1)
-                    _buildSizeWithQuantitySection(),
+                  // Use the spread operator to make sure this always results in a list
+                  // of widgets, even if there's only one. This handles the comma issue.
+                  ...(
+                      (['Pizza', 'Garlic Breads', 'Shawarmas', 'Wraps', 'Burgers'].contains(widget.foodItem.category) &&
+                          widget.foodItem.price.keys.length > 1)
+                          ? [_buildSizeWithQuantitySection()] // If true, return a list with this widget
+                          : [_buildQuantityControlOnly()]      // If false, return a list with this widget
+                  ),
 
-                  // Option Category Buttons and Options Display for Pizza/Garlic Breads
+
                   if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads') ...[
                     _buildOptionCategoryButtons(),
                     _buildSelectedOptionDisplay(),
                   ] else if (widget.foodItem.category == 'Shawarmas' || widget.foodItem.category == 'Wraps' || widget.foodItem.category == 'Burgers') ...[
-                    // "Make it a meal" option
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -326,7 +324,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                                 setState(() {
                                   _makeItAMeal = value!;
                                   _selectedDrink = null;
-                                  _calculatePrice();
+                                  _updatePriceDisplay();
                                 });
                               },
                               activeColor: const Color(0xFFCB6CE6),
@@ -373,7 +371,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                     ),
                   ],
 
-                  // Burger specific options
                   if (widget.foodItem.category == 'Burgers') ...[
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -411,7 +408,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                     ),
                   ],
 
-                  // Review Notes
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -451,7 +447,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
             ),
           ),
 
-          // Modal Footer
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -466,7 +461,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Total: €${_currentPrice.toStringAsFixed(2)}',
+                  'Total: €${(_calculatedPricePerUnit * _quantity).toStringAsFixed(2)}',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -513,6 +508,112 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     );
   }
 
+  Widget _buildQuantityControlOnly() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            InkWell(
+              onTapDown: (_) {
+                setState(() {
+                  _isRemoveButtonPressed = true;
+                });
+              },
+              onTapUp: (_) {
+                setState(() {
+                  _isRemoveButtonPressed = false;
+                });
+              },
+              onTapCancel: () {
+                setState(() {
+                  _isRemoveButtonPressed = false;
+                });
+              },
+              onTap: () {
+                setState(() {
+                  if (_quantity > 1) {
+                    _quantity--;
+                  }
+                });
+              },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _isRemoveButtonPressed ? Colors.grey : Colors.black,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.grey),
+                ),
+                child: const Icon(
+                  Icons.remove,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+            ),
+            Container(
+              width: 50,
+              height: 40,
+              margin: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: Colors.grey[300]!),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                '$_quantity',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            InkWell(
+              onTapDown: (_) {
+                setState(() {
+                  _isAddButtonPressed = true;
+                });
+              },
+              onTapUp: (_) {
+                setState(() {
+                  _isAddButtonPressed = false;
+                });
+              },
+              onTapCancel: () {
+                setState(() {
+                  _isAddButtonPressed = false;
+                });
+              },
+              onTap: () {
+                setState(() {
+                  _quantity++;
+                });
+              },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _isAddButtonPressed ? Colors.grey : Colors.black,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.grey),
+                ),
+                child: const Icon(
+                  Icons.add,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
   Widget _buildSizeWithQuantitySection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -520,7 +621,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Size Label
             Container(
               width: 120,
               padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
@@ -538,21 +638,19 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               ),
             ),
             const SizedBox(width: 15),
-
-            // Size Options
             Expanded(
-              flex: 2, // Give it more flex to occupy available space
+              flex: 2,
               child: Wrap(
                 spacing: 10,
                 runSpacing: 10,
                 children: widget.foodItem.price.keys.map((size) {
                   final bool isActive = _selectedSize == size;
-                  final String displaySize = size.split(' ')[0]; // Extracts "10" from "10 inch"
+                  final String displaySize = size.split(' ')[0];
                   return InkWell(
                     onTap: () {
                       setState(() {
                         _selectedSize = size;
-                        _calculatePrice();
+                        _updatePriceDisplay();
                       });
                     },
                     child: Container(
@@ -577,15 +675,12 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                 }).toList(),
               ),
             ),
-
-            // Quantity Controls
-            Expanded( // <--- Added Expanded here
-              flex: 1, // Give it less flex than size options, adjust as needed
+            Expanded(
+              flex: 1,
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.end, // <--- Key change: push to end
-                mainAxisSize: MainAxisSize.min, // Keep row content compact
+                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Decrease Button
                   InkWell(
                     onTapDown: (_) {
                       setState(() {
@@ -606,7 +701,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       setState(() {
                         if (_quantity > 1) {
                           _quantity--;
-                          _calculatePrice();
                         }
                       });
                     },
@@ -625,8 +719,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       ),
                     ),
                   ),
-
-                  // Quantity Display
                   Container(
                     width: 50,
                     height: 40,
@@ -645,8 +737,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       ),
                     ),
                   ),
-
-                  // Increase Button
                   InkWell(
                     onTapDown: (_) {
                       setState(() {
@@ -666,7 +756,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                     onTap: () {
                       setState(() {
                         _quantity++;
-                        _calculatePrice();
                       });
                     },
                     child: Container(
@@ -803,7 +892,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                     } else {
                       _selectedToppings.add(topping);
                     }
-                    _calculatePrice();
+                    _updatePriceDisplay();
                   });
                 },
                 child: Container(
@@ -848,13 +937,13 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               onTap: () {
                 setState(() {
                   _selectedBase = base;
-                  _calculatePrice();
+                  _updatePriceDisplay();
                 });
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isActive ? Colors.grey : Colors.black, // Active base is grey
+                  color: isActive ? Colors.grey : Colors.black,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -886,13 +975,13 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               onTap: () {
                 setState(() {
                   _selectedCrust = crust;
-                  _calculatePrice();
+                  _updatePriceDisplay();
                 });
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isActive ? Colors.grey : Colors.black, // Active crust is grey
+                  color: isActive ? Colors.grey : Colors.black,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -928,13 +1017,13 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                   } else {
                     _selectedSauces.add(sauce);
                   }
-                  _calculatePrice();
+                  _updatePriceDisplay();
                 });
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isActive ? const Color(0xFFCB6CE6) : Colors.black, // Active sauce is purple
+                  color: isActive ? Colors.grey : Colors.black,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(

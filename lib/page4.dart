@@ -141,11 +141,8 @@ class _Page4State extends State<Page4> {
   double _calculateTotalPrice() {
     double total = 0.0;
     for (var item in _cartItems) {
-      // Use null-aware operator and provide a default value if price map is empty or key doesn't exist
-      double itemPricePerUnit = item.foodItem.price.isNotEmpty
-          ? (item.foodItem.price.values.firstOrNull ?? 0.0) // Access first value, or 0.0
-          : 0.0;
-      total += itemPricePerUnit * item.quantity;
+      // Use the calculated pricePerUnit from the CartItem itself
+      total += item.pricePerUnit * item.quantity;
     }
     return total;
   }
@@ -196,12 +193,8 @@ class _Page4State extends State<Page4> {
           description += ' (${cartItem.selectedOptions!.join(', ')})';
         }
 
-        // Use null-aware operator for price access
-        double itemPricePerUnit = cartItem.foodItem.price.isNotEmpty
-            ? (cartItem.foodItem.price.values.firstOrNull ?? 0.0)
-            : 0.0;
-
-        double itemTotalPrice = double.parse((itemPricePerUnit * cartItem.quantity).toStringAsFixed(2));
+// Use the calculated pricePerUnit from the CartItem itself
+        double itemTotalPrice = double.parse((cartItem.pricePerUnit * cartItem.quantity).toStringAsFixed(2));
 
         return {
           "item_id": cartItem.foodItem.id,
