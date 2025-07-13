@@ -1,3 +1,4 @@
+import 'package:epos/settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:epos/models/order.dart'; // Ensure Order model is correctly defined AND UPDATED
 import 'package:epos/dynamic_order_list_screen.dart'; // Ensure this file exists
@@ -767,8 +768,13 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                 onTap: () {
                   setState(() {
                     _selectedBottomNavItem = 5;
-                    // Add navigation to your "More" screen here if it exists
-                    debugPrint("WebsiteOrdersScreen: More button tapped.");
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (context) => const SettingsScreen(
+                          initialBottomNavItemIndex: 5,
+                        ),
+                      ),
+                    );
                   });
                 },
               ),

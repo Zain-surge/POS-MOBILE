@@ -22,6 +22,8 @@ class ShopStatusData {
 
 class OrderApiService {
   // Base URL for HTTP requests (using the new thingproxy)
+  // IMPORTANT: The backend URL should be appended AFTER the proxy URL,
+  // as the proxy itself takes the target URL as part of its path.
   static const String _httpProxyUrl = 'https://thingproxy.freeboard.io/fetch/';
   static const String _backendBaseUrl = 'https://thevillage-backend.onrender.com';
 
@@ -60,13 +62,14 @@ class OrderApiService {
   }
 
   void _initSocket() {
+    // Socket.IO typically connects directly, no proxy needed here
     _socket = IO.io(
-      _backendBaseUrl,
+      _backendBaseUrl, // Use the direct backend URL for sockets
       IO.OptionBuilder()
-          .setTransports(['websocket'])
-          .enableForceNewConnection()
-          .enableAutoConnect()
-          .setExtraHeaders({'withCredentials': 'true'})
+          .setTransports(['websocket']) // Use WebSocket
+          .enableForceNewConnection() // Important for hot reload/reconnection
+          .enableAutoConnect() // Enable auto connection
+          .setExtraHeaders({'withCredentials': 'true'}) // Pass credentials if needed
           .build(),
     );
 
@@ -145,7 +148,7 @@ class OrderApiService {
     return Uri.parse('$_httpProxyUrl$_backendBaseUrl$path');
   }
 
-  // --- HTTP Methods ---
+  // --- HTTP Methods (now using the new proxy) ---
 
   static Future<List<Order>> fetchTodayOrders() async {
     final url = _buildProxyUrl('/orders/today'); // Use the helper

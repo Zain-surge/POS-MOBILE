@@ -1,6 +1,7 @@
 // lib/page3.dart
 
 import 'package:epos/page4.dart';
+import 'package:epos/settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:epos/bottom_nav_item.dart';
 import 'package:epos/dynamic_order_list_screen.dart';
@@ -11,16 +12,15 @@ import 'package:epos/active_orders_list.dart';
 class Page3 extends StatefulWidget {
   final List<FoodItem> foodItems;
 
-  const Page3({
-    super.key,
-    required this.foodItems,
-  });
+  const Page3(
+      {super.key, required this.foodItems,});
 
   @override
   State<Page3> createState() => _Page3State();
 }
 
 class _Page3State extends State<Page3> {
+
   int _selectedBottomNavItem = 4;
 
   @override
@@ -194,7 +194,16 @@ class _Page3State extends State<Page3> {
                     index: 5,
                     selectedIndex: _selectedBottomNavItem,
                     onTap: () {
-                      print("Page3: More button tapped.");
+                      setState(() {
+                        _selectedBottomNavItem = 5;
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (context) => const SettingsScreen(
+                              initialBottomNavItemIndex: 5,
+                            ),
+                          ),
+                        );
+                      });
                     },
                   ),
                 ],

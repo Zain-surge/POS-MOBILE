@@ -41,7 +41,7 @@ class BottomNavItem extends StatelessWidget {
     } else if (index == 4) {
       displayImage = 'home.png';
     } else if (index == 5) {
-      displayImage = isSelected ? 'Morewhite.png' : 'More.png';
+      displayImage = isSelected ? 'More.png' : 'More.png';
     }
 
 
