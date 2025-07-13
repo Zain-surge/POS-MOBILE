@@ -28,7 +28,6 @@ dependencies:
   thermal_printer: ^1.0.5
   esc_pos_utils: ^1.1.0
   esc_pos_utils_plus: ^2.0.4
-  flutter_bluetooth_serial: ^0.4.0
   usb_serial: ^0.5.2
 
 dev_dependencies:
