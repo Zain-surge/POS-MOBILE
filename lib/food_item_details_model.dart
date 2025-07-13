@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:epos/models/food_item.dart';
 import 'package:epos/models/cart_item.dart';
+import 'dart:math';
 
 // Assuming HexColor extension is in a common utility file or defined here
 extension HexColor on Color {
@@ -15,11 +16,13 @@ extension HexColor on Color {
 class FoodItemDetailsModal extends StatefulWidget {
   final FoodItem foodItem;
   final Function(CartItem) onAddToCart;
+  final VoidCallback? onClose;
 
   const FoodItemDetailsModal({
     super.key,
     required this.foodItem,
     required this.onAddToCart,
+    this.onClose,
   });
 
   @override
@@ -29,6 +32,7 @@ class FoodItemDetailsModal extends StatefulWidget {
 class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   late double _currentPrice;
   int _quantity = 1;
+  String _selectedOptionCategory = 'Toppings'; // Default selected category
 
   // Pizza/Garlic Bread specific
   String? _selectedSize;
@@ -63,7 +67,10 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     "Coca Cola", "7Up", "Diet Coca Cola", "Fanta", "Pepsi", "Sprite",
   ];
 
-  bool _showAllToppings = false;
+  // New state variables for quantity button press feedback
+  bool _isRemoveButtonPressed = false;
+  bool _isAddButtonPressed = false;
+
 
   @override
   void initState() {
@@ -79,9 +86,10 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       _selectedBase = "Tomato";
       _selectedCrust = "Normal";
 
-      print(widget.foodItem.defaultToppings);
+      debugPrint("Default Toppings from FoodItem: ${widget.foodItem.defaultToppings}");
+      debugPrint("Default Cheese from FoodItem: ${widget.foodItem.defaultCheese}");
 
-      //Populate _selectedToppings with default toppings and cheese
+      // Populate _selectedToppings with default toppings and cheese
       if (widget.foodItem.defaultToppings != null) {
         _selectedToppings.addAll(widget.foodItem.defaultToppings!);
       }
@@ -105,12 +113,11 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     if (_selectedSize != null && widget.foodItem.price.containsKey(_selectedSize)) {
       price += widget.foodItem.price[_selectedSize] ?? 0.0;
     } else if (widget.foodItem.price.isNotEmpty) {
-      price += widget.foodItem.price.values.first;
+      price += widget.foodItem.price.values.firstOrNull ?? 0.0;
     }
 
     if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads') {
       for (var topping in _selectedToppings) {
-        // Only add cost for toppings that are NOT default
         if (!((widget.foodItem.defaultToppings ?? []).contains(topping) || (widget.foodItem.defaultCheese ?? []).contains(topping))) {
           if (_selectedSize == "10 inch") {
             price += 1.0;
@@ -160,45 +167,33 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     });
   }
 
-  void _toggleToppingVisibility() {
-    setState(() {
-      _showAllToppings = !_showAllToppings;
-    });
-  }
-
   void _closeModal() {
-    Navigator.of(context).pop();
+    widget.onClose?.call();
   }
 
   void _addToCart() {
     final List<String> selectedOptions = [];
 
-    // Add selected size if applicable
     if (_selectedSize != null && widget.foodItem.price.keys.length > 1) {
       selectedOptions.add('Size: $_selectedSize');
     }
 
-    // Add toppings
     if (_selectedToppings.isNotEmpty) {
       selectedOptions.add('Toppings: ${_selectedToppings.join(', ')}');
     }
 
-    // Add base
     if (_selectedBase != null && (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads')) {
       selectedOptions.add('Base: $_selectedBase');
     }
 
-    // Add crust
     if (_selectedCrust != null && (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads')) {
       selectedOptions.add('Crust: $_selectedCrust');
     }
 
-    // Add sauces
     if (_selectedSauces.isNotEmpty && (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads')) {
       selectedOptions.add('Sauce Dips: ${_selectedSauces.join(', ')}');
     }
 
-    // Add meal option and selected drink
     if (_makeItAMeal) {
       selectedOptions.add('Make it a meal');
       if (_selectedDrink != null) {
@@ -206,7 +201,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       }
     }
 
-    // Add burger specific options
     if (widget.foodItem.category == 'Burgers') {
       if (_noSalad) selectedOptions.add('No Salad');
       if (_noSauce) selectedOptions.add('No Sauce');
@@ -222,11 +216,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       comment: userComment.isNotEmpty ? userComment : null,
     );
 
-    // Call the callback to add the item to the cart in Page4
     widget.onAddToCart(cartItem);
-
-    Navigator.of(context).pop(); // Close the modal
-    // Snackbar will be shown from Page4
+    widget.onClose?.call();
   }
 
   @override
@@ -243,545 +234,719 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       return a.compareTo(b);
     });
 
-    return Dialog(
+    final double modalWidth = min(
+      MediaQuery.of(context).size.width * 0.5,
+      800.0,
+    );
 
-      insetPadding: const EdgeInsets.all(0),
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.5,
-        constraints: BoxConstraints(
-          maxWidth: 800,
-          maxHeight: MediaQuery.of(context).size.height * 0.9,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          children: [
-            // Modal Header
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                color: Color(0xFFCB6CE6),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(8),
-                  topRight: Radius.circular(8),
-                ),
+    return Container(
+      width: modalWidth,
+      constraints: BoxConstraints(
+        maxWidth: 800,
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          // Modal Header - Item Name
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(14),
+                topRight: Radius.circular(14),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'ADD ITEM',
-                    style: TextStyle(
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    widget.foodItem.name.toUpperCase(),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  InkWell(
-                    onTap: _closeModal,
-                    child: const Text(
-                      '×',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.normal,
-                      ),
+                ),
+                const Spacer(),
+                InkWell(
+                  onTap: _closeModal,
+                  child: const Text(
+                    '×',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 28,
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
 
-            // Modal Content
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.foodItem.name.toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 50,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Poppins',
-                      ),
-                    ),
-                    const SizedBox(height: 20),
+          // Modal Content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Size Selection with Quantity Controls
+                  if (['Pizza', 'Garlic Breads', 'Shawarmas', 'Wraps', 'Burgers'].contains(widget.foodItem.category) &&
+                      widget.foodItem.price.keys.length > 1)
+                    _buildSizeWithQuantitySection(),
 
-                    // Size Selection
-                    if (['Pizza', 'Garlic Breads', 'Shawarmas', 'Wraps', 'Burgers'].contains(widget.foodItem.category) &&
-                        widget.foodItem.price.keys.length > 1)
-                      _buildOptionSection(
-                        label: 'Size',
-                        options: widget.foodItem.price.keys.toList(),
-                        selectedValue: _selectedSize,
-                        onSelected: (value) {
-                          setState(() {
-                            _selectedSize = value;
-                            _calculatePrice();
-                          });
-                        },
-                      ),
-
-                    // Render options based on category
-                    if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads') ...[
-
-                      _buildOptionSection(
-                        label: 'Toppings',
-                        options: _showAllToppings ? reorderedToppings : reorderedToppings.take(4).toList(),
-                        selectedValues: _selectedToppings,
-                        onToggle: (topping) {
-                          // **Prevent unselecting default toppings**
-                          final isDefault = (widget.foodItem.defaultToppings ?? []).contains(topping) ||
-                              (widget.foodItem.defaultCheese ?? []).contains(topping);
-                          if (isDefault) {
-                            // If it's a default topping, do nothing (don't allow unselection)
-                            return;
-                          }
-                          setState(() {
-                            if (_selectedToppings.contains(topping)) {
-                              _selectedToppings.remove(topping);
-                            } else {
-                              _selectedToppings.add(topping);
-                            }
-                            _calculatePrice();
-                          });
-                        },
-                        showSeeMore: _allToppings.length > 4,
-                        onSeeMore: _toggleToppingVisibility,
-                        // Pass the default checker function to the builder
-                        isDefaultChecker: (topping) => (widget.foodItem.defaultToppings ?? []).contains(topping) || (widget.foodItem.defaultCheese ?? []).contains(topping),
-                        seeMoreButtonLabel: _showAllToppings ? 'Show Less' : 'See More',
-                      ),
-
-
-                      _buildOptionSection(
-                        label: 'Base',
-                        options: _allBases,
-                        selectedValue: _selectedBase,
-                        onSelected: (value) {
-                          setState(() {
-                            _selectedBase = value;
-                            _calculatePrice();
-                          });
-                        },
-                      ),
-                      _buildOptionSection(
-                        label: 'Crust',
-                        options: _allCrusts,
-                        selectedValue: _selectedCrust,
-                        onSelected: (value) {
-                          setState(() {
-                            _selectedCrust = value;
-                            _calculatePrice();
-                          });
-                        },
-                      ),
-                      _buildOptionSection(
-                        label: 'Sauce Dips',
-                        options: _allSauces,
-                        selectedValues: _selectedSauces,
-                        onToggle: (sauce) {
-                          setState(() {
-                            if (_selectedSauces.contains(sauce)) {
-                              _selectedSauces.remove(sauce);
-                            } else {
-                              _selectedSauces.add(sauce);
-                            }
-                            _calculatePrice();
-                          });
-                        },
-                      ),
-                    ] else if (widget.foodItem.category == 'Shawarmas' || widget.foodItem.category == 'Wraps' || widget.foodItem.category == 'Burgers') ...[
-                      // "Make it a meal" option
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Checkbox(
-                                value: _makeItAMeal,
-                                onChanged: (bool? value) {
-                                  setState(() {
-                                    _makeItAMeal = value!;
-                                    _selectedDrink = null;
-                                    _calculatePrice();
-                                  });
-                                },
-                                activeColor: const Color(0xFFCB6CE6),
-                              ),
-                              const Text('Make it a meal ', style: TextStyle(fontSize: 16)),
-                            ],
-                          ),
-                          if (_makeItAMeal) ...[
-                            const SizedBox(height: 8),
-                            const Text('Select Drink', style: TextStyle(fontWeight: FontWeight.normal, fontSize: 16)),
-                            DropdownButtonFormField<String>(
-                              value: _selectedDrink,
-                              hint: const Text('Select a drink'),
-                              items: _allDrinks.map((drink) {
-                                return DropdownMenuItem(
-                                  value: drink,
-                                  child: Text(drink),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                  _selectedDrink = value;
-                                });
-                              },
-                              decoration: InputDecoration(
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(color: Color(0xFFCB6CE6)),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 20),
-                        ],
-                      ),
-                    ],
-
-                    // Burger specific options
-                    if (widget.foodItem.category == 'Burgers') ...[
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Checkbox(
-                                value: _noSalad,
-                                onChanged: (bool? value) {
-                                  setState(() {
-                                    _noSalad = value!;
-                                  });
-                                },
-                                activeColor: const Color(0xFFCB6CE6),
-                              ),
-                              const Text('No Salad', style: TextStyle(fontSize: 16)),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              Checkbox(
-                                value: _noSauce,
-                                onChanged: (bool? value) {
-                                  setState(() {
-                                    _noSauce = value!;
-                                  });
-                                },
-                                activeColor: const Color(0xFFCB6CE6),
-                              ),
-                              const Text('No Sauce', style: TextStyle(fontSize: 16)),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-                      ),
-                    ],
-
-                    // Quantity Control
+                  // Option Category Buttons and Options Display for Pizza/Garlic Breads
+                  if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads') ...[
+                    _buildOptionCategoryButtons(),
+                    _buildSelectedOptionDisplay(),
+                  ] else if (widget.foodItem.category == 'Shawarmas' || widget.foodItem.category == 'Wraps' || widget.foodItem.category == 'Burgers') ...[
+                    // "Make it a meal" option
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Quantity',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            InkWell(
-                              onTap: () {
+                            Checkbox(
+                              value: _makeItAMeal,
+                              onChanged: (bool? value) {
                                 setState(() {
-                                  if (_quantity > 1) {
-                                    _quantity--;
-                                    _calculatePrice();
-                                  }
-                                });
-                              },
-                              child: Container(
-                                width: 50,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[200],
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.grey[300]!),
-                                ),
-                                child: const Icon(Icons.remove, size: 20),
-                              ),
-                            ),
-                            Container(
-                              width: 50,
-                              height: 50,
-                              margin: const EdgeInsets.symmetric(horizontal: 10),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                '$_quantity',
-                                style: const TextStyle(fontSize: 18),
-                              ),
-                            ),
-                            InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _quantity++;
+                                  _makeItAMeal = value!;
+                                  _selectedDrink = null;
                                   _calculatePrice();
                                 });
                               },
-                              child: Container(
-                                width: 50,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[200],
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.grey[300]!),
-                                ),
-                                child: const Icon(Icons.add, size: 20),
-                              ),
+                              activeColor: const Color(0xFFCB6CE6),
                             ),
+                            const Text('Make it a meal ', style: TextStyle(fontSize: 16)),
                           ],
                         ),
+                        if (_makeItAMeal) ...[
+                          const SizedBox(height: 8),
+                          const Text('Select Drink', style: TextStyle(fontWeight: FontWeight.normal, fontSize: 16)),
+                          DropdownButtonFormField<String>(
+                            value: _selectedDrink,
+                            hint: const Text('Select a drink'),
+                            items: _allDrinks.map((drink) {
+                              return DropdownMenuItem(
+                                value: drink,
+                                child: Text(drink),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedDrink = value;
+                              });
+                            },
+                            decoration: InputDecoration(
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: Colors.grey[300]!),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: Colors.grey[300]!),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(color: Color(0xFFCB6CE6)),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 20),
                       ],
                     ),
+                  ],
 
-                    // Review Notes
+                  // Burger specific options
+                  if (widget.foodItem.category == 'Burgers') ...[
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Review Notes',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: _noSalad,
+                              onChanged: (bool? value) {
+                                setState(() {
+                                  _noSalad = value!;
+                                });
+                              },
+                              activeColor: const Color(0xFFCB6CE6),
+                            ),
+                            const Text('No Salad', style: TextStyle(fontSize: 16)),
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _reviewNotesController,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.grey[300]!),
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: _noSauce,
+                              onChanged: (bool? value) {
+                                setState(() {
+                                  _noSauce = value!;
+                                });
+                              },
+                              activeColor: const Color(0xFFCB6CE6),
                             ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.grey[300]!),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: Color(0xFFCB6CE6)),
-                            ),
-                            hintText: 'Add any special requests or notes...',
-                            contentPadding: const EdgeInsets.all(12),
-                          ),
-                          maxLines: 3,
+                            const Text('No Sauce', style: TextStyle(fontSize: 16)),
+                          ],
                         ),
                         const SizedBox(height: 20),
                       ],
                     ),
                   ],
-                ),
-              ),
-            ),
 
-            // Modal Footer
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Colors.grey[200]!)),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(14),
-                  bottomRight: Radius.circular(14),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Total: €${_currentPrice.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Row(
+                  // Review Notes
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ElevatedButton(
-                        onPressed: _closeModal,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey[200],
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(color: Colors.black),
+                      const Text(
+                        'Review Notes',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
                         ),
                       ),
-                      const SizedBox(width: 15),
-                      ElevatedButton(
-                        onPressed: _addToCart,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                          shape: RoundedRectangleBorder(
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _reviewNotesController,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
                           ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: Color(0xFFCB6CE6)),
+                          ),
+                          hintText: 'Add any special requests or notes...',
+                          contentPadding: const EdgeInsets.all(12),
                         ),
-                        child: const Text(
-                          'Add to Cart',
-                          style: TextStyle(color: Colors.white),
-                        ),
+                        maxLines: 3,
                       ),
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+
+          // Modal Footer
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Colors.grey[200]!)),
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(14),
+                bottomRight: Radius.circular(14),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Total: €${_currentPrice.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Row(
+                  children: [
+                    ElevatedButton(
+                      onPressed: _closeModal,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[200],
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(color: Colors.black),
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    ElevatedButton(
+                      onPressed: _addToCart,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text(
+                        'Add to Cart',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // Widget to build Options section
-  Widget _buildOptionSection({
-    required String label,
-    required List<String> options,
-    String? selectedValue,
-    Set<String>? selectedValues,
-    Function(String)? onSelected,
-    Function(String)? onToggle,
-    String Function(String)? suffixText,
-    bool showSeeMore = false,
-    VoidCallback? onSeeMore,
-    bool Function(String)? isDefaultChecker,
-    String seeMoreButtonLabel = 'See More',
-  }) {
-    if (options.isEmpty && !showSeeMore) {
-      return const SizedBox.shrink();
-    }
-
+  Widget _buildSizeWithQuantitySection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
-            SizedBox(
+            // Size Label
+            Container(
               width: 120,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 10.0),
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 16,
-
-                    fontWeight: FontWeight.normal,
-                  ),
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'Size',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.normal,
+                  color: Colors.white,
                 ),
               ),
             ),
             const SizedBox(width: 15),
 
+            // Size Options
             Expanded(
+              flex: 2, // Give it more flex to occupy available space
               child: Wrap(
                 spacing: 10,
                 runSpacing: 10,
-                children: [
-                  ...options.map((option) {
-                    final bool isActive = (selectedValue != null && selectedValue == option) ||
-                        (selectedValues != null && selectedValues.contains(option));
-                    final bool isDefault = isDefaultChecker != null ? isDefaultChecker(option) : false;
-
-                    return InkWell(
-                      // **Modified onTap to prevent unselecting default toppings**
-                      onTap: () {
-                        if (isDefault && (selectedValues != null && selectedValues.contains(option))) {
-                          // If it's a default topping and currently selected, do nothing
-                          return;
-                        }
-                        if (onSelected != null) {
-                          onSelected(option);
-                        }
-                        if (onToggle != null) {
-                          onToggle(option);
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: isActive
-                              ? const Color(0xFFCB6CE6) // Color for selected toppings
-                              : (isDefault ? Colors.grey[400] : Colors.grey[200]), // Slightly darker grey for default but unselectable
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '$option${suffixText != null ? suffixText(option) : ''}',
-                          style: TextStyle(
-                            color: isActive ? Colors.white : Colors.black,
-                          ),
+                children: widget.foodItem.price.keys.map((size) {
+                  final bool isActive = _selectedSize == size;
+                  final String displaySize = size.split(' ')[0]; // Extracts "10" from "10 inch"
+                  return InkWell(
+                    onTap: () {
+                      setState(() {
+                        _selectedSize = size;
+                        _calculatePrice();
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isActive ? Colors.grey : Colors.black,
+                        borderRadius: BorderRadius.circular(25),
+                        border: Border.all(
+                          color: isActive ? Colors.white : Colors.grey,
+                          width: 2,
                         ),
                       ),
-                    );
-                  }).toList(),
-                  if (showSeeMore && onSeeMore != null)
-                    InkWell(
-                      onTap: onSeeMore,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              seeMoreButtonLabel,
-                              style: const TextStyle(color: Color(0xFFCB6CE6)),
-                            ),
-                            const SizedBox(width: 5),
-                            Icon(
-                              seeMoreButtonLabel == 'See More' ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
-                              size: 18,
-                              color: const Color(0xFFCB6CE6),
-                            ),
-                          ],
+                      child: Text(
+                        '$displaySize"',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
                         ),
                       ),
                     ),
+                  );
+                }).toList(),
+              ),
+            ),
+
+            // Quantity Controls
+            Expanded( // <--- Added Expanded here
+              flex: 1, // Give it less flex than size options, adjust as needed
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end, // <--- Key change: push to end
+                mainAxisSize: MainAxisSize.min, // Keep row content compact
+                children: [
+                  // Decrease Button
+                  InkWell(
+                    onTapDown: (_) {
+                      setState(() {
+                        _isRemoveButtonPressed = true;
+                      });
+                    },
+                    onTapUp: (_) {
+                      setState(() {
+                        _isRemoveButtonPressed = false;
+                      });
+                    },
+                    onTapCancel: () {
+                      setState(() {
+                        _isRemoveButtonPressed = false;
+                      });
+                    },
+                    onTap: () {
+                      setState(() {
+                        if (_quantity > 1) {
+                          _quantity--;
+                          _calculatePrice();
+                        }
+                      });
+                    },
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: _isRemoveButtonPressed ? Colors.grey : Colors.black,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.grey),
+                      ),
+                      child: const Icon(
+                        Icons.remove,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+
+                  // Quantity Display
+                  Container(
+                    width: 50,
+                    height: 40,
+                    margin: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: Colors.grey[300]!),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '$_quantity',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+
+                  // Increase Button
+                  InkWell(
+                    onTapDown: (_) {
+                      setState(() {
+                        _isAddButtonPressed = true;
+                      });
+                    },
+                    onTapUp: (_) {
+                      setState(() {
+                        _isAddButtonPressed = false;
+                      });
+                    },
+                    onTapCancel: () {
+                      setState(() {
+                        _isAddButtonPressed = false;
+                      });
+                    },
+                    onTap: () {
+                      setState(() {
+                        _quantity++;
+                        _calculatePrice();
+                      });
+                    },
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: _isAddButtonPressed ? Colors.grey : Colors.black,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.grey),
+                      ),
+                      child: const Icon(
+                        Icons.add,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildOptionCategoryButtons() {
+    final List<String> categories = ['Toppings', 'Base', 'Crust', 'Sauce Dips'];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: categories.map((category) {
+            final bool isSelected = _selectedOptionCategory == category;
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      _selectedOptionCategory = category;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.grey : Colors.black,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      category,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildSelectedOptionDisplay() {
+    final List<String> reorderedToppings = List.from(_allToppings);
+    reorderedToppings.sort((a, b) {
+      final isDefaultA = (widget.foodItem.defaultToppings ?? []).contains(a) ||
+          (widget.foodItem.defaultCheese ?? []).contains(a);
+      final isDefaultB = (widget.foodItem.defaultToppings ?? []).contains(b) ||
+          (widget.foodItem.defaultCheese ?? []).contains(b);
+      if (isDefaultA && !isDefaultB) return -1;
+      if (!isDefaultA && isDefaultB) return 1;
+      return a.compareTo(b);
+    });
+
+    switch (_selectedOptionCategory) {
+      case 'Toppings':
+        return _buildToppingsDisplay(reorderedToppings);
+      case 'Base':
+        return _buildBaseDisplay();
+      case 'Crust':
+        return _buildCrustDisplay();
+      case 'Sauce Dips':
+        return _buildSauceDisplay();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildToppingsDisplay(List<String> reorderedToppings) {
+    final double modalWidth = min(
+      MediaQuery.of(context).size.width * 0.5,
+      800.0,
+    );
+
+    final double horizontalPaddingOfScrollView = 20.0 * 2;
+    final double availableWidthForWrap = modalWidth - horizontalPaddingOfScrollView;
+
+    const int desiredColumns = 4;
+    const double itemSpacing = 10.0;
+    final double totalSpacingBetweenItems = itemSpacing * (desiredColumns - 1);
+
+    final double toppingBoxWidth = (availableWidthForWrap - totalSpacingBetweenItems) / desiredColumns;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: itemSpacing,
+          runSpacing: 10,
+          children: reorderedToppings.map((topping) {
+            final bool isActive = _selectedToppings.contains(topping);
+            final bool isDefault = (widget.foodItem.defaultToppings ?? []).contains(topping) ||
+                (widget.foodItem.defaultCheese ?? []).contains(topping);
+
+            return SizedBox(
+              width: toppingBoxWidth,
+              child: InkWell(
+                onTap: () {
+                  if (isDefault && _selectedToppings.contains(topping)) {
+                    return;
+                  }
+                  setState(() {
+                    if (_selectedToppings.contains(topping)) {
+                      _selectedToppings.remove(topping);
+                    } else {
+                      _selectedToppings.add(topping);
+                    }
+                    _calculatePrice();
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? const Color(0xFFCB6CE6)
+                        : (isDefault ? Colors.grey[400] : Colors.black),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    topping,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildBaseDisplay() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: _allBases.map((base) {
+            final bool isActive = _selectedBase == base;
+            return InkWell(
+              onTap: () {
+                setState(() {
+                  _selectedBase = base;
+                  _calculatePrice();
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isActive ? Colors.grey : Colors.black, // Active base is grey
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  base,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildCrustDisplay() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: _allCrusts.map((crust) {
+            final bool isActive = _selectedCrust == crust;
+            return InkWell(
+              onTap: () {
+                setState(() {
+                  _selectedCrust = crust;
+                  _calculatePrice();
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isActive ? Colors.grey : Colors.black, // Active crust is grey
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  crust,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildSauceDisplay() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: _allSauces.map((sauce) {
+            final bool isActive = _selectedSauces.contains(sauce);
+            return InkWell(
+              onTap: () {
+                setState(() {
+                  if (_selectedSauces.contains(sauce)) {
+                    _selectedSauces.remove(sauce);
+                  } else {
+                    _selectedSauces.add(sauce);
+                  }
+                  _calculatePrice();
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isActive ? const Color(0xFFCB6CE6) : Colors.black, // Active sauce is purple
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  sauce,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
         ),
         const SizedBox(height: 20),
       ],

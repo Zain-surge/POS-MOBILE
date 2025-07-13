@@ -453,7 +453,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
             ),
             const VerticalDivider(
                 width: 1, thickness: 0.5, color: Colors.black),
-
+             // right panel
             Expanded(
               flex: 1,
               child: Container(

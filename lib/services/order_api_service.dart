@@ -22,8 +22,6 @@ class ShopStatusData {
 
 class OrderApiService {
   // Base URL for HTTP requests (using the new thingproxy)
-  // IMPORTANT: The backend URL should be appended AFTER the proxy URL,
-  // as the proxy itself takes the target URL as part of its path.
   static const String _httpProxyUrl = 'https://thingproxy.freeboard.io/fetch/';
   static const String _backendBaseUrl = 'https://thevillage-backend.onrender.com';
 
@@ -44,21 +42,31 @@ class OrderApiService {
   final _shopStatusUpdatedController = StreamController<ShopStatusData>.broadcast();
   final _connectionStatusController = StreamController<bool>.broadcast();
 
+  // NEW: StreamController for orders that have been explicitly 'accepted'
+  final _acceptedOrderController = StreamController<Order>.broadcast();
+
   // Getters for the streams
   Stream<Order> get newOrderStream => _newOrderController.stream;
   Stream<List<dynamic>> get offersUpdatedStream => _offersUpdatedController.stream;
   Stream<ShopStatusData> get shopStatusUpdatedStream => _shopStatusUpdatedController.stream;
   Stream<bool> get connectionStatusStream => _connectionStatusController.stream;
+  // NEW: Getter for the accepted orders stream
+  Stream<Order> get acceptedOrderStream => _acceptedOrderController.stream;
+
+  // NEW: Method to add an order to the accepted stream
+  void addAcceptedOrder(Order order) {
+    _acceptedOrderController.add(order);
+    print('OrderApiService: Order ${order.orderId} added to accepted stream.');
+  }
 
   void _initSocket() {
-    // Socket.IO typically connects directly, no proxy needed here
     _socket = IO.io(
-      _backendBaseUrl, // Use the direct backend URL for sockets
+      _backendBaseUrl,
       IO.OptionBuilder()
-          .setTransports(['websocket']) // Use WebSocket
-          .enableForceNewConnection() // Important for hot reload/reconnection
-          .enableAutoConnect() // Enable auto connection
-          .setExtraHeaders({'withCredentials': 'true'}) // Pass credentials if needed
+          .setTransports(['websocket'])
+          .enableForceNewConnection()
+          .enableAutoConnect()
+          .setExtraHeaders({'withCredentials': 'true'})
           .build(),
     );
 
@@ -71,7 +79,7 @@ class OrderApiService {
       print('📦 New order received from server: $data');
       try {
         final orderData = Order.fromJson(data);
-        _newOrderController.add(orderData);
+        _newOrderController.add(orderData); // All new orders (EPOS & Website) go here first
       } catch (e) {
         print('Error parsing new_order data: $e');
       }
@@ -128,6 +136,7 @@ class OrderApiService {
     _offersUpdatedController.close();
     _shopStatusUpdatedController.close();
     _connectionStatusController.close();
+    _acceptedOrderController.close(); // NEW: Close the new controller
     _socket.dispose();
   }
 
@@ -136,7 +145,7 @@ class OrderApiService {
     return Uri.parse('$_httpProxyUrl$_backendBaseUrl$path');
   }
 
-  // --- HTTP Methods (now using the new proxy) ---
+  // --- HTTP Methods ---
 
   static Future<List<Order>> fetchTodayOrders() async {
     final url = _buildProxyUrl('/orders/today'); // Use the helper
