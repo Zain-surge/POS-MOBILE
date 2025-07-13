@@ -228,7 +228,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
   }
 
   Widget _buildOrderSummaryContent(Order order) {
-    final textStyle = const TextStyle(fontSize: 25, color: Colors.black87, fontFamily: 'Poppins');
+    final textStyle = const TextStyle(fontSize: 22, color: Colors.black87, fontFamily: 'Poppins');
 
     if (order.orderSource.toLowerCase() == 'epos') {
       final itemNames = order.items.map((item) => ' ${item.itemName}').join(', ');
@@ -492,36 +492,35 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),
+                                    if (item.comment != null && item.comment!.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8.0),
+                                        child: Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFDF1C7),
+                                            borderRadius: BorderRadius.circular(8.0),
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              'Comment: ${item.comment!}',
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                color: Colors.black,
+                                                fontFamily: 'Poppins',
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-
-                        if (item.comment != null && item.comment!.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8.0),
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFDF1C7),
-                                borderRadius: BorderRadius.circular(8.0),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'Comment: ${item.comment!}',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.black,
-                                    fontFamily: 'Poppins',
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                   );
@@ -653,11 +652,11 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                               ],
                             ),
 
-                            if (order.orderExtraNotes != null && order.orderExtraNotes!.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8.0, left: 12.0, right: 12.0),
-                                child: Text('Notes: ${order.orderExtraNotes!}', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, fontFamily: 'Poppins')),
-                              ),
+                            // if (order.orderExtraNotes != null && order.orderExtraNotes!.isNotEmpty)
+                            //   Padding(
+                            //     padding: const EdgeInsets.only(top: 8.0, left: 12.0, right: 12.0),
+                            //     child: Text('Notes: ${order.orderExtraNotes!}', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, fontFamily: 'Poppins')),
+                            //   ),
                           ],
                         ),
                       ),

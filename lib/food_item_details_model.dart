@@ -270,7 +270,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                     widget.foodItem.name.toUpperCase(),
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 20,
+                      fontSize: 30,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -282,7 +282,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                     '×',
                     style: TextStyle(
                       color: Colors.black,
-                      fontSize: 28,
+                      fontSize: 30,
                       fontWeight: FontWeight.normal,
                     ),
                   ),
@@ -297,9 +297,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Size Selection with Quantity Controls
-                  // Use the spread operator to make sure this always results in a list
-                  // of widgets, even if there's only one. This handles the comma issue.
                   ...(
                       (['Pizza', 'Garlic Breads', 'Shawarmas', 'Wraps', 'Burgers'].contains(widget.foodItem.category) &&
                           widget.foodItem.price.keys.length > 1)
@@ -566,7 +563,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               child: Text(
                 '$_quantity',
                 style: const TextStyle(
-                  fontSize: 16,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
               ),
