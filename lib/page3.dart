@@ -45,16 +45,12 @@ class _Page3State extends State<Page3> {
                             const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF3D9FF),
-                              borderRadius: BorderRadius.circular(30),
+                              borderRadius: BorderRadius.circular(40),
                             ),
-                            child: const Text(
-                              'surge',
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black,
-                                fontFamily: 'Poppins',
-                              ),
+                            child: Image.asset(
+                              'assets/images/sLogo.png',
+                              height: 70,
+                              width: 350,
                             ),
                           ),
                         ),
@@ -234,13 +230,13 @@ class _Page3State extends State<Page3> {
           children: [
             Image.asset(
               'assets/images/$imageName',
-              width: title.toLowerCase() == 'delivery' ? 220 : 190,
-              height: title.toLowerCase() == 'delivery' ? 220 : 190,
+              width: title.toLowerCase() == 'delivery' ? 210 : 170,
+              height: title.toLowerCase() == 'delivery' ? 210 : 170,
               fit: BoxFit.contain,
               color: const Color(0xFF616161),
             ),
             // Align spacing for labels
-            SizedBox(height: title.toLowerCase() == 'delivery' ? 10 : 30),
+            SizedBox(height: title.toLowerCase() == 'delivery' ? 0 : 35),
 
             ConstrainedBox(
               constraints: const BoxConstraints(minWidth: 170),

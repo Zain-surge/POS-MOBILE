@@ -11,6 +11,7 @@ import 'dart:math';
 import 'dart:ui'; // Add this import for BackdropFilter
 import 'package:epos/dynamic_order_list_screen.dart';
 import 'package:flutter/scheduler.dart'; // Import for SchedulerBinding
+import 'package:epos/services/thermal_printer_service.dart';
 
 class Page4 extends StatefulWidget {
   final String? initialSelectedServiceImage;
@@ -153,83 +154,353 @@ class _Page4State extends State<Page4> {
   }
 
   Future<void> _submitOrder() async {
-    String id1 = generateTransactionId();
-    debugPrint("Generated Transaction ID: $id1");
-
+    // Check if cart is empty first
     if (_cartItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(
-            "Cart is empty. Please add items to place an order.")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Cart is empty. Please add items to place an order."),
+          ),
+        );
+      }
       return;
     }
 
-    final double subtotal = double.parse(_calculateTotalPrice().toStringAsFixed(2));
-    // const double vatRate = 0.0;
-    // final double vatAmount = double.parse((subtotal + vatRate).toStringAsFixed(2));
-    //
-    // final double totalCharge = double.parse((subtotal + vatAmount).toStringAsFixed(2));
+    String id1 = generateTransactionId();
+    print("Generated Transaction ID: $id1");
+
+    final double subtotal = double.parse(
+      _calculateTotalPrice().toStringAsFixed(2),
+    );
+    const double vatRate = 0.05; // 5% VAT
+    final double vatAmount = double.parse(
+      (subtotal * vatRate).toStringAsFixed(2),
+    );
+    final double totalCharge = double.parse(
+      (subtotal + vatAmount).toStringAsFixed(2),
+    );
 
     final orderData = {
       "guest": {
-        "name": "POS Customer - ${_actualOrderType.toUpperCase()}", // More descriptive
+        "name": "POS Customer - ${_actualOrderType.toUpperCase()}",
         "email": "pos_customer@example.com",
         "phone_number": "03001234567",
         "street_address": "POS ORDER",
         "city": "POS ORDER",
         "county": "POS ORDER",
-        "postal_code": "POS ORDER"
+        "postal_code": "POS ORDER",
       },
       "transaction_id": id1,
       "payment_type": "POS ORDER",
-      "order_type": _actualOrderType, // IMPORTANT: Use the dynamic order type here
-      "total_price":  subtotal,
-      "extra_notes": _cartItems.map((item) => item.comment ?? '').join(', ').trim(),
-      "status": "pending", // Set initial status as 'pending' for EPOS orders
-      "order_source": "epos", // Ensure this is 'epos' for correct filtering
-      "items": _cartItems.map((cartItem) {
+      "order_type": _actualOrderType,
+      "total_price": totalCharge,
+      "extra_notes":
+      _cartItems.map((item) => item.comment ?? '').join(', ').trim(),
+      "status": "pending",
+      "order_source": "epos",
+      "items":
+      _cartItems.map((cartItem) {
         String description = cartItem.foodItem.name;
-        if (cartItem.selectedOptions != null && cartItem.selectedOptions!.isNotEmpty) {
+        if (cartItem.selectedOptions != null &&
+            cartItem.selectedOptions!.isNotEmpty) {
           description += ' (${cartItem.selectedOptions!.join(', ')})';
         }
 
-// Use the calculated pricePerUnit from the CartItem itself
-        double itemTotalPrice = double.parse((cartItem.pricePerUnit * cartItem.quantity).toStringAsFixed(2));
+        double itemPricePerUnit =
+        cartItem.foodItem.price.isNotEmpty
+            ? (cartItem.foodItem.price[cartItem
+            .foodItem
+            .price
+            .keys
+            .first] ??
+            0.0)
+            : 0.0;
+
+        double itemTotalPrice = double.parse(
+          (itemPricePerUnit * cartItem.quantity).toStringAsFixed(2),
+        );
 
         return {
           "item_id": cartItem.foodItem.id,
           "quantity": cartItem.quantity,
           "description": description,
           "total_price": itemTotalPrice,
-          "comment": cartItem.comment, // Send comment as a separate field
+          "comment": cartItem.comment,
         };
       }).toList(),
     };
 
-    debugPrint("Attempting to submit order with order_type: $_actualOrderType");
-    try {
-      final orderId = await ApiService.createOrderFromMap(orderData);
-      if (orderId != null) {
-        debugPrint('Order placed successfully: $orderId for type: $_actualOrderType');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Order Placed Successfully")),
+    print("Attempting to submit order with order_type: $_actualOrderType");
+
+    // Show receipt preview dialog
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            width: 400,
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Receipt Preview',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 15),
+
+                // Order details preview
+                Container(
+                  height: 300,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Transaction ID: $id1', style: TextStyle(fontWeight: FontWeight.bold)),
+                        Text('Order Type: ${_actualOrderType.toUpperCase()}'),
+                        Text('Payment: POS ORDER'),
+                        const Divider(),
+
+                        const Text('Items:', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ..._cartItems.map((item) {
+                          double itemPricePerUnit = item.foodItem.price.isNotEmpty
+                              ? (item.foodItem.price[item.foodItem.price.keys.first] ?? 0.0)
+                              : 0.0;
+                          double itemTotalPrice = itemPricePerUnit * item.quantity;
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 4.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${item.quantity}x ${item.foodItem.name} (£${itemTotalPrice.toStringAsFixed(2)})'),
+                                if (item.selectedOptions != null && item.selectedOptions!.isNotEmpty)
+                                  Text('  Options: ${item.selectedOptions!.join(', ')}',
+                                      style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                                if (item.comment != null && item.comment!.isNotEmpty)
+                                  Text('  Comment: ${item.comment}',
+                                      style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                              ],
+                            ),
+                          );
+                        }),
+
+                        const Divider(),
+                        Text('Subtotal: £${subtotal.toStringAsFixed(2)}'),
+                        Text('VAT (5%): £${vatAmount.toStringAsFixed(2)}'),
+                        Text('Total: £${totalCharge.toStringAsFixed(2)}',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 15),
+
+                // Action buttons
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        try {
+                          Navigator.of(dialogContext).pop();
+                        } catch (e) {
+                          print('Error closing dialog: $e');
+                        }
+                      },
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () async {
+                        // Close preview dialog first
+                        try {
+                          Navigator.of(dialogContext).pop();
+                        } catch (e) {
+                          print('Error closing preview dialog: $e');
+                        }
+
+                        // Check if widget is still mounted before proceeding
+                        if (!mounted) return;
+
+                        // Show loading indicator
+                        try {
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (BuildContext context) {
+                              return const Center(child: CircularProgressIndicator());
+                            },
+                          );
+                        } catch (e) {
+                          print('Error showing loading dialog: $e');
+                          if (!mounted) return;
+                        }
+
+                        try {
+                          // First test printer connections
+                          final printerService = ThermalPrinterService();
+                          final connectionResults = await printerService.testAllConnections();
+
+                          // If no printers available, show selection dialog
+                          if (!connectionResults['usb']! &&
+                              !connectionResults['bluetooth']! &&
+                              !connectionResults['thermal']!) {
+                            if (!mounted) return;
+                            Navigator.of(context).pop(); // Close loading dialog
+
+                            // Show printer selection dialog
+                            final printerType = await showDialog<String>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: Text('Select Printer Type'),
+                                content: Text('No printers are currently connected. Please select a printer type to connect to:'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, 'bluetooth'),
+                                    child: Text('Bluetooth Printer'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, 'usb'),
+                                    child: Text('USB Printer'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, 'cancel'),
+                                    child: Text('Cancel'),
+                                  ),
+                                ],
+                              ),
+                            );
+
+                            if (printerType == null || printerType == 'cancel') {
+                              return;
+                            }
+
+                            // Show loading again while connecting
+                            showDialog(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (BuildContext context) {
+                                return const Center(child: CircularProgressIndicator());
+                              },
+                            );
+                          }
+
+                          // Submit the order regardless of printer status
+                          final orderId = await ApiService.createOrderFromMap(orderData);
+
+                          // Check if widget is still mounted before using context
+                          if (!mounted) return;
+
+                          // Hide loading indicator
+                          try {
+                            Navigator.of(context).pop();
+                          } catch (e) {
+                            print('Error hiding loading dialog: $e');
+                          }
+
+                          print('Order placed successfully: $orderId for type: $_actualOrderType');
+
+                          // Show success message
+                          if (mounted) {
+                            try {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Order Placed Successfully! Printing receipt..."),
+                                ),
+                              );
+                            } catch (e) {
+                              print('Error showing success message: $e');
+                            }
+                          }
+
+                          // Print receipt
+                          bool printSuccess = await ThermalPrinterService().printReceipt(
+                            transactionId: id1,
+                            orderType: _actualOrderType,
+                            cartItems: _cartItems,
+                            subtotal: subtotal,
+                            vatAmount: vatAmount,
+                            totalCharge: totalCharge,
+                            extraNotes:
+                            _cartItems.map((item) => item.comment ?? '').join(', ').trim(),
+                          );
+
+                          if (mounted) {
+                            try {
+                              if (printSuccess) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("Receipt printed successfully!"),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      "Order placed but printing failed. Please check printer connection.",
+                                    ),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              print('Error showing print status message: $e');
+                            }
+                          }
+
+                          // Clear cart on successful order
+                          if (mounted) {
+                            setState(() {
+                              _cartItems.clear();
+                            });
+                          }
+                        } catch (e) {
+                          // Check if widget is still mounted before using context
+                          if (!mounted) return;
+
+                          // Hide loading indicator
+                          try {
+                            Navigator.of(context).pop();
+                          } catch (navError) {
+                            print('Error hiding loading dialog after error: $navError');
+                          }
+
+                          print('Order submission failed: $e');
+                          if (mounted) {
+                            try {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text("Error placing order: $e"))
+                              );
+                            } catch (snackbarError) {
+                              print('Error showing error message: $snackbarError');
+                            }
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Confirm & Print'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         );
-        setState(() {
-          _cartItems.clear(); // Clear cart on successful order
-        });
-      } else {
-        debugPrint('Order placement failed: orderId is null');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Failed to place order.")),
-        );
-      }
-    } catch (e) {
-      debugPrint('Order submission failed: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error placing order: $e")),
-      );
-    }
+      },
+    );
   }
+
+//final double subtotal = double.parse(_calculateTotalPrice().toStringAsFixed(2));
+ //double itemTotalPrice = double.parse((cartItem.pricePerUnit * cartItem.quantity).toStringAsFixed(2));
 
   @override
   Widget build(BuildContext context) {
