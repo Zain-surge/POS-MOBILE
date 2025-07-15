@@ -44,11 +44,22 @@ class OrderApiService {
   final _shopStatusUpdatedController = StreamController<ShopStatusData>.broadcast();
   final _connectionStatusController = StreamController<bool>.broadcast();
 
+  // NEW: StreamController for orders that have been explicitly 'accepted'
+  final _acceptedOrderController = StreamController<Order>.broadcast();
+
   // Getters for the streams
   Stream<Order> get newOrderStream => _newOrderController.stream;
   Stream<List<dynamic>> get offersUpdatedStream => _offersUpdatedController.stream;
   Stream<ShopStatusData> get shopStatusUpdatedStream => _shopStatusUpdatedController.stream;
   Stream<bool> get connectionStatusStream => _connectionStatusController.stream;
+  // NEW: Getter for the accepted orders stream
+  Stream<Order> get acceptedOrderStream => _acceptedOrderController.stream;
+
+  // NEW: Method to add an order to the accepted stream
+  void addAcceptedOrder(Order order) {
+    _acceptedOrderController.add(order);
+    print('OrderApiService: Order ${order.orderId} added to accepted stream.');
+  }
 
   void _initSocket() {
     // Socket.IO typically connects directly, no proxy needed here
@@ -71,7 +82,7 @@ class OrderApiService {
       print('📦 New order received from server: $data');
       try {
         final orderData = Order.fromJson(data);
-        _newOrderController.add(orderData);
+        _newOrderController.add(orderData); // All new orders (EPOS & Website) go here first
       } catch (e) {
         print('Error parsing new_order data: $e');
       }
@@ -128,6 +139,7 @@ class OrderApiService {
     _offersUpdatedController.close();
     _shopStatusUpdatedController.close();
     _connectionStatusController.close();
+    _acceptedOrderController.close(); // NEW: Close the new controller
     _socket.dispose();
   }
 

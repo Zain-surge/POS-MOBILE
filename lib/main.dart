@@ -108,18 +108,11 @@ class _MyAppState extends State<MyApp> {
           // Expect arguments as a Map<String, String>
             final Map<String, String>? args = settings.arguments as Map<String, String>?;
 
-            // Extract initialSelectedServiceImage and selectedOrderType from the map
             final String? initialSelectedServiceImage = args?['initialSelectedServiceImage'];
             final String? selectedOrderType = args?['selectedOrderType'];
 
-            // Ensure selectedOrderType is not null, provide a default if necessary
-            // For a robust app, you might want to handle nulls more gracefully
-            // or ensure it's always provided from Page3.
             if (selectedOrderType == null) {
-              // Handle error: selectedOrderType is missing
-              // This could be a development error, or a robust default
               print('Error: selectedOrderType is missing for /page4 route.');
-              // Fallback to a default order type, or throw an error, or navigate back
               return MaterialPageRoute(builder: (context) => const Text('Error: Order type not provided.'));
             }
 

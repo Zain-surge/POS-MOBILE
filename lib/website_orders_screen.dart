@@ -631,7 +631,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                           style: TextStyle(fontSize: 18),
                         ),
                         Text(
-                          _selectedOrder!.paymentType,
+                          _selectedOrder!.paymentType ?? 'N/A',
                           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                       ],

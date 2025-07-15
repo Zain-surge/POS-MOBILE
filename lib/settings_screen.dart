@@ -1,9 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:epos/bottom_nav_item.dart';
 import 'package:epos/dynamic_order_list_screen.dart';
 import 'package:epos/website_orders_screen.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 class SettingsScreen extends StatefulWidget {
   final int initialBottomNavItemIndex;
@@ -28,12 +30,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _showDeliveryMenu = false;
   bool _mediaVolume = false;
   bool _keyboard = false;
-
-  // Bluetooth related
   List<BluetoothDevice> _availableDevices = [];
   BluetoothDevice? _connectedDevice;
   bool _isScanning = false;
   bool _isConnecting = false;
+  StreamSubscription<List<ScanResult>>? _scanSubscription;
 
   @override
   void initState() {
@@ -42,18 +43,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _initializeBluetooth();
   }
 
+  @override
+  void dispose() {
+    _scanSubscription?.cancel();
+    super.dispose();
+  }
+
   Future<void> _initializeBluetooth() async {
     try {
+      // Check if Bluetooth is supported
+      if (await FlutterBluePlus.isSupported == false) {
+        print("Bluetooth not supported by this device");
+        return;
+      }
+
       // Check if Bluetooth is enabled
-      bool? isEnabled = await FlutterBluetoothSerial.instance.isEnabled;
+      bool isEnabled = await FlutterBluePlus.isOn;
       setState(() {
-        _bluetoothEnabled = isEnabled ?? false;
+        _bluetoothEnabled = isEnabled;
       });
 
       // Get connected devices
       if (_bluetoothEnabled) {
         _getConnectedDevices();
       }
+
+      // Listen to Bluetooth state changes
+      FlutterBluePlus.adapterState.listen((BluetoothAdapterState state) {
+        setState(() {
+          _bluetoothEnabled = state == BluetoothAdapterState.on;
+        });
+        if (_bluetoothEnabled) {
+          _getConnectedDevices();
+        } else {
+          _availableDevices.clear();
+          _connectedDevice = null;
+        }
+      });
     } catch (e) {
       print('Error initializing Bluetooth: $e');
     }
@@ -61,7 +87,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _getConnectedDevices() async {
     try {
-      List<BluetoothDevice> devices = await FlutterBluetoothSerial.instance.getBondedDevices();
+      List<BluetoothDevice> devices = FlutterBluePlus.connectedDevices;
       setState(() {
         _availableDevices = devices;
       });
@@ -80,21 +106,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Permission.location,
       ].request();
 
-      if (statuses[Permission.bluetooth] != PermissionStatus.granted) {
+      if (statuses[Permission.bluetoothConnect] != PermissionStatus.granted) {
         _showPermissionDialog();
         return;
       }
 
       if (value) {
-        bool? result = await FlutterBluetoothSerial.instance.requestEnable();
-        if (result == true) {
-          setState(() {
-            _bluetoothEnabled = true;
-          });
-          _startDeviceDiscovery();
-        }
+        // Turn on Bluetooth
+        await FlutterBluePlus.turnOn();
+        setState(() {
+          _bluetoothEnabled = true;
+        });
+        _startDeviceDiscovery();
       } else {
-        await FlutterBluetoothSerial.instance.requestDisable();
+        // Turn off Bluetooth
+        await FlutterBluePlus.turnOff();
         setState(() {
           _bluetoothEnabled = false;
           _availableDevices.clear();
@@ -116,20 +142,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     try {
-      // Get bonded devices first
-      List<BluetoothDevice> bondedDevices = await FlutterBluetoothSerial.instance.getBondedDevices();
+      // Get already connected devices first
+      List<BluetoothDevice> connectedDevices = FlutterBluePlus.connectedDevices;
       setState(() {
-        _availableDevices.addAll(bondedDevices);
+        _availableDevices.addAll(connectedDevices);
       });
 
-      // Start discovery for new devices
-      FlutterBluetoothSerial.instance.startDiscovery().listen((result) {
+      // Start scanning for new devices
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
+
+      // Listen to scan results
+      _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
         setState(() {
-          if (!_availableDevices.any((device) => device.address == result.device.address)) {
-            _availableDevices.add(result.device);
+          for (ScanResult result in results) {
+            if (!_availableDevices.any((device) => device.remoteId == result.device.remoteId)) {
+              _availableDevices.add(result.device);
+            }
           }
         });
-      }).onDone(() {
+      });
+
+      // Stop scanning after timeout
+      Future.delayed(const Duration(seconds: 15), () {
+        FlutterBluePlus.stopScan();
         setState(() {
           _isScanning = false;
         });
@@ -150,7 +185,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     try {
-      BluetoothConnection connection = await BluetoothConnection.toAddress(device.address);
+      await device.connect();
       setState(() {
         _connectedDevice = device;
         _isConnecting = false;
@@ -158,13 +193,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Connected to ${device.name ?? device.address}'),
+          content: Text('Connected to ${device.platformName.isNotEmpty ? device.platformName : device.remoteId.toString()}'),
           backgroundColor: Colors.green,
         ),
       );
 
-      // Store connection for later use
-      // You might want to save this connection in a provider or service
+      // Listen to connection state
+      device.connectionState.listen((BluetoothConnectionState state) {
+        if (state == BluetoothConnectionState.disconnected) {
+          setState(() {
+            _connectedDevice = null;
+          });
+        }
+      });
 
     } catch (e) {
       print('Error connecting to device: $e');
@@ -174,7 +215,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to connect to ${device.name ?? device.address}'),
+          content: Text('Failed to connect to ${device.platformName.isNotEmpty ? device.platformName : device.remoteId.toString()}'),
           backgroundColor: Colors.red,
         ),
       );
@@ -254,15 +295,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   itemCount: _availableDevices.length,
                   itemBuilder: (context, index) {
                     final device = _availableDevices[index];
-                    final isConnected = _connectedDevice?.address == device.address;
+                    final isConnected = _connectedDevice?.remoteId == device.remoteId;
 
                     return ListTile(
                       leading: Icon(
                         Icons.bluetooth,
                         color: isConnected ? Colors.green : Colors.grey,
                       ),
-                      title: Text(device.name ?? 'Unknown Device'),
-                      subtitle: Text(device.address),
+                      title: Text(device.platformName.isNotEmpty ? device.platformName : 'Unknown Device'),
+                      subtitle: Text(device.remoteId.toString()),
                       trailing: isConnected
                           ? const Icon(Icons.check_circle, color: Colors.green)
                           : _isConnecting
