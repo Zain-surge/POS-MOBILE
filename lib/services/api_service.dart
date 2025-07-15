@@ -14,7 +14,7 @@ class ApiService {
       final response = await http.get(url);
       print("fetchMenuItems: Response Code: ${response.statusCode}");
 
-     // print("Response Body: ${response.body}");
+     //print("Response Body: ${response.body}");
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         return data.map((json) => FoodItem.fromJson(json)).toList();

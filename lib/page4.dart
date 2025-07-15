@@ -6,11 +6,11 @@ import 'package:uuid/uuid.dart';
 import 'package:epos/models/food_item.dart';
 import 'package:epos/services/api_service.dart';
 import 'package:epos/food_item_details_model.dart';
-import 'package:epos/models/cart_item.dart'; // Corrected import path for cart_item
+import 'package:epos/models/cart_item.dart';
 import 'dart:math';
-import 'dart:ui'; // Add this import for BackdropFilter
+import 'dart:ui';
 import 'package:epos/dynamic_order_list_screen.dart';
-import 'package:flutter/scheduler.dart'; // Import for SchedulerBinding
+import 'package:flutter/scheduler.dart';
 import 'package:epos/services/thermal_printer_service.dart';
 
 class Page4 extends StatefulWidget {
@@ -34,8 +34,8 @@ class _Page4State extends State<Page4> {
   List<FoodItem> foodItems = [];
   bool isLoading = false;
   List<CartItem> _cartItems = [];
-  bool _isModalOpen = false; // State variable to track modal visibility
-  FoodItem? _modalFoodItem; // Store the food item to be displayed in the modal
+  bool _isModalOpen = false;
+  FoodItem? _modalFoodItem;
 
   late String selectedServiceImage;
   late String _actualOrderType;
@@ -54,7 +54,9 @@ class _Page4State extends State<Page4> {
     Category(name: 'WRAPS', image: 'assets/images/WrapsS.png'),
     Category(name: 'KIDS MEAL', image: 'assets/images/KidsMealS.png'),
     Category(name: 'SIDES', image: 'assets/images/SidesS.png'),
+    Category(name: 'MILKSHAKE', image: 'assets/images/MilkshakeS.png'),
     Category(name: 'DRINKS', image: 'assets/images/DrinksS.png'),
+    Category(name: 'DIPS', image: 'assets/images/DipsS.png'),
   ];
 
   @override
@@ -81,7 +83,7 @@ class _Page4State extends State<Page4> {
   void _getLeftPanelDimensions() {
     final RenderBox? renderBox = _leftPanelKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox != null) {
-      final Offset offset = renderBox.localToGlobal(Offset.zero); // Get global position
+      final Offset offset = renderBox.localToGlobal(Offset.zero);
       setState(() {
         _leftPanelRect = Rect.fromLTWH(
           offset.dx,
@@ -142,14 +144,13 @@ class _Page4State extends State<Page4> {
   double _calculateTotalPrice() {
     double total = 0.0;
     for (var item in _cartItems) {
-      // Use the calculated pricePerUnit from the CartItem itself
       total += item.pricePerUnit * item.quantity;
     }
     return total;
   }
 
   String generateTransactionId() {
-    const uuid = Uuid(); // Use Uuid for better uniqueness
+    const uuid = Uuid();
     return uuid.v4(); // Generate a UUID v4 string
   }
 
@@ -672,11 +673,11 @@ class _Page4State extends State<Page4> {
     }
   }
 
+
+  // Updated _buildCartSummary method with MouseRegion for hand cursor
+
   Widget _buildCartSummary() {
     double subtotal = _calculateTotalPrice();
-    // const double vatRate = 0.05;
-    // double vatAmount = subtotal * vatRate;
-    // double totalCharge = subtotal + vatAmount;
 
     return Column(
       children: [
@@ -743,42 +744,143 @@ class _Page4State extends State<Page4> {
 
                           Expanded(
                             flex: 5,
-                            child: Row(
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  '${item.quantity}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 30,
-                                    fontFamily: 'Poppins',
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.only(left: 30),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        sizeDisplay,
-                                        style: const TextStyle(
-                                          fontSize: 20,
-                                          fontFamily: 'Poppins',
-                                          color: Colors.black,
-                                        ),
+                                // Quantity and Size/Crust section (original layout)
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${item.quantity}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 30,
+                                        fontFamily: 'Poppins',
                                       ),
-                                      if (crustDisplay != null)
-                                        Text(
-                                          crustDisplay,
-                                          style: const TextStyle(
-                                            fontSize: 20,
-                                            fontFamily: 'Poppins',
-                                            color: Colors.black,
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 30),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            sizeDisplay,
+                                            style: const TextStyle(
+                                              fontSize: 20,
+                                              fontFamily: 'Poppins',
+                                              color: Colors.black,
+                                            ),
+                                          ),
+                                          if (crustDisplay != null)
+                                            Text(
+                                              crustDisplay,
+                                              style: const TextStyle(
+                                                fontSize: 20,
+                                                fontFamily: 'Poppins',
+                                                color: Colors.black,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    )
+                                  ],
+                                ),
+
+                                const SizedBox(height: 15),
+
+                                // Quantity controls row (below size/crust) with MouseRegion
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  children: [
+                                    // Decrement button with hand cursor
+                                    MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            if (item.quantity > 1) {
+                                              item.decrementQuantity();
+                                            }
+                                          });
+                                        },
+                                        child: Container(
+                                          width: 35,
+                                          height: 35,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFCB6CE6),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(
+                                            Icons.remove,
+                                            color: Colors.white,
+                                            size: 20,
                                           ),
                                         ),
-                                    ],
-                                  ),
-                                )
+                                      ),
+                                    ),
+
+                                    const SizedBox(width: 15),
+
+                                    // Increment button with hand cursor
+                                    MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            item.incrementQuantity();
+                                          });
+                                        },
+                                        child: Container(
+                                          width: 35,
+                                          height: 35,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFCB6CE6),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(
+                                            Icons.add,
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(width: 15),
+
+                                    // Delete button with hand cursor
+                                    MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _cartItems.removeAt(index);
+                                          });
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('${item.foodItem.name} removed from cart!'),
+                                              duration: const Duration(seconds: 2),
+                                            ),
+                                          );
+                                        },
+                                        child: Container(
+                                          width: 35,
+                                          height: 35,
+                                          decoration: BoxDecoration(
+                                            color: Colors.red,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(
+                                            Icons.delete,
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
                           ),
@@ -787,7 +889,7 @@ class _Page4State extends State<Page4> {
                             width: 1.2,
                             height: 180,
                             color: Colors.black,
-                            margin: const EdgeInsets.symmetric(horizontal: 0),
+                            margin: const EdgeInsets.symmetric(horizontal: 10),
                           ),
 
                           Expanded(
@@ -812,12 +914,23 @@ class _Page4State extends State<Page4> {
                                   item.foodItem.name,
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
-                                    fontSize: 20,
+                                    fontSize: 18,
                                     fontWeight: FontWeight.normal,
                                     fontFamily: 'Poppins',
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 8),
+                                // Price display
+                                Text(
+                                  '£${(item.pricePerUnit * item.quantity).toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Poppins',
+                                    color: Color(0xFFCB6CE6),
+                                  ),
                                 ),
                               ],
                             ),
@@ -868,16 +981,40 @@ class _Page4State extends State<Page4> {
                 style: const TextStyle(fontSize: 16)),
           ],
         ),
+        const SizedBox(height: 10),
+
+        // NEW PROCEED BUTTON
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          // children: [
-          //   const Text('VAT (5%)',
-          //       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          //   Text('£${vatAmount.toStringAsFixed(2)}',
-          //       style: const TextStyle(fontSize: 16)),
-          // ],
+          children: [
+            Expanded(
+              child: GestureDetector(
+                //onTap: _proceedAction,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Proceed',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Image.asset('assets/images/men.png', width: 45, height: 45),
+          ],
         ),
         const SizedBox(height: 10),
+
 
         Row(
           children: [
@@ -911,6 +1048,8 @@ class _Page4State extends State<Page4> {
       ],
     );
   }
+
+
 
   Widget _buildServiceHighlight(String type, String imageName) {
     bool isSelected = _actualOrderType.toLowerCase() == type.toLowerCase();
