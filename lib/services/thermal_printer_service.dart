@@ -1,121 +1,376 @@
 // lib/services/thermal_printer_service.dart
-import 'dart:typed_data';
 import 'package:flutter/services.dart';
-import 'package:esc_pos_utils/esc_pos_utils.dart';
-import 'package:bluetooth_print_plus/bluetooth_print_plus.dart';
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:usb_serial/usb_serial.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:epos/models/cart_item.dart';
 import 'dart:async';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:math' as math;
 
 class ThermalPrinterService {
-  static final ThermalPrinterService _instance =
-  ThermalPrinterService._internal();
+  static final ThermalPrinterService _instance = ThermalPrinterService._internal();
   factory ThermalPrinterService() => _instance;
   ThermalPrinterService._internal();
+  static const bool ENABLE_MOCK_MODE = false; // Set to false in production
+  static const bool SIMULATE_PRINTER_SUCCESS = false; // Simulate successful connections
+  // Connection pools for persistent connections
+  UsbPort? _persistentUsbPort;
+  String? _connectedBluetoothDevice;
+  bool _isBluetoothConnected = false;
 
-  // Bluetooth Thermal Printer
-  BluetoothPrintPlus? _bluetoothPrint;
-  List<BluetoothDevice> _scanResults = [];
-  StreamSubscription<List<BluetoothDevice>>? _scanResultsSubscription;
+  // Cached devices for speed
+  List<BluetoothInfo> _cachedThermalDevices = [];
+  List<UsbDevice> _cachedUsbDevices = [];
+  DateTime? _lastCacheUpdate;
 
-  // USB Thermal Printer
-  UsbPort? _usbPort;
-  List<UsbDevice> _usbDevices = [];
+  // Connection timeout settings
+  static const Duration QUICK_TIMEOUT = Duration(seconds: 2);
+  static const Duration NORMAL_TIMEOUT = Duration(seconds: 5);
+  static const Duration CACHE_VALIDITY = Duration(minutes: 5);
 
-  // Initialize Bluetooth Print Plus
-  void _initBluetoothPrint() {
-    _bluetoothPrint ??= BluetoothPrintPlus();
+  // Connection health monitoring
+  Timer? _connectionHealthTimer;
+  bool _isMonitoringConnection = false;
+
+  // OPTIMIZED: Pre-generated receipt cache
+  Map<String, List<int>> _receiptCache = {};
+
+  Future<Map<String, bool>> testAllConnections() async {
+    print('🧪 Testing all printer connections...');
+
+    // Skip web-specific checks
+    if (kIsWeb) {
+      print('📱 Web platform detected - skipping native printer checks');
+      return {
+        'usb': false,
+        'bluetooth': false,
+      };
+    }
+
+    List<Future<bool>> futures = [];
+    List<String> methods = [];
+
+    // Only test USB on mobile/desktop platforms
+    if (Platform.isAndroid || Platform.isWindows || Platform.isLinux) {
+      futures.add(_testUSBConnection());
+      methods.add('usb');
+    }
+
+    // Only test Bluetooth on mobile platforms
+    if (Platform.isAndroid || Platform.isIOS) {
+      futures.add(_testThermalBluetoothConnection());
+      methods.add('bluetooth');
+    }
+
+    if (futures.isEmpty) {
+      return {
+        'usb': false,
+        'bluetooth': false,
+      };
+    }
+
+    List<bool> results = await Future.wait(futures);
+
+    Map<String, bool> testResults = {};
+    for (int i = 0; i < methods.length; i++) {
+      testResults[methods[i]] = results[i];
+    }
+
+    // Fill in missing methods
+    if (!testResults.containsKey('usb')) testResults['usb'] = false;
+    if (!testResults.containsKey('bluetooth')) testResults['bluetooth'] = false;
+
+    print('📊 Test Results:');
+    print('   USB: ${testResults['usb'] == true ? "✅ Available" : "❌ Not Available"}');
+    print('   Bluetooth: ${testResults['bluetooth'] == true ? "✅ Available" : "❌ Not Available"}');
+
+    return testResults;
   }
 
-  // Print via Bluetooth using bluetooth_print_plus
-  Future<bool> printReceiptBluetooth({
-    required String transactionId,
-    required String orderType,
-    required List<CartItem> cartItems,
-    required double subtotal,
-    required double vatAmount,
-    required double totalCharge,
-    String? extraNotes,
-  }) async {
-    try {
-      // Request permissions
-      await _requestBluetoothPermissions();
-
-      _initBluetoothPrint();
-
-      // Check if Bluetooth is available/on
-      if (!BluetoothPrintPlus.isBlueOn) {
-        print('Bluetooth is not enabled');
-        return false;
-      }
-
-      // Start scanning for devices
-      await BluetoothPrintPlus.startScan(timeout: Duration(seconds: 10));
-
-      // Listen for scan results
-      _scanResultsSubscription = BluetoothPrintPlus.scanResults.listen((
-          devices,
-          ) {
-        _scanResults = devices;
-      });
-
-      // Wait for scan to complete
-      await Future.delayed(Duration(seconds: 10));
-
-      if (_scanResults.isEmpty) {
-        print('No Bluetooth devices found');
-        return false;
-      }
-
-      // Find a printer device
-      BluetoothDevice? printer = _findPrinterDevice(_scanResults);
-      if (printer == null) {
-        print('No printer device found');
-        return false;
-      }
-
-      // Connect to printer
-      await BluetoothPrintPlus.connect(printer);
-
-      // Wait for connection
-      await Future.delayed(Duration(seconds: 2));
-
-      if (!BluetoothPrintPlus.isConnected) {
-        print('Failed to connect to Bluetooth printer');
-        return false;
-      }
-
-      // Generate receipt using ESC/POS commands
-      List<int> receiptBytes = await _generateESCPOSReceipt(
-        transactionId: transactionId,
-        orderType: orderType,
-        cartItems: cartItems,
-        subtotal: subtotal,
-        vatAmount: vatAmount,
-        totalCharge: totalCharge,
-        extraNotes: extraNotes,
-      );
-
-      // Print the receipt
-      await BluetoothPrintPlus.write(Uint8List.fromList(receiptBytes));
-
-      // Disconnect
-      await BluetoothPrintPlus.disconnect();
-
-      print('Receipt printed successfully via Bluetooth');
-      return true;
-    } catch (e) {
-      print('Error printing via Bluetooth: $e');
+  // OPTIMIZED: Fast USB connection test with improved caching
+  Future<bool> _testUSBConnection() async {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isWindows && !Platform.isLinux)) {
       return false;
-    } finally {
-      _scanResultsSubscription?.cancel();
+    }
+    if (ENABLE_MOCK_MODE) {
+      await Future.delayed(Duration(milliseconds: 500)); // Simulate connection time
+      print('🧪 MOCK: USB printer simulated - ${SIMULATE_PRINTER_SUCCESS ? "Connected" : "Failed"}');
+      return SIMULATE_PRINTER_SUCCESS;
+    }
+
+    try {
+      if (!await _isUSBSerialAvailable()) return false;
+
+      // Use cached devices if available and recent
+      if (_cachedUsbDevices.isEmpty || _isCacheExpired()) {
+        _cachedUsbDevices = await UsbSerial.listDevices();
+        _lastCacheUpdate = DateTime.now();
+      }
+
+      if (_cachedUsbDevices.isEmpty) return false;
+
+      // If we already have a persistent connection, test it quickly
+      if (_persistentUsbPort != null) {
+        try {
+          // Quick health check - send minimal data
+          await _persistentUsbPort!.write(Uint8List.fromList([0x1B, 0x40])); // ESC @ (initialize)
+          await Future.delayed(Duration(milliseconds: 100));
+          return true;
+        } catch (e) {
+          print('🔧 USB connection health check failed: $e');
+          await _closeUsbConnection();
+        }
+      }
+
+      // Establish new connection with first available device
+      UsbDevice device = _cachedUsbDevices.first;
+      return await _establishUSBConnection(device);
+    } catch (e) {
+      print('❌ USB test error: $e');
+      return false;
     }
   }
 
-  // Print via Bluetooth using print_bluetooth_thermal
-  Future<bool> printReceiptBluetoothThermal({
+  // OPTIMIZED: Fast Bluetooth connection test with health monitoring
+  Future<bool> _testThermalBluetoothConnection() async {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
+      return false;
+    }
+    if (ENABLE_MOCK_MODE) {
+      await Future.delayed(Duration(milliseconds: 800)); // Simulate connection time
+      print('🧪 MOCK: Bluetooth thermal printer simulated - ${SIMULATE_PRINTER_SUCCESS ? "Connected" : "Failed"}');
+      return SIMULATE_PRINTER_SUCCESS;
+    }
+
+    try {
+      if (!await _isBluetoothEnabled()) return false;
+
+      // Use cached devices if available and recent
+      if (_cachedThermalDevices.isEmpty || _isCacheExpired()) {
+        _cachedThermalDevices = await PrintBluetoothThermal.pairedBluetooths;
+        _lastCacheUpdate = DateTime.now();
+      }
+
+      if (_cachedThermalDevices.isEmpty) return false;
+
+      // If already connected, test connection health
+      if (_isBluetoothConnected && _connectedBluetoothDevice != null) {
+        try {
+          bool isConnected = await PrintBluetoothThermal.connectionStatus;
+          if (isConnected) {
+            // Send a quick test command
+            await PrintBluetoothThermal.writeBytes([0x1B, 0x40]); // ESC @ (initialize)
+            await Future.delayed(Duration(milliseconds: 100));
+            return true;
+          }
+        } catch (e) {
+          print('🔧 Bluetooth connection health check failed: $e');
+          await _closeBluetoothConnection();
+        }
+      }
+
+      // Establish new connection
+      return await _establishBluetoothConnection();
+    } catch (e) {
+      print('❌ Bluetooth test error: $e');
+      return false;
+    }
+  }
+
+  // SUPER OPTIMIZED: Ultra-fast printing with pre-generated receipts
+  Future<bool> printReceiptWithUserInteraction({
+    required String transactionId,
+    required String orderType,
+    required List<CartItem> cartItems,
+    required double subtotal,
+    required double vatAmount,
+    required double totalCharge,
+    String? extraNotes,
+    Function(List<String> availableMethods)? onShowMethodSelection,
+  }) async {
+    if (kIsWeb) {
+      print('🚫 Web platform - printer not supported');
+      return false;
+    }
+
+    print('🖨️ Starting super-fast print job...');
+
+    // Pre-generate receipt data while testing connections
+    String receiptKey = '$transactionId-$orderType-${cartItems.length}';
+
+    // Generate receipt data in parallel with connection testing
+    Future<List<int>> receiptDataFuture = _generateESCPOSReceipt(
+      transactionId: transactionId,
+      orderType: orderType,
+      cartItems: cartItems,
+      subtotal: subtotal,
+      vatAmount: vatAmount,
+      totalCharge: totalCharge,
+      extraNotes: extraNotes,
+    );
+
+    Future<String> receiptContentFuture = Future.value(_generateReceiptContent(
+      transactionId: transactionId,
+      orderType: orderType,
+      cartItems: cartItems,
+      subtotal: subtotal,
+      vatAmount: vatAmount,
+      totalCharge: totalCharge,
+      extraNotes: extraNotes,
+    ));
+
+    // Test connections in parallel
+    Future<Map<String, bool>> connectionTestFuture = testAllConnections();
+
+    // Wait for all preparations to complete
+    List<dynamic> results = await Future.wait([
+      connectionTestFuture,
+      receiptDataFuture,
+      receiptContentFuture,
+    ]);
+
+    Map<String, bool> connectionStatus = results[0];
+    List<int> receiptData = results[1];
+    String receiptContent = results[2];
+
+    // Cache the generated receipt data
+    _receiptCache[receiptKey] = receiptData;
+
+    List<String> availableMethods = [];
+    if (connectionStatus['usb'] == true) availableMethods.add('USB');
+    if (connectionStatus['bluetooth'] == true) availableMethods.add('Thermal Bluetooth');
+
+    if (availableMethods.isEmpty) {
+      print('❌ No printer connections available');
+      if (onShowMethodSelection != null) {
+        onShowMethodSelection(['USB', 'Thermal Bluetooth']);
+      }
+      return false;
+    }
+
+    // Start connection health monitoring
+    _startConnectionHealthMonitoring();
+
+    // Try available methods with pre-generated data
+    for (String method in availableMethods) {
+      print('🚀 Attempting super-fast $method printing...');
+
+      bool success = await _printWithPreGeneratedData(
+        method: method,
+        receiptData: receiptData,
+        receiptContent: receiptContent,
+      );
+
+      if (success) {
+        print('✅ $method printing successful');
+        return true;
+      }
+    }
+
+    print('❌ All available methods failed');
+    if (onShowMethodSelection != null) {
+      onShowMethodSelection(availableMethods);
+    }
+    return false;
+  }
+
+  // SUPER OPTIMIZED: Direct printing with pre-generated data
+  Future<bool> _printWithPreGeneratedData({
+    required String method,
+    required List<int> receiptData,
+    required String receiptContent,
+  }) async {
+    switch (method) {
+      case 'USB':
+        return await _printUSBSuperFast(receiptData);
+      case 'Thermal Bluetooth':
+        return await _printBluetoothSuperFast(receiptContent);
+      default:
+        return false;
+    }
+  }
+
+  // SUPER OPTIMIZED: Ultra-fast USB printing
+  Future<bool> _printUSBSuperFast(List<int> receiptData) async {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isWindows && !Platform.isLinux)) {
+      return false;
+    }
+    if (ENABLE_MOCK_MODE) {
+      await Future.delayed(Duration(milliseconds: 1000)); // Simulate print time
+      print('🧪 MOCK: USB printing simulated');
+      print('📄 Receipt data length: ${receiptData.length} bytes');
+      print('📄 Receipt preview: ${String.fromCharCodes(receiptData.take(100))}...');
+      return SIMULATE_PRINTER_SUCCESS;
+    }
+
+
+    try {
+      // Ensure we have a persistent connection
+      if (_persistentUsbPort == null) {
+        if (_cachedUsbDevices.isEmpty) {
+          _cachedUsbDevices = await UsbSerial.listDevices();
+        }
+        if (_cachedUsbDevices.isEmpty) return false;
+
+        if (!await _establishUSBConnection(_cachedUsbDevices.first)) {
+          return false;
+        }
+      }
+
+      // Ultra-fast printing with minimal delays
+      await _persistentUsbPort!.write(Uint8List.fromList(receiptData));
+      await Future.delayed(Duration(milliseconds: 50)); // Minimal delay
+
+      print('✅ USB super-fast print successful');
+      return true;
+
+    } catch (e) {
+      print('❌ USB super-fast print error: $e');
+      await _closeUsbConnection();
+      return false;
+    }
+  }
+
+  // SUPER OPTIMIZED: Ultra-fast Bluetooth printing
+  Future<bool> _printBluetoothSuperFast(String receiptContent) async {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
+      return false;
+    }
+    if (ENABLE_MOCK_MODE) {
+      await Future.delayed(Duration(milliseconds: 1200)); // Simulate print time
+      print('🧪 MOCK: Bluetooth printing simulated');
+      print('📄 Receipt content preview:');
+      print(receiptContent.substring(0, math.min(200, receiptContent.length)) + '...');
+      return SIMULATE_PRINTER_SUCCESS;
+    }
+
+    try {
+      // Ensure we have a persistent connection
+      if (!_isBluetoothConnected) {
+        if (!await _establishBluetoothConnection()) {
+          return false;
+        }
+      }
+
+      // Generate thermal ticket and print immediately
+      List<int> ticket = await _generateThermalTicket(receiptContent);
+      await PrintBluetoothThermal.writeBytes(ticket);
+
+      print('✅ Bluetooth super-fast print successful');
+      return true;
+
+    } catch (e) {
+      print('❌ Bluetooth super-fast print error: $e');
+      await _closeBluetoothConnection();
+      return false;
+    }
+  }
+
+  // Add this method to your class
+  Future<bool> validateReceiptGeneration({
     required String transactionId,
     required String orderType,
     required List<CartItem> cartItems,
@@ -125,41 +380,7 @@ class ThermalPrinterService {
     String? extraNotes,
   }) async {
     try {
-      // Request permissions
-      await _requestBluetoothPermissions();
-
-      // Check Bluetooth status
-      bool connectionStatus = await PrintBluetoothThermal.bluetoothEnabled;
-      if (!connectionStatus) {
-        print('Bluetooth is not enabled');
-        return false;
-      }
-
-      // Get paired devices
-      List<BluetoothInfo> pairedDevices =
-      await PrintBluetoothThermal.pairedBluetooths;
-
-      if (pairedDevices.isEmpty) {
-        print('No paired Bluetooth devices found');
-        return false;
-      }
-
-      // Find a printer device
-      BluetoothInfo? printer = _findThermalPrinterDevice(pairedDevices);
-      if (printer == null) {
-        printer = pairedDevices.first; // Use first device if no specific printer found
-      }
-
-      // Connect to printer
-      bool connected = await PrintBluetoothThermal.connect(
-        macPrinterAddress: printer.macAdress,
-      );
-      if (!connected) {
-        print('Failed to connect to thermal printer');
-        return false;
-      }
-
-      // Generate receipt content
+      // Test receipt content generation
       String receiptContent = _generateReceiptContent(
         transactionId: transactionId,
         orderType: orderType,
@@ -170,23 +391,147 @@ class ThermalPrinterService {
         extraNotes: extraNotes,
       );
 
-      // Print the receipt
-      List<int> ticket = await _generateThermalTicket(receiptContent);
-      await PrintBluetoothThermal.writeBytes(ticket);
+      // Test ESC/POS receipt generation
+      List<int> receiptData = await _generateESCPOSReceipt(
+        transactionId: transactionId,
+        orderType: orderType,
+        cartItems: cartItems,
+        subtotal: subtotal,
+        vatAmount: vatAmount,
+        totalCharge: totalCharge,
+        extraNotes: extraNotes,
+      );
 
-      // Disconnect
-      await PrintBluetoothThermal.disconnect;
+      print('✅ Receipt generation validation successful');
+      print('📄 Content length: ${receiptContent.length} characters');
+      print('📄 ESC/POS data length: ${receiptData.length} bytes');
 
-      print('Receipt printed successfully via Bluetooth Thermal');
       return true;
     } catch (e) {
-      print('Error printing via Bluetooth Thermal: $e');
+      print('❌ Receipt generation validation failed: $e');
       return false;
     }
   }
 
-  // Print receipt with multiple printer options
-  Future<bool> printReceipt({
+  // IMPROVED: Robust USB connection establishment
+  Future<bool> _establishUSBConnection(UsbDevice device) async {
+    try {
+      _persistentUsbPort = await device.create();
+      if (_persistentUsbPort == null) return false;
+
+      bool opened = await _persistentUsbPort!.open();
+      if (!opened) {
+        _persistentUsbPort = null;
+        return false;
+      }
+
+      // Optimal settings for thermal printers
+      await _persistentUsbPort!.setPortParameters(
+        115200, // Higher baud rate for faster printing
+        8,
+        1,
+        0,
+      );
+
+      // Send initialization command
+      await _persistentUsbPort!.write(Uint8List.fromList([0x1B, 0x40])); // ESC @
+      await Future.delayed(Duration(milliseconds: 100));
+
+      print('✅ USB persistent connection established with optimal settings');
+      return true;
+
+    } catch (e) {
+      print('❌ Failed to establish USB connection: $e');
+      _persistentUsbPort = null;
+      return false;
+    }
+  }
+
+  // IMPROVED: Robust Bluetooth connection establishment
+  Future<bool> _establishBluetoothConnection() async {
+    try {
+      if (_cachedThermalDevices.isEmpty) return false;
+
+      BluetoothInfo? printer = _findThermalPrinterDevice(_cachedThermalDevices);
+      printer ??= _cachedThermalDevices.first;
+
+      // Disconnect any existing connection first
+      if (_isBluetoothConnected) {
+        await PrintBluetoothThermal.disconnect;
+        await Future.delayed(Duration(milliseconds: 200));
+      }
+
+      bool connected = await PrintBluetoothThermal.connect(
+        macPrinterAddress: printer.macAdress,
+      );
+
+      if (connected) {
+        _isBluetoothConnected = true;
+        _connectedBluetoothDevice = printer.macAdress;
+
+        // Send initialization command
+        await PrintBluetoothThermal.writeBytes([0x1B, 0x40]); // ESC @
+        await Future.delayed(Duration(milliseconds: 100));
+
+        print('✅ Bluetooth persistent connection established');
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      print('❌ Failed to establish Bluetooth connection: $e');
+      _isBluetoothConnected = false;
+      _connectedBluetoothDevice = null;
+      return false;
+    }
+  }
+
+  // NEW: Connection health monitoring
+  void _startConnectionHealthMonitoring() {
+    if (_isMonitoringConnection) return;
+
+    _isMonitoringConnection = true;
+    _connectionHealthTimer = Timer.periodic(Duration(seconds: 30), (timer) async {
+      if (!_isMonitoringConnection) {
+        timer.cancel();
+        return;
+      }
+
+      // Check USB connection health
+      if (_persistentUsbPort != null) {
+        try {
+          await _persistentUsbPort!.write(Uint8List.fromList([0x1B, 0x40]));
+        } catch (e) {
+          print('🔧 USB connection lost, attempting reconnection...');
+          await _closeUsbConnection();
+        }
+      }
+
+      // Check Bluetooth connection health
+      if (_isBluetoothConnected) {
+        try {
+          bool isConnected = await PrintBluetoothThermal.connectionStatus;
+          if (!isConnected) {
+            print('🔧 Bluetooth connection lost, attempting reconnection...');
+            await _closeBluetoothConnection();
+          }
+        } catch (e) {
+          print('🔧 Bluetooth health check failed: $e');
+          await _closeBluetoothConnection();
+        }
+      }
+    });
+  }
+
+  void _stopConnectionHealthMonitoring() {
+    _isMonitoringConnection = false;
+    _connectionHealthTimer?.cancel();
+    _connectionHealthTimer = null;
+  }
+
+  // OPTIMIZED: Retry with connection reset
+  Future<bool> retryPrintingMethod({
+    required String method,
     required String transactionId,
     required String orderType,
     required List<CartItem> cartItems,
@@ -195,70 +540,157 @@ class ThermalPrinterService {
     required double totalCharge,
     String? extraNotes,
   }) async {
-    print('🖨️ Starting print job...');
+    if (kIsWeb) return false;
 
-    // Try USB first
-    try {
-      bool usbSuccess = await printReceiptUSB(
-        transactionId: transactionId,
-        orderType: orderType,
-        cartItems: cartItems,
-        subtotal: subtotal,
-        vatAmount: vatAmount,
-        totalCharge: totalCharge,
-        extraNotes: extraNotes,
-      );
+    print('🔄 Retrying $method printing with connection reset...');
 
-      if (usbSuccess) {
-        return true;
-      }
-    } catch (e) {
-      print('USB print method failed: $e');
-    }
+    // Clean up existing connections
+    await _closeAllConnections();
+    _clearCache();
 
-    // Try Bluetooth with bluetooth_print_plus
-    try {
-      bool bluetoothSuccess = await printReceiptBluetooth(
-        transactionId: transactionId,
-        orderType: orderType,
-        cartItems: cartItems,
-        subtotal: subtotal,
-        vatAmount: vatAmount,
-        totalCharge: totalCharge,
-        extraNotes: extraNotes,
-      );
+    // Generate receipt data
+    List<int> receiptData = await _generateESCPOSReceipt(
+      transactionId: transactionId,
+      orderType: orderType,
+      cartItems: cartItems,
+      subtotal: subtotal,
+      vatAmount: vatAmount,
+      totalCharge: totalCharge,
+      extraNotes: extraNotes,
+    );
 
-      if (bluetoothSuccess) {
-        return true;
-      }
-    } catch (e) {
-      print('Bluetooth print method failed: $e');
-    }
+    String receiptContent = _generateReceiptContent(
+      transactionId: transactionId,
+      orderType: orderType,
+      cartItems: cartItems,
+      subtotal: subtotal,
+      vatAmount: vatAmount,
+      totalCharge: totalCharge,
+      extraNotes: extraNotes,
+    );
 
-    // Try Bluetooth with print_bluetooth_thermal as last option
-    try {
-      bool thermalSuccess = await printReceiptBluetoothThermal(
-        transactionId: transactionId,
-        orderType: orderType,
-        cartItems: cartItems,
-        subtotal: subtotal,
-        vatAmount: vatAmount,
-        totalCharge: totalCharge,
-        extraNotes: extraNotes,
-      );
-
-      if (thermalSuccess) {
-        return true;
-      }
-    } catch (e) {
-      print('Thermal print method failed: $e');
-    }
-
-    print('❌ All printer methods failed');
-    return false;
+    return await _printWithPreGeneratedData(
+      method: method,
+      receiptData: receiptData,
+      receiptContent: receiptContent,
+    );
   }
 
-  // Generate receipt content
+  // Helper methods
+  bool _isCacheExpired() {
+    if (_lastCacheUpdate == null) return true;
+    return DateTime.now().difference(_lastCacheUpdate!) > CACHE_VALIDITY;
+  }
+
+  Future<void> _closeUsbConnection() async {
+    try {
+      await _persistentUsbPort?.close();
+    } catch (e) {
+      print('Error closing USB connection: $e');
+    } finally {
+      _persistentUsbPort = null;
+    }
+  }
+
+  Future<void> _closeBluetoothConnection() async {
+    try {
+      if (_isBluetoothConnected) {
+        await PrintBluetoothThermal.disconnect;
+      }
+    } catch (e) {
+      print('Error closing Bluetooth connection: $e');
+    } finally {
+      _isBluetoothConnected = false;
+      _connectedBluetoothDevice = null;
+    }
+  }
+
+  Future<void> _closeAllConnections() async {
+    await _closeUsbConnection();
+    await _closeBluetoothConnection();
+  }
+
+  void _clearCache() {
+    _cachedThermalDevices.clear();
+    _cachedUsbDevices.clear();
+    _receiptCache.clear();
+    _lastCacheUpdate = null;
+  }
+
+  // Cleanup method
+  Future<void> dispose() async {
+    _stopConnectionHealthMonitoring();
+    await _closeAllConnections();
+    _clearCache();
+  }
+
+  // Platform-specific helper methods
+  Future<bool> _isUSBSerialAvailable() async {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isWindows && !Platform.isLinux)) {
+      return false;
+    }
+
+    try {
+      await UsbSerial.listDevices();
+      return true;
+    } on MissingPluginException {
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> _isBluetoothEnabled() async {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
+      return false;
+    }
+
+    try {
+      await _requestBluetoothPermissions();
+      return await PrintBluetoothThermal.bluetoothEnabled;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _requestBluetoothPermissions() async {
+    if (kIsWeb) return; // Skip permissions on web
+
+    try {
+      List<Permission> permissions = [
+        Permission.bluetooth,
+        Permission.bluetoothConnect,
+        Permission.bluetoothScan,
+        Permission.location,
+      ];
+
+      Map<Permission, PermissionStatus> statuses = await permissions.request();
+
+      for (var entry in statuses.entries) {
+        if (entry.value != PermissionStatus.granted) {
+          print('Permission ${entry.key} not granted: ${entry.value}');
+        }
+      }
+    } catch (e) {
+      print('Error requesting Bluetooth permissions: $e');
+    }
+  }
+
+  BluetoothInfo? _findThermalPrinterDevice(List<BluetoothInfo> devices) {
+    for (BluetoothInfo device in devices) {
+      String deviceName = device.name.toLowerCase();
+      if (deviceName.contains('printer') ||
+          deviceName.contains('thermal') ||
+          deviceName.contains('pos') ||
+          deviceName.contains('receipt') ||
+          deviceName.contains('rp')) {
+        return device;
+      }
+    }
+    return null;
+  }
+
+  // Receipt generation methods (optimized)
   String _generateReceiptContent({
     required String transactionId,
     required String orderType,
@@ -270,7 +702,6 @@ class ThermalPrinterService {
   }) {
     StringBuffer receipt = StringBuffer();
 
-    // Header
     receipt.writeln('================================');
     receipt.writeln('         RESTAURANT NAME');
     receipt.writeln('================================');
@@ -280,7 +711,6 @@ class ThermalPrinterService {
     receipt.writeln('================================');
     receipt.writeln();
 
-    // Items
     receipt.writeln('ITEMS:');
     receipt.writeln('--------------------------------');
 
@@ -294,14 +724,12 @@ class ThermalPrinterService {
 
       receipt.writeln('${item.quantity}x ${item.foodItem.name}');
 
-      // Add options if available
       if (item.selectedOptions != null && item.selectedOptions!.isNotEmpty) {
         for (String option in item.selectedOptions!) {
           receipt.writeln('  + $option');
         }
       }
 
-      // Add comment if available
       if (item.comment != null && item.comment!.isNotEmpty) {
         receipt.writeln('  Note: ${item.comment}');
       }
@@ -310,7 +738,6 @@ class ThermalPrinterService {
       receipt.writeln();
     }
 
-    // Totals
     receipt.writeln('--------------------------------');
     receipt.writeln('Subtotal:         £${subtotal.toStringAsFixed(2)}');
     receipt.writeln('VAT (5%):         £${vatAmount.toStringAsFixed(2)}');
@@ -318,13 +745,11 @@ class ThermalPrinterService {
     receipt.writeln('TOTAL:            £${totalCharge.toStringAsFixed(2)}');
     receipt.writeln('================================');
 
-    // Extra notes
     if (extraNotes != null && extraNotes.isNotEmpty) {
       receipt.writeln();
       receipt.writeln('Notes: $extraNotes');
     }
 
-    // Footer
     receipt.writeln();
     receipt.writeln('Thank you for your order!');
     receipt.writeln('================================');
@@ -332,7 +757,6 @@ class ThermalPrinterService {
     return receipt.toString();
   }
 
-  // Generate ESC/POS receipt
   Future<List<int>> _generateESCPOSReceipt({
     required String transactionId,
     required String orderType,
@@ -346,7 +770,6 @@ class ThermalPrinterService {
     final generator = Generator(PaperSize.mm58, profile);
     List<int> bytes = [];
 
-    // Header
     bytes += generator.setGlobalCodeTable('CP1252');
     bytes += generator.text(
       'RESTAURANT NAME',
@@ -368,7 +791,6 @@ class ThermalPrinterService {
     );
     bytes += generator.emptyLines(1);
 
-    // Items
     bytes += generator.text('ITEMS:', styles: const PosStyles(bold: true));
     bytes += generator.text('--------------------------------');
 
@@ -382,14 +804,12 @@ class ThermalPrinterService {
 
       bytes += generator.text('${item.quantity}x ${item.foodItem.name}');
 
-      // Add options if available
       if (item.selectedOptions != null && item.selectedOptions!.isNotEmpty) {
         for (String option in item.selectedOptions!) {
           bytes += generator.text('  + $option');
         }
       }
 
-      // Add comment if available
       if (item.comment != null && item.comment!.isNotEmpty) {
         bytes += generator.text('  Note: ${item.comment}');
       }
@@ -401,7 +821,6 @@ class ThermalPrinterService {
       bytes += generator.emptyLines(1);
     }
 
-    // Totals
     bytes += generator.text('--------------------------------');
     bytes += generator.row([
       PosColumn(text: 'Subtotal:', width: 8),
@@ -436,13 +855,11 @@ class ThermalPrinterService {
       styles: const PosStyles(align: PosAlign.center),
     );
 
-    // Extra notes
     if (extraNotes != null && extraNotes.isNotEmpty) {
       bytes += generator.emptyLines(1);
       bytes += generator.text('Notes: $extraNotes');
     }
 
-    // Footer
     bytes += generator.emptyLines(1);
     bytes += generator.text(
       'Thank you for your order!',
@@ -453,324 +870,17 @@ class ThermalPrinterService {
       styles: const PosStyles(align: PosAlign.center),
     );
 
-    // Feed paper
-    bytes += generator.emptyLines(3);
+    bytes += generator.emptyLines(2);
     bytes += generator.cut();
 
     return bytes;
   }
 
-  // Generate thermal ticket for print_bluetooth_thermal
   Future<List<int>> _generateThermalTicket(String content) async {
     List<int> bytes = [];
-
-    // Convert string to bytes
     bytes.addAll(content.codeUnits);
-
-    // Add line feeds
     bytes.addAll([10, 10, 10]); // 3 line feeds
-
-    // Cut paper (if supported)
     bytes.addAll([29, 86, 65, 0]); // Full cut
-
     return bytes;
-  }
-
-  // Find printer device from bluetooth_print_plus devices
-  BluetoothDevice? _findPrinterDevice(List<BluetoothDevice> devices) {
-    for (BluetoothDevice device in devices) {
-      String deviceName = device.name.toLowerCase();
-      if (deviceName.contains('printer') ||
-          deviceName.contains('thermal') ||
-          deviceName.contains('pos') ||
-          deviceName.contains('receipt')) {
-        return device;
-      }
-    }
-    return devices.isNotEmpty ? devices.first : null;
-  }
-
-  // Find printer device from print_bluetooth_thermal devices
-  BluetoothInfo? _findThermalPrinterDevice(List<BluetoothInfo> devices) {
-    for (BluetoothInfo device in devices) {
-      String deviceName = device.name.toLowerCase();
-      if (deviceName.contains('printer') ||
-          deviceName.contains('thermal') ||
-          deviceName.contains('pos') ||
-          deviceName.contains('receipt')) {
-        return device;
-      }
-    }
-    return null;
-  }
-
-  // Find USB thermal printer device
-  UsbDevice? _findUSBThermalPrinter(List<UsbDevice> devices) {
-    for (UsbDevice device in devices) {
-      // Check for common thermal printer vendor IDs
-      // These are common vendor IDs for thermal printers
-      if (device.vid == 0x0483 || // STMicroelectronics
-          device.vid == 0x04b8 || // Epson
-          device.vid == 0x04f9 || // Brother
-          device.vid == 0x0fe6 || // ICS Advent
-          device.vid == 0x154f || // SNBC
-          device.vid == 0x0dd4 || // Zijiang
-          device.vid == 0x1fc9 || // NXP
-          device.vid == 0x2965) {  // Xprinter
-        return device;
-      }
-    }
-
-    // If no specific thermal printer found, return first device
-    return devices.isNotEmpty ? devices.first : null;
-  }
-
-  // Request Bluetooth permissions
-  Future<void> _requestBluetoothPermissions() async {
-    try {
-      List<Permission> permissions = [
-        Permission.bluetooth,
-        Permission.bluetoothConnect,
-        Permission.bluetoothScan,
-        Permission.location,
-      ];
-
-      Map<Permission, PermissionStatus> statuses = await permissions.request();
-
-      for (var entry in statuses.entries) {
-        if (entry.value != PermissionStatus.granted) {
-          print('Permission ${entry.key} not granted: ${entry.value}');
-        }
-      }
-    } catch (e) {
-      print('Error requesting Bluetooth permissions: $e');
-    }
-  }
-
-  // Get available Bluetooth devices
-  Future<List<BluetoothDevice>> getBluetoothDevices() async {
-    try {
-      await _requestBluetoothPermissions();
-      _initBluetoothPrint();
-
-      if (!BluetoothPrintPlus.isBlueOn) {
-        return [];
-      }
-
-      // Start scanning
-      await BluetoothPrintPlus.startScan(timeout: Duration(seconds: 10));
-
-      // Listen for scan results
-      Completer<List<BluetoothDevice>> completer = Completer();
-      StreamSubscription? subscription;
-
-      subscription = BluetoothPrintPlus.scanResults.listen((devices) {
-        if (!completer.isCompleted) {
-          completer.complete(devices);
-          subscription?.cancel();
-        }
-      });
-
-      // Wait for scan to complete or timeout
-      return await completer.future.timeout(
-        Duration(seconds: 15),
-        onTimeout: () {
-          subscription?.cancel();
-          return [];
-        },
-      );
-    } catch (e) {
-      print('Error getting Bluetooth devices: $e');
-      return [];
-    }
-  }
-
-  // Get available thermal Bluetooth devices
-  Future<List<BluetoothInfo>> getThermalBluetoothDevices() async {
-    try {
-      await _requestBluetoothPermissions();
-
-      bool connectionStatus = await PrintBluetoothThermal.bluetoothEnabled;
-      if (!connectionStatus) {
-        return [];
-      }
-
-      return await PrintBluetoothThermal.pairedBluetooths;
-    } catch (e) {
-      print('Error getting thermal Bluetooth devices: $e');
-      return [];
-    }
-  }
-
-  Future<bool> printReceiptUSB({
-    required String transactionId,
-    required String orderType,
-    required List<CartItem> cartItems,
-    required double subtotal,
-    required double vatAmount,
-    required double totalCharge,
-    String? extraNotes,
-  }) async {
-    try {
-      // Check if USB serial plugin is available
-      if (!await _isUSBSerialAvailable()) {
-        print('USB serial plugin not available on this platform');
-        return false;
-      }
-
-      // Get available USB devices
-      List<UsbDevice> devices = await UsbSerial.listDevices();
-      if (devices.isEmpty) {
-        print('No USB devices found');
-        return false;
-      }
-
-      // Find thermal printer device
-      UsbDevice? printer = _findUSBThermalPrinter(devices);
-      if (printer == null) {
-        print('No USB thermal printer found');
-        return false;
-      }
-
-      // Connect to USB device
-      _usbPort = await printer.create();
-      if (_usbPort == null) {
-        print('Failed to create USB port');
-        return false;
-      }
-
-      bool opened = await _usbPort!.open();
-      if (!opened) {
-        print('Failed to open USB port');
-        return false;
-      }
-
-      // Set port parameters for thermal printer
-      await _usbPort!.setPortParameters(9600, 8, 1, 0);
-
-      // Generate ESC/POS receipt
-      List<int> receiptBytes = await _generateESCPOSReceipt(
-        transactionId: transactionId,
-        orderType: orderType,
-        cartItems: cartItems,
-        subtotal: subtotal,
-        vatAmount: vatAmount,
-        totalCharge: totalCharge,
-        extraNotes: extraNotes,
-      );
-
-      // Send data to USB printer
-      await _usbPort!.write(Uint8List.fromList(receiptBytes));
-
-      // Wait for printing to complete
-      await Future.delayed(Duration(seconds: 2));
-
-      // Close USB connection
-      await _usbPort!.close();
-
-      print('Receipt printed successfully via USB');
-      return true;
-    } on MissingPluginException catch (e) {
-      print('USB serial plugin not implemented on this platform: $e');
-      return false;
-    } catch (e) {
-      print('Error printing via USB: $e');
-      if (_usbPort != null) {
-        try {
-          await _usbPort!.close();
-        } catch (closeError) {
-          print('Error closing USB port: $closeError');
-        }
-      }
-      return false;
-    }
-  }
-
-// Check if USB serial plugin is available
-  Future<bool> _isUSBSerialAvailable() async {
-    try {
-      await UsbSerial.listDevices();
-      return true;
-    } on MissingPluginException {
-      return false;
-    } catch (e) {
-      return false;
-    }
-  }
-
-// Get available USB printers
-  Future<List<UsbDevice>> getUSBPrinters() async {
-    try {
-      if (!await _isUSBSerialAvailable()) {
-        print('USB serial plugin not available on this platform');
-        return [];
-      }
-
-      List<UsbDevice> devices = await UsbSerial.listDevices();
-      return devices.where((device) => _findUSBThermalPrinter([device]) != null).toList();
-    } on MissingPluginException catch (e) {
-      print('USB serial plugin not implemented on this platform: $e');
-      return [];
-    } catch (e) {
-      print('Error getting USB printers: $e');
-      return [];
-    }
-  }
-
-// Test connection methods
-  Future<bool> testUSBConnection() async {
-    try {
-      if (!await _isUSBSerialAvailable()) {
-        print('USB serial plugin not available on this platform');
-        return false;
-      }
-
-      List<UsbDevice> printers = await getUSBPrinters();
-      return printers.isNotEmpty;
-    } on MissingPluginException catch (e) {
-      print('USB serial plugin not implemented on this platform: $e');
-      return false;
-    } catch (e) {
-      print('Error testing USB connection: $e');
-      return false;
-    }
-  }
-
-  Future<bool> testBluetoothConnection() async {
-    try {
-      List<BluetoothDevice> devices = await getBluetoothDevices();
-      return devices.isNotEmpty;
-    } catch (e) {
-      print('Error testing Bluetooth connection: $e');
-      return false;
-    }
-  }
-
-  Future<bool> testThermalBluetoothConnection() async {
-    try {
-      List<BluetoothInfo> devices = await getThermalBluetoothDevices();
-      return devices.isNotEmpty;
-    } catch (e) {
-      print('Error testing thermal Bluetooth connection: $e');
-      return false;
-    }
-  }
-
-  // Run connection tests
-  Future<Map<String, bool>> testAllConnections() async {
-    print('🧪 Testing all printer connections...');
-
-    Map<String, bool> results = {
-      'usb': await testUSBConnection(),
-      'bluetooth': await testBluetoothConnection(),
-      'thermal': await testThermalBluetoothConnection(),
-    };
-
-    print('📊 Connection Test Results:');
-    print('   USB: ${results['usb'] == true ? "✅ Available" : "❌ Not Available"}');
-    print('   Bluetooth: ${results['bluetooth'] == true ? "✅ Available" : "❌ Not Available"}');
-    print('   Thermal: ${results['thermal'] == true ? "✅ Available" : "❌ Not Available"}');
-
-    return results;
   }
 }

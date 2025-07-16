@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:epos/models/order_models.dart';
+import 'package:epos/services/thermal_printer_service.dart';
 
 class PaymentWidget extends StatefulWidget {
   final double subtotal;
@@ -26,7 +27,8 @@ class _PaymentWidgetState extends State<PaymentWidget> {
   String _selectedPaymentType = 'Cash';
   final TextEditingController _amountReceivedController = TextEditingController();
   final TextEditingController _discountPercentageController = TextEditingController();
-
+  bool _isPrinterConnected = false;
+  bool _isCheckingPrinter = false;
   double _discountedTotal = 0.0;
   double _change = 0.0;
 
@@ -36,6 +38,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
     _discountedTotal = widget.subtotal;
     _amountReceivedController.addListener(_calculateChange);
     _discountPercentageController.addListener(_calculateDiscountedTotal);
+    _checkPrinterStatus();
   }
 
   @override
@@ -46,6 +49,35 @@ class _PaymentWidgetState extends State<PaymentWidget> {
     _discountPercentageController.dispose();
     super.dispose();
   }
+
+  Future<void> _checkPrinterStatus() async {
+    if (_isCheckingPrinter) return;
+
+    setState(() {
+      _isCheckingPrinter = true;
+    });
+
+    try {
+      Map<String, bool> connectionStatus = await ThermalPrinterService().testAllConnections();
+      bool isConnected = connectionStatus['usb'] == true || connectionStatus['bluetooth'] == true;
+
+      if (mounted) {
+        setState(() {
+          _isPrinterConnected = isConnected;
+          _isCheckingPrinter = false;
+        });
+      }
+    } catch (e) {
+      print('Error checking printer status: $e');
+      if (mounted) {
+        setState(() {
+          _isPrinterConnected = false;
+          _isCheckingPrinter = false;
+        });
+      }
+    }
+  }
+
 
   void _calculateDiscountedTotal() {
     setState(() {
@@ -380,7 +412,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                     width: double.infinity,
                     height: 60,
                     child: ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async {
                         if (_selectedPaymentType == 'Cash' &&
                             (_amountReceivedController.text.isEmpty ||
                                 (double.tryParse(_amountReceivedController.text) ?? 0.0) < _discountedTotal)) {
@@ -392,6 +424,9 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                           );
                           return;
                         }
+
+                        // Check printer status before proceeding
+                        await _checkPrinterStatus();
 
                         final paymentDetails = PaymentDetails(
                           paymentType: _selectedPaymentType,
@@ -410,13 +445,34 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                         ),
                         elevation: 8,
                       ),
-                      child: const Text(
-                        'Confirm Order',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Poppins',
-                        ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'Confirm Order',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          if (_isCheckingPrinter)
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          else
+                            Icon(
+                              Icons.print,
+                              color: _isPrinterConnected ? Colors.green : Colors.red,
+                              size: 24,
+                            ),
+                        ],
                       ),
                     ),
                   ),
