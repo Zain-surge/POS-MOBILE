@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:epos/models/order.dart'; // Ensure your Order model is correctly imported
 
 class NewOrderNotificationWidget extends StatelessWidget {
-  final Order order;
-  final VoidCallback onAccept;
-  final VoidCallback onDecline;
-  final VoidCallback onDismiss;
+  final Order order; // Now handles a single order
+  final Function(Order) onAccept;
+  final Function(Order) onDecline;
+  final VoidCallback onDismiss; // To signal removal of this specific widget
 
   const NewOrderNotificationWidget({
     Key? key,
@@ -20,7 +20,7 @@ class NewOrderNotificationWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double cardWidth = 450.0;
-    final double cardHeight = 480.0; // Fixed height
+    final double cardHeight = 520.0;
     final double cardPadding = 16.0;
 
     return Positioned(
@@ -32,7 +32,7 @@ class NewOrderNotificationWidget extends StatelessWidget {
           width: cardWidth,
           height: cardHeight,
           decoration: BoxDecoration(
-            color: const Color(0xFFF2D9F9), // Background color: 0xFFF2D9F9
+            color: const Color(0xFFF2D9F9),
             borderRadius: BorderRadius.circular(15),
             boxShadow: [
               BoxShadow(
@@ -54,15 +54,17 @@ class NewOrderNotificationWidget extends StatelessWidget {
                   color: Colors.black,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
                 ),
-                child: Text(
-                  'Order ${order.orderId}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Poppins',
+                child: Center( // Center the order ID
+                  child: Text(
+                    'Order ${order.orderId}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'Poppins',
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
               ),
               // --- Body Content ---
@@ -139,10 +141,10 @@ class NewOrderNotificationWidget extends StatelessWidget {
 
                       // --- Horizontal Separator Line ---
                       const Divider(
-                        color: Colors.black, // Black line
-                        thickness: 1, // Thin line
+                        color: Colors.black,
+                        thickness: 1,
                       ),
-                      const SizedBox(height: 15), // Space after the line
+                      const SizedBox(height: 15),
 
                       // --- Total Section ---
                       Container(
@@ -182,7 +184,7 @@ class NewOrderNotificationWidget extends StatelessWidget {
                         'Customer: ${order.customerName}',
                         style: const TextStyle(
                           fontSize: 16,
-                          color: Colors.black, // Already black
+                          color: Colors.black,
                           fontFamily: 'Poppins',
                         ),
                       ),
@@ -191,7 +193,7 @@ class NewOrderNotificationWidget extends StatelessWidget {
                           'Phone: ${order.phoneNumber}',
                           style: const TextStyle(
                             fontSize: 16,
-                            color: Colors.black, // Already black
+                            color: Colors.black,
                             fontFamily: 'Poppins',
                           ),
                         ),
@@ -199,35 +201,69 @@ class NewOrderNotificationWidget extends StatelessWidget {
                         'Type: ${order.orderType}',
                         style: const TextStyle(
                           fontSize: 16,
-                          color: Colors.black, // Already black
+                          color: Colors.black,
                           fontFamily: 'Poppins',
                         ),
                       ),
                       const SizedBox(height: 20),
 
-                      // --- ACCEPT Button ---
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: onAccept,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFCB6CE6),
-                            padding: const EdgeInsets.symmetric(vertical: 18),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
+                      // --- Action Buttons ---
+                      Row(
+                        children: [
+                          // DECLINE Button
+                          // Expanded(
+                          //   child: ElevatedButton(
+                          //     onPressed: () {
+                          //       onDecline(order);
+                          //       onDismiss(); // Dismiss this specific notification
+                          //     },
+                          //     style: ElevatedButton.styleFrom(
+                          //       backgroundColor: Colors.red,
+                          //       padding: const EdgeInsets.symmetric(vertical: 16),
+                          //       shape: RoundedRectangleBorder(
+                          //         borderRadius: BorderRadius.circular(10),
+                          //       ),
+                          //       elevation: 5,
+                          //     ),
+                          //     child: const Text(
+                          //       'DECLINE',
+                          //       style: TextStyle(
+                          //         color: Colors.white,
+                          //         fontSize: 18,
+                          //         fontWeight: FontWeight.normal,
+                          //         fontFamily: 'Poppins',
+                          //       ),
+                          //     ),
+                          //   ),
+                          // ),
+                          const SizedBox(width: 16),
+                          // ACCEPT Button
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                onAccept(order);
+                                onDismiss(); // Dismiss this specific notification
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFCB6CE6),
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                elevation: 5,
+                              ),
+                              child: const Text(
+                                'ACCEPT',
+                                style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.normal,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
                             ),
-                            elevation: 5,
                           ),
-                          child: const Text(
-                            'ACCEPT',
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 20,
-                              fontWeight: FontWeight.normal,
-                              fontFamily: 'Poppins',
-                            ),
-                          ),
-                        ),
+                        ],
                       ),
                     ],
                   ),
@@ -241,7 +277,6 @@ class NewOrderNotificationWidget extends StatelessWidget {
   }
 }
 
-// Ensure you have your HexColor extension if you're using it elsewhere.
 extension HexColor on Color {
   static Color fromHex(String hexString) {
     final buffer = StringBuffer();

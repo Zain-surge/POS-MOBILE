@@ -163,6 +163,10 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
         return 'assets/images/SidesS.png';
       case 'DRINKS':
         return 'assets/images/DrinksS.png';
+      case 'MILKSHAKE':
+        return 'assets/images/MilkshakeS.png';
+      case 'DIPS':
+        return 'assets/images/DipsS.png';
       default:
         return 'assets/images/default.png';
     }
