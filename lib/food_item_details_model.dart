@@ -47,6 +47,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
 
   bool _noSalad = false;
   bool _noSauce = false;
+  bool _noCream = false;
 
   final TextEditingController _reviewNotesController = TextEditingController();
 
@@ -242,7 +243,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         maxHeight: MediaQuery.of(context).size.height * 0.9,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -250,7 +251,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
             decoration: const BoxDecoration(
-              color: Colors.white,
+              color: Colors.transparent,
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(14),
                 topRight: Radius.circular(14),
@@ -349,11 +350,11 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                             decoration: InputDecoration(
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
+                                borderSide: BorderSide(color: Colors.grey[100]!),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
+                                borderSide: BorderSide(color: Colors.grey[100]!),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
@@ -405,6 +406,29 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                     ),
                   ],
 
+                  if (widget.foodItem.category == 'Milkshake') ...[
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: _noCream,
+                              onChanged: (bool? value) {
+                                setState(() {
+                                  _noCream = value!;
+                                });
+                              },
+                              activeColor: const Color(0xFFCB6CE6),
+                            ),
+                            const Text('No Cream', style: TextStyle(fontSize: 16)),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  ],
+
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -421,11 +445,11 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                         decoration: InputDecoration(
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
+                            borderSide: BorderSide(color: Colors.grey[100]!),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
+                            borderSide: BorderSide(color: Colors.grey[100]!),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -447,8 +471,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: Colors.grey[200]!)),
+              color: Colors.transparent,
+              border: Border(top: BorderSide(color: Colors.grey[100]!)),
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(14),
                 bottomRight: Radius.circular(14),
@@ -469,7 +493,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                     ElevatedButton(
                       onPressed: _closeModal,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey[200],
+                        backgroundColor: Colors.grey[100],
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -556,7 +580,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               margin: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
                 color: Colors.white,
-                border: Border.all(color: Colors.grey[300]!),
+                border: Border.all(color: Colors.grey[100]!),
                 borderRadius: BorderRadius.circular(8),
               ),
               alignment: Alignment.center,
@@ -722,7 +746,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                     margin: const EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      border: Border.all(color: Colors.grey[300]!),
+                      border: Border.all(color: Colors.grey[100]!),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     alignment: Alignment.center,
@@ -801,16 +825,16 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: isSelected ? Colors.grey : Colors.black,
+                      color: isSelected ? Colors.grey[100] : Colors.black, // Background color change
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       category,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle( // Removed 'const' because color will change dynamically
+                        color: isSelected ? Colors.black : Colors.white, // Text color based on selection
                         fontSize: 14,
-                        fontWeight: FontWeight.normal,
+                        fontWeight: FontWeight.bold, // Text is always bold
                       ),
                     ),
                   ),
@@ -849,7 +873,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         return const SizedBox.shrink();
     }
   }
-
   Widget _buildToppingsDisplay(List<String> reorderedToppings) {
     final double modalWidth = min(
       MediaQuery.of(context).size.width * 0.5,
@@ -873,6 +896,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           runSpacing: 10,
           children: reorderedToppings.map((topping) {
             final bool isActive = _selectedToppings.contains(topping);
+            // isDefault is still used for bolding if needed, but not for background color decision.
             final bool isDefault = (widget.foodItem.defaultToppings ?? []).contains(topping) ||
                 (widget.foodItem.defaultCheese ?? []).contains(topping);
 
@@ -880,9 +904,12 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               width: toppingBoxWidth,
               child: InkWell(
                 onTap: () {
-                  if (isDefault && _selectedToppings.contains(topping)) {
-                    return;
-                  }
+                  // If it's a default topping and it's currently selected,
+                  // you might want to prevent it from being deselected.
+                  // The current logic allows deselecting defaults.
+                  // If you want to prevent deselecting default toppings, uncomment the line below:
+                  // if (isDefault && _selectedToppings.contains(topping)) return;
+
                   setState(() {
                     if (_selectedToppings.contains(topping)) {
                       _selectedToppings.remove(topping);
@@ -897,16 +924,17 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: isActive
-                        ? const Color(0xFFCB6CE6)
-                        : (isDefault ? Colors.grey[400] : Colors.black),
+                        ? Colors.grey[100] // Selected (active) toppings are grey[100]
+                        : Colors.black,   // Unselected toppings are black
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     topping,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: isActive ? Colors.black : Colors.white, // Text color: black for grey[100] BG, white for black BG
                       fontSize: 14,
+                      fontWeight: isDefault ? FontWeight.bold : FontWeight.normal, // Keep bold for defaults
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -940,13 +968,13 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isActive ? Colors.grey : Colors.black,
+                  color: isActive ? Colors.grey[100] : Colors.black,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   base,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: isActive ? Colors.black : Colors.white,
                     fontSize: 14,
                   ),
                 ),
@@ -978,13 +1006,13 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isActive ? Colors.grey : Colors.black,
+                  color: isActive ? Colors.grey[100] : Colors.black,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   crust,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: isActive? Colors.black : Colors.white,
                     fontSize: 14,
                   ),
                 ),
@@ -1020,13 +1048,13 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isActive ? Colors.grey : Colors.black,
+                  color: isActive ? Colors.grey[100] : Colors.black,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   sauce,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: isActive ? Colors.black : Colors.white,
                     fontSize: 14,
                   ),
                 ),

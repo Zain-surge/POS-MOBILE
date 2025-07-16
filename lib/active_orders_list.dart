@@ -6,7 +6,6 @@ import 'package:epos/services/order_api_service.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import 'package:flutter/gestures.dart';
-import 'package:epos/new_order_notification_widget.dart';
 
 extension HexColor on Color {
   static Color fromHex(String hexString) {
@@ -32,9 +31,6 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
   late StreamSubscription _acceptedOrderStreamSubscription;
   Order? _selectedOrder;
 
-  // This Set expects Strings, so we'll add String representations of orderId
-  final Set<String> _pendingWebsiteOrderIds = {};
-
   @override
   void initState() {
     super.initState();
@@ -50,126 +46,79 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
     super.dispose();
   }
 
+  // --- Unified Order Processing Logic ---
+  void _processIncomingOrder(Order order) {
+    final status = order.status.toLowerCase();
+    final source = order.orderSource.toLowerCase();
+
+    bool shouldDisplay = false;
+
+    // Logic for Website Orders
+    if (source == 'website') {
+      // Website orders should ONLY be displayed if their status is 'accepted'.
+      // 'pending' and 'yellow' website orders are for notifications, not this list.
+      shouldDisplay = (status == 'accepted');
+      if (!shouldDisplay) {
+        print('ActiveOrdersList: Skipping website order ${order.orderId} (Source: $source, Status: $status) - not accepted.');
+      }
+    }
+    // Logic for EPOS Orders (and any other non-website sources)
+    else if (source == 'epos') {
+      // EPOS orders should be displayed unless they are 'completed', 'delivered', or 'declined'.
+      // Any other status (including initial 'pending' or 'yellow' for EPOS) means it's active.
+      shouldDisplay = !['completed', 'delivered', 'declined'].contains(status);
+      if (!shouldDisplay) {
+        print('ActiveOrdersList: Skipping EPOS order ${order.orderId} (Source: $source, Status: $status) - non-active EPOS status.');
+      }
+    }
+    // Handle other potential sources if needed, otherwise default to not displaying
+    // else {
+    //   shouldDisplay = false;
+    // }
+
+    setState(() {
+      if (shouldDisplay) {
+        int existingIndex = _activeOrders.indexWhere((o) => o.orderId == order.orderId);
+        if (existingIndex != -1) {
+          _activeOrders[existingIndex] = order; // Update existing
+          if (_selectedOrder != null && _selectedOrder!.orderId == order.orderId) {
+            _selectedOrder = order; // Update selected order if it's the one
+          }
+          print('ActiveOrdersList: Order ${order.orderId} updated in active list (Source: $source, Status: ${order.status}).');
+        } else {
+          _activeOrders.add(order); // Add new active order
+          print('ActiveOrdersList: Order ${order.orderId} added to active list (Source: $source, Status: ${order.status}).');
+        }
+        _activeOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      } else {
+        // If not to be displayed, ensure it's removed from the active list if present
+        // Store if the selected order was the one being removed BEFORE removal
+        bool wasSelectedOrder = (_selectedOrder != null && _selectedOrder!.orderId == order.orderId);
+
+        _activeOrders.removeWhere((o) => o.orderId == order.orderId); // Perform removal
+
+        if (wasSelectedOrder) {
+          _selectedOrder = null; // Deselect if it was the current selected order
+        }
+        _activeOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        print('ActiveOrdersList: Order ${order.orderId} removed from active list (Source: $source, Status: ${order.status}).');
+      }
+    });
+  }
+
+
   void _listenForNewOrdersFromSocket() {
     _newOrderSocketSubscription = OrderApiService().newOrderStream.listen((newOrder) {
-      print('ActiveOrdersList: Received new order from socket: ${newOrder.orderId} (Source: ${newOrder.orderSource})');
-
-      final nonActiveStatuses = ['completed', 'delivered'];
-
-      if (newOrder.orderSource.toLowerCase() == 'website' && newOrder.status.toLowerCase() == 'pending') {
-        setState(() {
-          // Fix: Convert newOrder.orderId (int) to String for the Set
-          if (!_pendingWebsiteOrderIds.contains(newOrder.orderId.toString())) {
-            _pendingWebsiteOrderIds.add(newOrder.orderId.toString()); // <-- FIX
-            _showNewOrderNotification(newOrder);
-          }
-        });
-      } else if (!nonActiveStatuses.contains(newOrder.status.toLowerCase())) {
-        setState(() {
-          int existingIndex = _activeOrders.indexWhere((o) => o.orderId == newOrder.orderId);
-          if (existingIndex != -1) {
-            _activeOrders[existingIndex] = newOrder;
-            if (_selectedOrder != null && _selectedOrder!.orderId == newOrder.orderId) {
-              _selectedOrder = newOrder;
-            }
-          } else {
-            _activeOrders.add(newOrder);
-          }
-          _activeOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        });
-      } else {
-        setState(() {
-          if (_selectedOrder != null && _selectedOrder!.orderId == newOrder.orderId) {
-            _selectedOrder = null;
-          }
-          _activeOrders.removeWhere((o) => o.orderId == newOrder.orderId);
-          _activeOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        });
-      }
+      print('ActiveOrdersList: Received new order from socket: ${newOrder.orderId} (Source: ${newOrder.orderSource}), Status: ${newOrder.status}');
+      _processIncomingOrder(newOrder); // Use the unified processing logic
     });
   }
 
   void _listenForAcceptedOrders() {
     _acceptedOrderStreamSubscription = OrderApiService().acceptedOrderStream.listen((acceptedOrder) {
       print('ActiveOrdersList: Received accepted order via stream: ${acceptedOrder.orderId}');
-      setState(() {
-        // Fix: Convert acceptedOrder.orderId (int) to String for the Set
-        _pendingWebsiteOrderIds.remove(acceptedOrder.orderId.toString()); // <-- FIX
-
-        int existingIndex = _activeOrders.indexWhere((o) => o.orderId == acceptedOrder.orderId);
-        if (existingIndex != -1) {
-          _activeOrders[existingIndex] = acceptedOrder;
-        } else {
-          _activeOrders.add(acceptedOrder);
-        }
-        _activeOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      });
+      _processIncomingOrder(acceptedOrder); // Use the unified processing logic
     });
-  }
-
-  void _showNewOrderNotification(Order order) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          contentPadding: EdgeInsets.zero,
-          insetPadding: const EdgeInsets.all(0),
-          backgroundColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          content: NewOrderNotificationWidget(
-            order: order,
-            onAccept: () async {
-              print('Order ${order.orderId} ACCEPTED!');
-              // Fix: order.orderId is already int, no need for replaceAll or tryParse here if API expects int
-              final orderIdForApi = order.orderId; // This is already an int
-
-              final success = await OrderApiService.updateOrderStatus(
-                  orderIdForApi, // Pass the int directly
-                  'Accepted');
-
-              if (success) {
-                OrderApiService().addAcceptedOrder(order.copyWith(status: 'Accepted'));
-              } else {
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  const SnackBar(content: Text('Failed to accept order on server.')),
-                );
-              }
-              Navigator.of(dialogContext).pop();
-            },
-            onDecline: () async {
-              print('Order ${order.orderId} DECLINED!');
-              // Fix: order.orderId is already int, no need for replaceAll or tryParse here if API expects int
-              final orderIdForApi = order.orderId; // This is already an int
-
-              final success = await OrderApiService.updateOrderStatus(
-                  orderIdForApi, // Pass the int directly
-                  'Declined');
-
-              if (success) {
-                setState(() {
-                  // Fix: Convert order.orderId (int) to String for the Set
-                  _pendingWebsiteOrderIds.remove(order.orderId.toString()); // <-- FIX
-                });
-              } else {
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  const SnackBar(content: Text('Failed to decline order on server.')),
-                );
-              }
-              Navigator.of(dialogContext).pop();
-            },
-            onDismiss: () {
-              print('Order ${order.orderId} DISMISSED!');
-              setState(() {
-                // Fix: Convert order.orderId (int) to String for the Set
-                _pendingWebsiteOrderIds.remove(order.orderId.toString()); // <-- FIX
-              });
-              Navigator.of(dialogContext).pop();
-            },
-          ),
-        );
-      },
-    );
   }
 
   Future<void> _fetchActiveOrders() async {
@@ -179,40 +128,42 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
     });
     try {
       final allOrders = await OrderApiService.fetchTodayOrders();
-      print('ActiveOrdersList: Fetched ${allOrders.length} orders from backend.');
+      print('ActiveOrdersList: Fetched ${allOrders.length} orders from backend for initial load.');
 
-      final List<Order> currentlyActive = [];
-      final List<Order> initiallyPendingWebOrders = [];
+      final List<Order> initiallyActive = [];
 
       for (var order in allOrders) {
-        final nonActiveStatuses = ['completed', 'delivered', 'declined'];
+        final status = order.status.toLowerCase();
+        final source = order.orderSource.toLowerCase();
 
-        if (order.orderSource.toLowerCase() == 'website' && order.status.toLowerCase() == 'pending') {
-          initiallyPendingWebOrders.add(order);
-        } else if (!nonActiveStatuses.contains(order.status.toLowerCase())) {
-          currentlyActive.add(order);
+        bool shouldDisplay = false;
+
+        // Apply the same display logic as in _processIncomingOrder
+        if (source == 'website') {
+          shouldDisplay = (status == 'accepted');
+        } else if (source == 'epos') {
+          shouldDisplay = !['completed', 'delivered', 'declined'].contains(status);
+        }
+
+        if (shouldDisplay) {
+          initiallyActive.add(order);
+          print('ActiveOrdersList: Initially adding order ${order.orderId} to active list (Source: $source, Status: ${order.status}).');
+        } else {
+          print('ActiveOrdersList: Skipping initial display of order ${order.orderId} (Source: $source, Status: $status).');
         }
       }
 
-      currentlyActive.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      initiallyActive.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
       setState(() {
-        _activeOrders = currentlyActive;
+        _activeOrders = initiallyActive;
         _isLoadingOrders = false;
         if (_selectedOrder != null && !_activeOrders.any((o) => o.orderId == _selectedOrder!.orderId)) {
-          _selectedOrder = null;
-        }
-
-        for (var order in initiallyPendingWebOrders) {
-          // Fix: Convert order.orderId (int) to String for the Set
-          if (!_pendingWebsiteOrderIds.contains(order.orderId.toString())) {
-            _pendingWebsiteOrderIds.add(order.orderId.toString()); // <-- FIX
-            _showNewOrderNotification(order);
-          }
+          _selectedOrder = null; // Deselect if the order is no longer active
         }
       });
-      print('ActiveOrdersList: Displaying ${_activeOrders.length} active orders (excluding pending website orders).');
-      print('ActiveOrdersList: ${_pendingWebsiteOrderIds.length} pending website orders found on initial fetch.');
+
+      print('ActiveOrdersList: Displaying ${_activeOrders.length} active orders after initial fetch.');
 
     } catch (e) {
       print('Error fetching active orders: $e');
@@ -295,6 +246,10 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
         return 'assets/images/SidesS.png';
       case 'DRINKS':
         return 'assets/images/DrinksS.png';
+      case 'MILKSHAKE':
+        return 'assets/images/MilkshakeS.png';
+      case 'DIPS':
+        return 'assets/images/DipsS.png';
       default:
         return 'assets/images/default.png';
     }
@@ -347,7 +302,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Order no. ${_selectedOrder!.orderId}', // orderId (int) will be automatically converted to String for display
+                  'Order no. ${_selectedOrder!.orderId}',
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
               ],
@@ -557,7 +512,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
           ],
         ),
       );
-    } else if (_activeOrders.isEmpty && _pendingWebsiteOrderIds.isEmpty) {
+    } else if (_activeOrders.isEmpty) {
       return const Center(
         child: Text(
           'No active orders found.',
@@ -651,12 +606,6 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                                 ),
                               ],
                             ),
-
-                            // if (order.orderExtraNotes != null && order.orderExtraNotes!.isNotEmpty)
-                            //   Padding(
-                            //     padding: const EdgeInsets.only(top: 8.0, left: 12.0, right: 12.0),
-                            //     child: Text('Notes: ${order.orderExtraNotes!}', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, fontFamily: 'Poppins')),
-                            //   ),
                           ],
                         ),
                       ),

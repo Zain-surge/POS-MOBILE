@@ -4,6 +4,7 @@ import 'package:epos/services/order_api_service.dart';
 import 'package:epos/bottom_nav_item.dart';
 import 'package:epos/website_orders_screen.dart';
 import 'package:epos/page4.dart';
+import 'package:epos/settings_screen.dart';
 
 
 
@@ -388,7 +389,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                                   const SizedBox(width: 15),
 
                                   Expanded(
-                                    flex: 3,
+                                    flex:  3,
                                     child: GestureDetector(
                                       onTap: () {
                                         setState(() {
@@ -398,7 +399,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                                       },
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(
-                                            horizontal: 14, vertical: 14),
+                                            horizontal: 30, vertical: 14),
                                         decoration: BoxDecoration(
                                           color: order.statusColor,
                                           borderRadius: BorderRadius.circular(50),
@@ -776,7 +777,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
               );
             },
           ),
-          // --- MODIFIED: Home button now navigates to Page4 with required parameters ---
           BottomNavItem(
             image: 'home.png', // Make sure you have 'assets/images/home.png'
             index: 4,
@@ -785,6 +785,21 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
               debugPrint("DynamicOrderListScreen: Navigating to Page4 (Home Screen).");
               Navigator.pushReplacementNamed(context, '/service-selection');
             },
+          ),
+          BottomNavItem(
+            image: 'More.png', // Make sure you have 'assets/images/home.png'
+            index: 5,
+            selectedIndex: _selectedBottomNavItem,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SettingsScreen(
+                      initialBottomNavItemIndex: 5,
+                    ),
+                  ),
+                );
+              }
           ),
         ],
       ),
