@@ -723,10 +723,10 @@ class _Page4State extends State<Page4> {
 
 
   Future<void> _handleOrderCompletion({
-    required CustomerDetails customerDetails, // NEW parameter
-    required PaymentDetails paymentDetails,   // NEW parameter
+    required CustomerDetails customerDetails,
+    required PaymentDetails paymentDetails,
   }) async {
-    // Check if cart is empty first (redundant if called via _proceedAction, but good for direct calls)
+    // Check if cart is empty first
     if (_cartItems.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -741,12 +741,8 @@ class _Page4State extends State<Page4> {
     String id1 = generateTransactionId();
     print("Generated Transaction ID: $id1");
 
-    // The subtotal here is the original subtotal from the cart.
-    final double subtotal = double.parse(
-      _calculateTotalPrice().toStringAsFixed(2),
-    );
-
-    // Calculate discounted subtotal based on paymentDetails.discountPercentage
+    // Calculate totals
+    final double subtotal = double.parse(_calculateTotalPrice().toStringAsFixed(2));
     double discountedSubtotal = subtotal;
     double discountAmount = 0.0;
     if (paymentDetails.discountPercentage != null && paymentDetails.discountPercentage! > 0) {
@@ -755,51 +751,39 @@ class _Page4State extends State<Page4> {
     }
 
     const double vatRate = 0.05; // 5% VAT
-    final double vatAmount = double.parse(
-      (discountedSubtotal * vatRate).toStringAsFixed(2), // VAT applied on discounted subtotal
-    );
-    final double totalCharge = double.parse(
-      (discountedSubtotal + vatAmount).toStringAsFixed(2), // Final total includes VAT
-    );
+    final double vatAmount = double.parse((discountedSubtotal * vatRate).toStringAsFixed(2));
+    final double totalCharge = double.parse((discountedSubtotal + vatAmount).toStringAsFixed(2));
 
     final orderData = {
       "guest": {
         "name": customerDetails.name,
-        "email": customerDetails.email ?? "N/A", // Use N/A if email is null
+        "email": customerDetails.email ?? "N/A",
         "phone_number": customerDetails.phoneNumber,
         "street_address": customerDetails.streetAddress ?? "N/A",
         "city": customerDetails.city ?? "N/A",
-        "county": customerDetails.city ?? "N/A", // Assuming county same as city or 'N/A'
+        "county": customerDetails.city ?? "N/A",
         "postal_code": customerDetails.postalCode ?? "N/A",
       },
       "transaction_id": id1,
       "payment_type": paymentDetails.paymentType,
-      "amount_received": paymentDetails.amountReceived, // Will be null for card payments
+      "amount_received": paymentDetails.amountReceived,
       "discount_percentage": paymentDetails.discountPercentage,
       "order_type": _actualOrderType,
-      "total_price": totalCharge, // Send the final total charge to the backend
-      "extra_notes":
-      _cartItems.map((item) => item.comment ?? '').join(', ').trim(),
+      "total_price": totalCharge,
+      "extra_notes": _cartItems.map((item) => item.comment ?? '').join(', ').trim(),
       "status": "pending",
       "order_source": "epos",
-      "items":
-      _cartItems.map((cartItem) {
+      "items": _cartItems.map((cartItem) {
         String description = cartItem.foodItem.name;
-        if (cartItem.selectedOptions != null &&
-            cartItem.selectedOptions!.isNotEmpty) {
+        if (cartItem.selectedOptions != null && cartItem.selectedOptions!.isNotEmpty) {
           description += ' (${cartItem.selectedOptions!.join(', ')})';
         }
-
-        // Use cartItem.pricePerUnit which should already include selected options pricing
-        double itemTotalPrice = double.parse(
-          (cartItem.pricePerUnit * cartItem.quantity).toStringAsFixed(2),
-        );
-
+        double itemTotalPrice = double.parse((cartItem.pricePerUnit * cartItem.quantity).toStringAsFixed(2));
         return {
           "item_id": cartItem.foodItem.id,
           "quantity": cartItem.quantity,
           "description": description,
-          "price_per_unit": double.parse(cartItem.pricePerUnit.toStringAsFixed(2)), // Ensure unit price is sent
+          "price_per_unit": double.parse(cartItem.pricePerUnit.toStringAsFixed(2)),
           "total_price": itemTotalPrice,
           "comment": cartItem.comment,
         };
@@ -807,294 +791,89 @@ class _Page4State extends State<Page4> {
     };
 
     print("Attempting to submit order with order_type: $_actualOrderType");
-    print("Order Data being sent: $orderData"); // For comprehensive debugging
+    print("Order Data being sent: $orderData");
 
-    // Show receipt preview dialog
+    String extraNotes = _cartItems.map((item) => item.comment ?? '').join(', ').trim();
+
+    // Proceed directly to printing and order process without dialog
+    await _handlePrintingAndOrderDirect(
+      orderData: orderData,
+      id1: id1,
+      subtotal: discountedSubtotal,
+      vatAmount: vatAmount,
+      totalCharge: totalCharge,
+      extraNotes: extraNotes,
+    );
+  }
+
+// New method that handles printing without showing dialog
+  Future<void> _handlePrintingAndOrderDirect({
+    required Map<String, dynamic> orderData,
+    required String id1,
+    required double subtotal,
+    required double vatAmount,
+    required double totalCharge,
+    required String extraNotes,
+  }) async {
     if (!mounted) return;
 
+    // Try to print silently in the background
+    try {
+      await ThermalPrinterService().printReceiptWithUserInteraction(
+        transactionId: id1,
+        orderType: _actualOrderType,
+        cartItems: _cartItems,
+        subtotal: subtotal,
+        vatAmount: vatAmount,
+        totalCharge: totalCharge,
+        extraNotes: extraNotes.isNotEmpty ? extraNotes : null,
+      );
+    } catch (e) {
+      print('Background printing failed: $e');
+      // Continue with order placement even if printing fails
+    }
+
+    // Place order regardless of printing success
+    await _placeOrderDirectly(orderData);
+  }
 
 
+  Future<void> _placeOrderDirectly(Map<String, dynamic> orderData) async {
+    if (!mounted) return;
 
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-            side: const BorderSide(color:  Color(0xFFCB6CE6), width: 3),),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(15.0),
-            ),
-            width: 600,
-            height: 600,
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Receipt Preview',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 15),
+    try {
+      // Place the order in background
+      final orderId = await ApiService.createOrderFromMap(orderData);
 
-                // Order details preview
-                Container(
-                  height: 300,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Transaction ID: $id1', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Text('Order Type: ${_actualOrderType.toUpperCase()}'),
-                        Text('Customer: ${customerDetails.name}'),
-                        if (customerDetails.phoneNumber.isNotEmpty) Text('Phone: ${customerDetails.phoneNumber}'),
-                        if (customerDetails.email != null && customerDetails.email!.isNotEmpty) Text('Email: ${customerDetails.email}'),
-                        if (customerDetails.streetAddress != null && customerDetails.streetAddress!.isNotEmpty)
-                          Text('Address: ${customerDetails.streetAddress}, ${customerDetails.city}, ${customerDetails.postalCode}'),
-                        Text('Payment Type: ${paymentDetails.paymentType}'),
-                        if (paymentDetails.amountReceived != null)
-                          Text('Amount Received: £${paymentDetails.amountReceived!.toStringAsFixed(2)}'),
-                        if (paymentDetails.discountPercentage != null && paymentDetails.discountPercentage! > 0)
-                          Text('Discount: ${paymentDetails.discountPercentage!.toStringAsFixed(2)}%'),
-                        const Divider(),
+      print('Order placed successfully: $orderId for type: $_actualOrderType');
 
-                        const Text('Items:', style: TextStyle(fontWeight: FontWeight.bold)),
-                        ..._cartItems.map((item) {
-                          // Use pricePerUnit for receipt display as well
-                          double itemTotalPrice = item.pricePerUnit * item.quantity;
-
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 4.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('${item.quantity}x ${item.foodItem.name} (£${itemTotalPrice.toStringAsFixed(2)})'),
-                                if (item.selectedOptions != null && item.selectedOptions!.isNotEmpty)
-                                  Text('  Options: ${item.selectedOptions!.join(', ')}',
-                                      style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                                if (item.comment != null && item.comment!.isNotEmpty)
-                                  Text('  Comment: ${item.comment}',
-                                      style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                              ],
-                            ),
-                          );
-                        }),
-
-                        const Divider(),
-                        Text('Subtotal: £${subtotal.toStringAsFixed(2)}'),
-                        if (discountAmount > 0)
-                          Text('Discount Amount: -£${discountAmount.toStringAsFixed(2)}'),
-                        Text('Discounted Subtotal: £${discountedSubtotal.toStringAsFixed(2)}'),
-                        Text('VAT (5%): £${vatAmount.toStringAsFixed(2)}'),
-                        Text('Total: £${totalCharge.toStringAsFixed(2)}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        if (paymentDetails.paymentType == 'Cash' && paymentDetails.amountReceived != null)
-                          Text('Change Due: £${(paymentDetails.amountReceived! - totalCharge).toStringAsFixed(2)}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 15),
-
-                // Action buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    TextButton(
-                      onPressed: () {
-                        try {
-                          Navigator.of(dialogContext).pop();
-                        } catch (e) {
-                          print('Error closing dialog: $e');
-                        }
-                      },
-                      child: const Text('Cancel'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () async {
-                        // Close preview dialog first
-                        try {
-                          Navigator.of(dialogContext).pop();
-                        } catch (e) {
-                          print('Error closing preview dialog: $e');
-                        }
-
-                        // Check if widget is still mounted before proceeding
-                        if (!mounted) return;
-
-                        // Show loading indicator
-                        try {
-                          showDialog(
-                            context: context,
-                            barrierDismissible: false,
-                            builder: (BuildContext context) {
-                              return const Center(child: CircularProgressIndicator());
-                            },
-                          );
-                        } catch (e) {
-                          print('Error showing loading dialog: $e');
-                          if (!mounted) return;
-                        }
-
-                        try {
-                          // First test printer connections
-                          final printerService = ThermalPrinterService(); // Your existing service
-                          final connectionResults = await printerService.testAllConnections();
-
-                          // If no printers available, show selection dialog
-                          if (!connectionResults['usb']! &&
-                              !connectionResults['bluetooth']! &&
-                              !connectionResults['thermal']!) {
-                            if (!mounted) return;
-                            Navigator.of(context).pop(); // Close loading dialog
-
-                            // Show printer selection dialog
-                            final printerType = await showDialog<String>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Select Printer Type'),
-                                content: const Text('No printers are currently connected. Please select a printer type to connect to:'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context, 'bluetooth'),
-                                    child: const Text('Bluetooth Printer'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context, 'usb'),
-                                    child: const Text('USB Printer'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context, 'cancel'),
-                                    child: const Text('Cancel'),
-                                  ),
-                                ],
-                              ),
-                            );
-
-                            if (printerType == null || printerType == 'cancel') {
-                              return;
-                            }
-
-                            // Show loading again while connecting
-                            showDialog(
-                              context: context,
-                              barrierDismissible: false,
-                              builder: (BuildContext context) {
-                                return const Center(child: CircularProgressIndicator());
-                              },
-                            );
-                          }
-
-                          // Submit the order regardless of printer status
-                          final orderId = await ApiService.createOrderFromMap(orderData); // Your existing API service
-
-                          if (!mounted) return;
-
-                          // Hide loading indicator
-                          try {
-                            Navigator.of(context).pop();
-                          } catch (e) {
-                            print('Error hiding loading dialog: $e');
-                          }
-
-                          print('Order placed successfully: $orderId for type: $_actualOrderType');
-
-                          // Show success message
-                          if (mounted) {
-                            try {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("Order Placed Successfully! Printing receipt..."),
-                                ),
-                              );
-                            } catch (e) {
-                              print('Error showing success message: $e');
-                            }
-                          }
-
-                          // Print receipt
-                          bool printSuccess = await ThermalPrinterService().printReceipt(
-                            transactionId: id1,
-                            orderType: _actualOrderType,
-                            cartItems: _cartItems,
-                            subtotal: discountedSubtotal, // Use discounted subtotal for print
-                            vatAmount: vatAmount,
-                            totalCharge: totalCharge,
-                            extraNotes: _cartItems.map((item) => item.comment ?? '').join(', ').trim(),
-                          );
-
-                          if (mounted) {
-                            try {
-                              if (printSuccess) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("Receipt printed successfully!"),
-                                    backgroundColor: Colors.green,
-                                  ),
-                                );
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      "Order placed but printing failed. Please check printer connection.",
-                                    ),
-                                    backgroundColor: Colors.orange,
-                                  ),
-                                );
-                              }
-                            } catch (e) {
-                              print('Error showing print status message: $e');
-                            }
-                          }
-
-                          // Clear cart on successful order
-                          if (mounted) {
-                            setState(() {
-                              _cartItems.clear();
-                            });
-                          }
-                        } catch (e) {
-                          // Check if widget is still mounted before using context
-                          if (!mounted) return;
-
-                          // Hide loading indicator
-                          try {
-                            Navigator.of(context).pop();
-                          } catch (navError) {
-                            print('Error hiding loading dialog after error: $navError');
-                          }
-
-                          print('Order submission failed: $e');
-                          if (mounted) {
-                            try {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text("Error placing order: $e"))
-                              );
-                            } catch (snackbarError) {
-                              print('Error showing error message: $snackbarError');
-                            }
-                          }
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: const Text('Confirm & Print'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Order placed successfully!"),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
           ),
         );
-      },
-    );
+
+        // Clear cart
+        setState(() {
+          _cartItems.clear();
+        });
+      }
+    } catch (e) {
+      print('Order placement failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to place order: $e"),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildRightPanelContent() {
