@@ -720,8 +720,6 @@ class _Page4State extends State<Page4> {
     }
   }
 
-
-
   Future<void> _handleOrderCompletion({
     required CustomerDetails customerDetails,
     required PaymentDetails paymentDetails,
@@ -837,7 +835,6 @@ class _Page4State extends State<Page4> {
     await _placeOrderDirectly(orderData);
   }
 
-
   Future<void> _placeOrderDirectly(Map<String, dynamic> orderData) async {
     if (!mounted) return;
 
@@ -857,9 +854,12 @@ class _Page4State extends State<Page4> {
           ),
         );
 
-        // Clear cart
+        // Reset UI state to go back to cart widget
         setState(() {
           _cartItems.clear();
+          _showCustomerDetails = false;
+          _showPayment = false;
+          _customerDetails = null;
         });
       }
     } catch (e) {
