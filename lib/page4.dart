@@ -411,7 +411,6 @@ class _Page4State extends State<Page4> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-
                           Expanded(
                             flex: 5,
                             child: Column(
@@ -657,7 +656,7 @@ class _Page4State extends State<Page4> {
           children: [
             Expanded(
               child: GestureDetector(
-                onTap: () =>   _proceedToNextStep(),
+                onTap: () => _proceedToNextStep(),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
@@ -666,7 +665,7 @@ class _Page4State extends State<Page4> {
                   ),
                   child: Center(
                     child: Text(
-                      'Proceed to Charge £${ subtotal.toStringAsFixed(2)}',
+                      'Proceed to Charge £${subtotal.toStringAsFixed(2)}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -719,8 +718,6 @@ class _Page4State extends State<Page4> {
       });
     }
   }
-
-
 
   Future<void> _handleOrderCompletion({
     required CustomerDetails customerDetails,
@@ -837,7 +834,6 @@ class _Page4State extends State<Page4> {
     await _placeOrderDirectly(orderData);
   }
 
-
   Future<void> _placeOrderDirectly(Map<String, dynamic> orderData) async {
     if (!mounted) return;
 
@@ -857,9 +853,12 @@ class _Page4State extends State<Page4> {
           ),
         );
 
-        // Clear cart
+        // Reset UI state to go back to cart widget
         setState(() {
           _cartItems.clear();
+          _showCustomerDetails = false;
+          _showPayment = false;
+          _customerDetails = null;
         });
       }
     } catch (e) {
@@ -880,6 +879,7 @@ class _Page4State extends State<Page4> {
     // If showing customer details
     if (_showCustomerDetails) {
       return CustomerDetailsWidget(
+        subtotal: _calculateTotalPrice(),
         orderType: _actualOrderType,
         onCustomerDetailsSubmitted: (CustomerDetails details) {
           setState(() {
