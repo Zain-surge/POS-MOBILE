@@ -329,6 +329,11 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                       ],
                     ),
                     const SizedBox(height: 20),
+
+
+
+
+                    //left
                     Expanded(
                       child: allOrdersForDisplay.isEmpty
                           ? Center(
@@ -352,14 +357,11 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                               ),
                             );
                           }
-
                           bool isSelected = _selectedOrder?.orderId == order.orderId;
                           int? serialNumber;
                           if (activeOrders.contains(order)) {
                             serialNumber = activeOrders.indexOf(order) + 1;
                           }
-
-
                           return GestureDetector(
                             onTap: () {
                               setState(() {
@@ -377,19 +379,19 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  // Conditionally display the serial number
-                                  if (serialNumber != null) // Only show if it's an active order
+                                  if (serialNumber != null)
                                     Text(
                                       '$serialNumber',
                                       style: const TextStyle(fontSize: 50,
                                           fontWeight: FontWeight.bold),
                                     )
-                                  else // Add an empty SizedBox for alignment if no serial number
-                                    const SizedBox(width: 50),
-                                  const SizedBox(width: 15),
+                                  else
+                                    const SizedBox(width: 0),
+
+                                  SizedBox(width: serialNumber != null ? 15 : 0),
 
                                   Expanded(
-                                    flex:  3,
+                                    flex: serialNumber != null ? 3 : 4,
                                     child: GestureDetector(
                                       onTap: () {
                                         setState(() {
@@ -448,13 +450,17 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                         },
                       ),
                     ),
+
+
+
                   ],
                 ),
               ),
             ),
             const VerticalDivider(
                 width: 1, thickness: 0.5, color: Colors.black),
-             // right panel
+
+            // right panel
             Expanded(
               flex: 1,
               child: Container(
@@ -787,9 +793,9 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
             },
           ),
           BottomNavItem(
-            image: 'More.png', // Make sure you have 'assets/images/home.png'
-            index: 5,
-            selectedIndex: _selectedBottomNavItem,
+              image: 'More.png', // Make sure you have 'assets/images/home.png'
+              index: 5,
+              selectedIndex: _selectedBottomNavItem,
               onTap: () {
                 Navigator.push(
                   context,

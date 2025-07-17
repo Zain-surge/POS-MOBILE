@@ -245,6 +245,10 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       decoration: BoxDecoration(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Colors.grey.shade100,
+          width: 1.0,
+        ),
       ),
       child: Column(
         children: [
@@ -436,7 +440,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                         'Review Notes',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                          fontSize: 22,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -501,7 +505,9 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       ),
                       child: const Text(
                         'Cancel',
-                        style: TextStyle(color: Colors.black),
+                        style: TextStyle(color: Colors.black,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 15),
@@ -516,7 +522,10 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       ),
                       child: const Text(
                         'Add to Cart',
-                        style: TextStyle(color: Colors.white),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
@@ -661,39 +670,44 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
             const SizedBox(width: 15),
             Expanded(
               flex: 2,
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: widget.foodItem.price.keys.map((size) {
-                  final bool isActive = _selectedSize == size;
-                  final String displaySize = size.split(' ')[0];
-                  return InkWell(
-                    onTap: () {
-                      setState(() {
-                        _selectedSize = size;
-                        _updatePriceDisplay();
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: isActive ? Colors.grey : Colors.black,
-                        borderRadius: BorderRadius.circular(25),
-                        border: Border.all(
-                          color: isActive ? Colors.white : Colors.grey,
-                          width: 2,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  debugPrint('Available width for Wrap: ${constraints.maxWidth}');
+                  return Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: widget.foodItem.price.keys.map((size) {
+                      final bool isActive = _selectedSize == size;
+                      final String displaySize = size.split(' ')[0];
+                      return InkWell(
+                        onTap: () {
+                          setState(() {
+                            _selectedSize = size;
+                            _updatePriceDisplay();
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isActive ? Colors.grey : Colors.black,
+                            borderRadius: BorderRadius.circular(25),
+                            border: Border.all(
+                              color: isActive ? Colors.white : Colors.grey,
+                              width: 2,
+                            ),
+                          ),
+                          child: Text(
+                            '$displaySize"',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        '$displaySize"',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
+                      );
+                    }).toList(),
                   );
-                }).toList(),
+                },
               ),
             ),
             Expanded(
@@ -873,20 +887,30 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         return const SizedBox.shrink();
     }
   }
+
   Widget _buildToppingsDisplay(List<String> reorderedToppings) {
+    // We'll still use these calculations as a guide, but won't force 'toppingBoxWidth'
     final double modalWidth = min(
       MediaQuery.of(context).size.width * 0.5,
       800.0,
     );
 
-    final double horizontalPaddingOfScrollView = 20.0 * 2;
-    final double availableWidthForWrap = modalWidth - horizontalPaddingOfScrollView;
+    // This is the padding from the SingleChildScrollView that wraps this content.
+    // Make sure this accurately reflects the actual horizontal padding applied to the content.
+    final double horizontalPaddingOfParent = 20.0 * 2; // From SingleChildScrollView's padding
 
-    const int desiredColumns = 4;
+    // The actual available width for the Wrap is the modalWidth minus its parent's horizontal padding.
+    final double availableWidthForWrap = modalWidth - horizontalPaddingOfParent;
+
+    // Let's assume an average item width for calculation purposes, or a target minimum.
+    // Instead of calculating a strict 'toppingBoxWidth', think about what's the maximum
+    // comfortable width for each item to allow 4 per row.
     const double itemSpacing = 10.0;
-    final double totalSpacingBetweenItems = itemSpacing * (desiredColumns - 1);
+    const int desiredColumns = 4;
 
-    final double toppingBoxWidth = (availableWidthForWrap - totalSpacingBetweenItems) / desiredColumns;
+    // Calculate the approximate width needed if items were equally sized
+    // This is for conceptual understanding; we won't directly use this for SizedBox.width
+    final double idealItemWidth = (availableWidthForWrap - (itemSpacing * (desiredColumns - 1))) / desiredColumns;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -894,22 +918,21 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         Wrap(
           spacing: itemSpacing,
           runSpacing: 10,
+          alignment: WrapAlignment.start, // Ensure items start from the left
           children: reorderedToppings.map((topping) {
             final bool isActive = _selectedToppings.contains(topping);
-            // isDefault is still used for bolding if needed, but not for background color decision.
             final bool isDefault = (widget.foodItem.defaultToppings ?? []).contains(topping) ||
                 (widget.foodItem.defaultCheese ?? []).contains(topping);
 
-            return SizedBox(
-              width: toppingBoxWidth,
+            return ConstrainedBox( // Use ConstrainedBox to provide a min/max width
+              constraints: BoxConstraints(
+                minWidth: 0, // Allow it to shrink if needed
+                maxWidth: (availableWidthForWrap / desiredColumns) - itemSpacing, // Max width per item for 4 columns
+                // A small adjustment to maxWidth might be needed if there's any unaccounted for space.
+                // For example: maxWidth: (availableWidthForWrap / desiredColumns) - itemSpacing - 1.0,
+              ),
               child: InkWell(
                 onTap: () {
-                  // If it's a default topping and it's currently selected,
-                  // you might want to prevent it from being deselected.
-                  // The current logic allows deselecting defaults.
-                  // If you want to prevent deselecting default toppings, uncomment the line below:
-                  // if (isDefault && _selectedToppings.contains(topping)) return;
-
                   setState(() {
                     if (_selectedToppings.contains(topping)) {
                       _selectedToppings.remove(topping);
@@ -920,21 +943,21 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                   });
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15), // Add horizontal padding for text
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: isActive
-                        ? Colors.grey[100] // Selected (active) toppings are grey[100]
-                        : Colors.black,   // Unselected toppings are black
+                        ? Colors.grey[100]
+                        : Colors.black,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     topping,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: isActive ? Colors.black : Colors.white, // Text color: black for grey[100] BG, white for black BG
+                      color: isActive ? Colors.black : Colors.white,
                       fontSize: 14,
-                      fontWeight: isDefault ? FontWeight.bold : FontWeight.normal, // Keep bold for defaults
+                      fontWeight: isDefault ? FontWeight.bold : FontWeight.normal,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
