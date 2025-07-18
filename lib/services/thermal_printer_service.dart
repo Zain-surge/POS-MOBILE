@@ -186,9 +186,9 @@ class ThermalPrinterService {
     required String orderType,
     required List<CartItem> cartItems,
     required double subtotal,
-    required double vatAmount,
     required double totalCharge,
     String? extraNotes,
+    required double changeDue, // Added changeDue
     Function(List<String> availableMethods)? onShowMethodSelection,
   }) async {
     if (kIsWeb) {
@@ -207,9 +207,9 @@ class ThermalPrinterService {
       orderType: orderType,
       cartItems: cartItems,
       subtotal: subtotal,
-      vatAmount: vatAmount,
       totalCharge: totalCharge,
       extraNotes: extraNotes,
+      changeDue: changeDue, // Pass changeDue
     );
 
     Future<String> receiptContentFuture = Future.value(_generateReceiptContent(
@@ -217,9 +217,9 @@ class ThermalPrinterService {
       orderType: orderType,
       cartItems: cartItems,
       subtotal: subtotal,
-      vatAmount: vatAmount,
       totalCharge: totalCharge,
       extraNotes: extraNotes,
+      changeDue: changeDue, // Pass changeDue
     ));
 
     // Test connections in parallel
@@ -306,7 +306,6 @@ class ThermalPrinterService {
       return SIMULATE_PRINTER_SUCCESS;
     }
 
-
     try {
       // Ensure we have a persistent connection
       if (_persistentUsbPort == null) {
@@ -326,7 +325,6 @@ class ThermalPrinterService {
 
       print('✅ USB super-fast print successful');
       return true;
-
     } catch (e) {
       print('❌ USB super-fast print error: $e');
       await _closeUsbConnection();
@@ -361,7 +359,6 @@ class ThermalPrinterService {
 
       print('✅ Bluetooth super-fast print successful');
       return true;
-
     } catch (e) {
       print('❌ Bluetooth super-fast print error: $e');
       await _closeBluetoothConnection();
@@ -375,9 +372,9 @@ class ThermalPrinterService {
     required String orderType,
     required List<CartItem> cartItems,
     required double subtotal,
-    required double vatAmount,
     required double totalCharge,
     String? extraNotes,
+    required double changeDue, // Added changeDue
   }) async {
     try {
       // Test receipt content generation
@@ -386,9 +383,9 @@ class ThermalPrinterService {
         orderType: orderType,
         cartItems: cartItems,
         subtotal: subtotal,
-        vatAmount: vatAmount,
         totalCharge: totalCharge,
         extraNotes: extraNotes,
+        changeDue: changeDue, // Pass changeDue
       );
 
       // Test ESC/POS receipt generation
@@ -397,9 +394,9 @@ class ThermalPrinterService {
         orderType: orderType,
         cartItems: cartItems,
         subtotal: subtotal,
-        vatAmount: vatAmount,
         totalCharge: totalCharge,
         extraNotes: extraNotes,
+        changeDue: changeDue, // Pass changeDue
       );
 
       print('✅ Receipt generation validation successful');
@@ -439,7 +436,6 @@ class ThermalPrinterService {
 
       print('✅ USB persistent connection established with optimal settings');
       return true;
-
     } catch (e) {
       print('❌ Failed to establish USB connection: $e');
       _persistentUsbPort = null;
@@ -536,9 +532,9 @@ class ThermalPrinterService {
     required String orderType,
     required List<CartItem> cartItems,
     required double subtotal,
-    required double vatAmount,
     required double totalCharge,
     String? extraNotes,
+    required double changeDue, // Added changeDue
   }) async {
     if (kIsWeb) return false;
 
@@ -554,9 +550,9 @@ class ThermalPrinterService {
       orderType: orderType,
       cartItems: cartItems,
       subtotal: subtotal,
-      vatAmount: vatAmount,
       totalCharge: totalCharge,
       extraNotes: extraNotes,
+      changeDue: changeDue, // Pass changeDue
     );
 
     String receiptContent = _generateReceiptContent(
@@ -564,9 +560,9 @@ class ThermalPrinterService {
       orderType: orderType,
       cartItems: cartItems,
       subtotal: subtotal,
-      vatAmount: vatAmount,
       totalCharge: totalCharge,
       extraNotes: extraNotes,
+      changeDue: changeDue, // Pass changeDue
     );
 
     return await _printWithPreGeneratedData(
@@ -696,9 +692,9 @@ class ThermalPrinterService {
     required String orderType,
     required List<CartItem> cartItems,
     required double subtotal,
-    required double vatAmount,
     required double totalCharge,
     String? extraNotes,
+    required double changeDue, // Added changeDue
   }) {
     StringBuffer receipt = StringBuffer();
 
@@ -740,10 +736,16 @@ class ThermalPrinterService {
 
     receipt.writeln('--------------------------------');
     receipt.writeln('Subtotal:         £${subtotal.toStringAsFixed(2)}');
-    receipt.writeln('VAT (5%):         £${vatAmount.toStringAsFixed(2)}');
+    // Removed VAT line
     receipt.writeln('================================');
     receipt.writeln('TOTAL:            £${totalCharge.toStringAsFixed(2)}');
     receipt.writeln('================================');
+
+    if (changeDue > 0) {
+      receipt.writeln('Amount Received:  £${(totalCharge + changeDue).toStringAsFixed(2)}');
+      receipt.writeln('Change Due:       £${changeDue.toStringAsFixed(2)}');
+      receipt.writeln('================================');
+    }
 
     if (extraNotes != null && extraNotes.isNotEmpty) {
       receipt.writeln();
@@ -762,9 +764,9 @@ class ThermalPrinterService {
     required String orderType,
     required List<CartItem> cartItems,
     required double subtotal,
-    required double vatAmount,
     required double totalCharge,
     String? extraNotes,
+    required double changeDue, // Added changeDue
   }) async {
     final profile = await CapabilityProfile.load();
     final generator = Generator(PaperSize.mm58, profile);
@@ -830,14 +832,7 @@ class ThermalPrinterService {
         styles: const PosStyles(align: PosAlign.right),
       ),
     ]);
-    bytes += generator.row([
-      PosColumn(text: 'VAT (5%):', width: 8),
-      PosColumn(
-        text: '£${vatAmount.toStringAsFixed(2)}',
-        width: 4,
-        styles: const PosStyles(align: PosAlign.right),
-      ),
-    ]);
+    // Removed VAT row
     bytes += generator.text(
       '================================',
       styles: const PosStyles(align: PosAlign.center),
@@ -854,6 +849,30 @@ class ThermalPrinterService {
       '================================',
       styles: const PosStyles(align: PosAlign.center),
     );
+
+    if (changeDue > 0) {
+      bytes += generator.emptyLines(1);
+      bytes += generator.row([
+        PosColumn(text: 'Amount Received:', width: 8),
+        PosColumn(
+          text: '£${(totalCharge + changeDue).toStringAsFixed(2)}',
+          width: 4,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]);
+      bytes += generator.row([
+        PosColumn(text: 'Change Due:', width: 8, styles: const PosStyles(bold: true)),
+        PosColumn(
+          text: '£${changeDue.toStringAsFixed(2)}',
+          width: 4,
+          styles: const PosStyles(align: PosAlign.right, bold: true),
+        ),
+      ]);
+      bytes += generator.text(
+        '================================',
+        styles: const PosStyles(align: PosAlign.center),
+      );
+    }
 
     if (extraNotes != null && extraNotes.isNotEmpty) {
       bytes += generator.emptyLines(1);

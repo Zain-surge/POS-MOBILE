@@ -1,20 +1,10 @@
 import 'package:epos/settings_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:epos/models/order.dart'; // Ensure Order model is correctly defined AND UPDATED
-import 'package:epos/dynamic_order_list_screen.dart'; // Ensure this file exists
-import 'package:epos/bottom_nav_item.dart'; // Ensure this file exists (for your bottom nav items)
+import 'package:epos/models/order.dart';
+import 'package:epos/dynamic_order_list_screen.dart';
+import 'package:epos/bottom_nav_item.dart';
 import 'package:epos/providers/order_provider.dart';
 import 'package:provider/provider.dart';
-
-// Extension to darken a color for the status button background
-extension ColorBrightness on Color {
-  Color darken([double amount = .1]) {
-    assert(amount >= 0 && amount <= 1);
-    final hsl = HSLColor.fromColor(this);
-    final hslDark = hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0));
-    return hslDark.toColor();
-  }
-}
 
 class WebsiteOrdersScreen extends StatefulWidget {
   final int initialBottomNavItemIndex;
@@ -29,7 +19,8 @@ class WebsiteOrdersScreen extends StatefulWidget {
 }
 
 class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
-  List<Order> _displayedOrders = [];
+  List<Order> activeOrders = []; // Track active orders for serial numbers
+  List<Order> completedOrders = []; // Track completed orders
   Order? _selectedOrder;
   late int _selectedBottomNavItem;
   String _selectedOrderType = 'all'; // 'all', 'pickup', 'delivery'
@@ -39,25 +30,22 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
     super.initState();
     _selectedBottomNavItem = widget.initialBottomNavItemIndex;
     print("WebsiteOrdersScreen: initState called.");
-    // Initial fetch to populate UI on first load.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updateDisplayedOrders(Provider.of<OrderProvider>(context, listen: false).websiteOrders);
+      _separateOrders(Provider.of<OrderProvider>(context, listen: false).websiteOrders);
     });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Ensure the listener is added only once.
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    // Attempt to remove any existing listener to prevent duplicates.
     try {
       orderProvider.removeListener(_onOrderProviderChange);
     } catch (e) {
       // Listener might not have been added yet, safe to ignore.
     }
     orderProvider.addListener(_onOrderProviderChange);
-    _updateDisplayedOrders(orderProvider.websiteOrders);
+    _separateOrders(orderProvider.websiteOrders);
   }
 
   @override
@@ -67,14 +55,13 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
   }
 
   void _onOrderProviderChange() {
-    // Debug print to confirm provider notification
     print("WebsiteOrdersScreen: OrderProvider data changed, updating UI. Current orders in provider: ${Provider.of<OrderProvider>(context, listen: false).websiteOrders.length}");
-    _updateDisplayedOrders(Provider.of<OrderProvider>(context, listen: false).websiteOrders);
-    print("WebsiteOrdersScreen: _displayedOrders count after update: ${_displayedOrders.length}");
+    _separateOrders(Provider.of<OrderProvider>(context, listen: false).websiteOrders);
   }
 
-  void _updateDisplayedOrders(List<Order> allOrdersFromProvider) {
+  void _separateOrders(List<Order> allOrdersFromProvider) {
     setState(() {
+      // First filter by order type (pickup/delivery)
       List<Order> filteredOrders;
       if (_selectedOrderType == 'pickup') {
         filteredOrders = allOrdersFromProvider.where((order) => order.orderType.toLowerCase() == 'pickup').toList();
@@ -84,18 +71,38 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
         filteredOrders = List.from(allOrdersFromProvider);
       }
 
-      // Sort by creation date, newest first for better visibility of new orders.
-      filteredOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      // Separate active and completed orders
+      List<Order> tempActive = [];
+      List<Order> tempCompleted = [];
 
-      _displayedOrders = filteredOrders;
+      for (var order in filteredOrders) {
+        if (order.status.toLowerCase() == 'completed' || order.status.toLowerCase() == 'delivered' || order.status.toLowerCase() == 'blue') {
+          tempCompleted.add(order);
+        } else {
+          tempActive.add(order);
+        }
+      }
 
-      // Maintain selection or select first if current selection is invalid/empty.
-      if (_selectedOrder != null && !_displayedOrders.any((o) => o.orderId == _selectedOrder!.orderId)) {
-        _selectedOrder = _displayedOrders.isNotEmpty ? _displayedOrders.first : null;
-      } else if (_displayedOrders.isNotEmpty && _selectedOrder == null) {
-        _selectedOrder = _displayedOrders.first;
-      } else if (_displayedOrders.isEmpty) {
-        _selectedOrder = null;
+      // Sort each group separately by creation date, newest first
+      tempActive.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      tempCompleted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      activeOrders = tempActive;
+      completedOrders = tempCompleted;
+
+      print("Active orders: ${activeOrders.length}, Completed orders: ${completedOrders.length}");
+
+      // Maintain selection or select first available order
+      if (_selectedOrder != null) {
+        bool foundInActive = activeOrders.any((o) => o.orderId == _selectedOrder!.orderId);
+        bool foundInCompleted = completedOrders.any((o) => o.orderId == _selectedOrder!.orderId);
+        if (!foundInActive && !foundInCompleted) {
+          _selectedOrder = activeOrders.isNotEmpty ? activeOrders.first :
+          completedOrders.isNotEmpty ? completedOrders.first : null;
+        }
+      } else {
+        _selectedOrder = activeOrders.isNotEmpty ? activeOrders.first :
+        completedOrders.isNotEmpty ? completedOrders.first : null;
       }
     });
   }
@@ -112,37 +119,29 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
     return 'No orders found for this type.';
   }
 
-  // Determines text color based on the background status color for readability.
-  // With the new colors (FFF6D4, DEF5D4, D6D6D6), black text is suitable for all.
-  Color _getTextColor(String status) {
-    return Colors.black;
-  }
-
-  // Determines the next status in the order workflow for a given current status.
   String _nextStatus(String current) {
     print("nextStatus: Current status is '$current'.");
     String newStatus;
     switch (current.toLowerCase()) {
       case 'pending':
-      case 'accepted': // Treat 'accepted' from API like 'pending' for UI transition
+      case 'accepted':
         newStatus = 'ready';
         break;
       case 'ready':
-      case 'preparing': // Treat 'preparing' from API like 'ready' for UI transition
+      case 'preparing':
         newStatus = 'completed';
         break;
       case 'completed':
-      case 'delivered': // Once completed/delivered, status remains completed.
+      case 'delivered':
         newStatus = 'completed';
         break;
       default:
-        newStatus = 'pending'; // Fallback to initial 'pending' status.
+        newStatus = 'pending';
     }
     print("nextStatus: Returning '$newStatus'.");
     return newStatus;
   }
 
-  // Maps item category names to their corresponding icon assets.
   String _getCategoryIcon(String categoryName) {
     switch (categoryName.toUpperCase()) {
       case 'PIZZA':
@@ -174,7 +173,34 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    print("WebsiteOrdersScreen: build method called. Current number of displayed orders: ${_displayedOrders.length}");
+    print("WebsiteOrdersScreen: build method called. Active orders: ${activeOrders.length}, Completed orders: ${completedOrders.length}");
+
+    // Create display list - Active orders first, then divider, then completed orders
+    final allOrdersForDisplay = <Order>[];
+
+    // Add active orders
+    allOrdersForDisplay.addAll(activeOrders);
+
+    // Add divider and completed orders if there are any completed orders
+    if (completedOrders.isNotEmpty) {
+      // Add divider order
+      allOrdersForDisplay.add(Order(
+        orderId: -1,
+        customerName: '',
+        items: [],
+        orderTotalPrice: 0.0,
+        createdAt: DateTime.now(),
+        status: 'divider',
+        orderType: 'divider',
+        changeDue: 0.0,
+        orderSource: 'website',
+        paymentType: 'cash',
+        transactionId: '',
+      ));
+
+      // Add completed orders
+      allOrdersForDisplay.addAll(completedOrders);
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -228,13 +254,13 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         // --- Pickup Button ---
-                        MouseRegion( // Added MouseRegion
-                          cursor: SystemMouseCursors.click, // Hand pointer on hover
+                        MouseRegion(
+                          cursor: SystemMouseCursors.click,
                           child: GestureDetector(
                             onTap: () {
                               setState(() {
                                 _selectedOrderType = 'pickup';
-                                _updateDisplayedOrders(Provider.of<OrderProvider>(context, listen: false).websiteOrders);
+                                _separateOrders(Provider.of<OrderProvider>(context, listen: false).websiteOrders);
                               });
                             },
                             child: Container(
@@ -259,13 +285,13 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                           ),
                         ),
                         // --- Deliveries Button ---
-                        MouseRegion( // Added MouseRegion
-                          cursor: SystemMouseCursors.click, // Hand pointer on hover
+                        MouseRegion(
+                          cursor: SystemMouseCursors.click,
                           child: GestureDetector(
                             onTap: () {
                               setState(() {
                                 _selectedOrderType = 'delivery';
-                                _updateDisplayedOrders(Provider.of<OrderProvider>(context, listen: false).websiteOrders);
+                                _separateOrders(Provider.of<OrderProvider>(context, listen: false).websiteOrders);
                               });
                             },
                             child: Container(
@@ -292,8 +318,37 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                       ],
                     ),
                     const SizedBox(height: 20),
+
+                    // Show summary of active and completed orders
+                    if (activeOrders.isNotEmpty || completedOrders.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Active: ${activeOrders.length}',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                            const SizedBox(width: 20),
+                            Text(
+                              'Completed: ${completedOrders.length}',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
                     Expanded(
-                      child: _displayedOrders.isEmpty
+                      child: allOrdersForDisplay.isEmpty
                           ? Center(
                         child: Text(
                           _emptyStateMessage,
@@ -301,13 +356,44 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                         ),
                       )
                           : ListView.builder(
-                        itemCount: _displayedOrders.length,
+                        itemCount: allOrdersForDisplay.length,
                         itemBuilder: (context, index) {
-                          final order = _displayedOrders[index];
-                          bool isSelected = _selectedOrder?.orderId == order.orderId;
+                          final order = allOrdersForDisplay[index];
 
-                          // Debug print for each order item being built
-                          print("Building Order ID: ${order.orderId}, Status: ${order.status}, Color: ${order.statusColor}");
+                          // Check if this is a divider
+                          if (order.orderId == -1) {
+                            return Container(
+                              margin: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 60),
+                              child: Column(
+                                children: [
+                                  const Divider(
+                                    color: Colors.black,
+                                    thickness: 2,
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    'COMPLETED ORDERS',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 5),
+                                ],
+                              ),
+                            );
+                          }
+
+                          // Check if this order is in active orders to show serial number
+                          bool isActiveOrder = activeOrders.contains(order);
+                          int? serialNumber;
+                          if (isActiveOrder) {
+                            serialNumber = activeOrders.indexOf(order) + 1;
+                          }
+
+                          // Check if this is the selected order
+                          bool isSelected = _selectedOrder?.orderId == order.orderId;
 
                           return GestureDetector(
                             onTap: () {
@@ -320,75 +406,112 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                               margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 60),
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: Colors.transparent,
+                                color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.transparent,
                                 borderRadius: BorderRadius.circular(20),
+                                border: isSelected ? Border.all(color: Colors.blue, width: 2) : null,
                               ),
                               child: Row(
                                 children: [
-                                  // Order number
-                                  Text(
-                                    '${index + 1}', // Displaying serial number (index + 1) for all items.
-                                    style: TextStyle(
-                                      fontSize: 50,
-                                      fontWeight: FontWeight.bold,
-                                      color: _getTextColor(order.status), // Text color for readability
+                                  // Serial number for active orders only
+                                  if (serialNumber != null)
+                                    Container(
+                                      width: 60,
+                                      height: 60,
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue,
+                                        borderRadius: BorderRadius.circular(30),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          '$serialNumber',
+                                          style: const TextStyle(
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                  // For completed orders, show a smaller indicator
+                                    Container(
+                                      width: 60,
+                                      height: 60,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[400],
+                                        borderRadius: BorderRadius.circular(30),
+                                      ),
+                                      child: const Center(
+                                        child: Icon(
+                                          Icons.check,
+                                          color: Colors.white,
+                                          size: 30,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+
                                   const SizedBox(width: 15),
 
-                                  // Order Summary (postcode, street address) - This is the middle part
+                                  // Order Summary
                                   Expanded(
                                     flex: 3,
-                                    child: GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          _selectedOrder = order;
-                                          debugPrint("WebsiteOrdersScreen: Order ID ${order.orderId} (inner tap) selected.");
-                                        });
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
+                                      decoration: BoxDecoration(
+                                        color: order.statusColor,
+                                        borderRadius: BorderRadius.circular(50),
+                                      ),
+                                      child: Text(
+                                        order.displayAddressSummary,
+                                        style: const TextStyle(fontSize: 32, color: Colors.black),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+
+                                  // Status Change Button (only for active orders)
+                                  if (isActiveOrder)
+                                    GestureDetector(
+                                      onTap: () async {
+                                        if (order.status.toLowerCase() != 'completed' && order.status.toLowerCase() != 'delivered') {
+                                          final newStatus = _nextStatus(order.status);
+                                          debugPrint("WebsiteOrdersScreen: Attempting to change status for order ID ${order.orderId} from ${order.status} to $newStatus.");
+
+                                          final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+                                          bool success = await orderProvider.updateAndRefreshOrder(order.orderId, newStatus);
+                                          if (success) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Order ${order.orderId} status updated to ${newStatus.toUpperCase()}.')),
+                                            );
+                                          } else {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Failed to update status for order ${order.orderId}. Please try again.')),
+                                            );
+                                          }
+                                        }
                                       },
-                                      child: Container( // This container gets the status color background
+                                      child: Container(
+                                        width: 200,
+                                        height: 80,
+                                        alignment: Alignment.center,
                                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                                         decoration: BoxDecoration(
                                           color: order.statusColor,
                                           borderRadius: BorderRadius.circular(50),
                                         ),
                                         child: Text(
-                                          order.displayAddressSummary,
-                                          style: TextStyle(fontSize: 32, color: _getTextColor(order.status)),
-                                          overflow: TextOverflow.ellipsis,
+                                          order.statusLabel,
+                                          style: const TextStyle(fontSize: 32, color: Colors.black),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10), // Space between middle and status button
-
-                                  // Status Change Button
-                                  GestureDetector(
-                                    onTap: () async {
-                                      // Only allow status change if not already 'completed'
-                                      if (order.status.toLowerCase() != 'completed' && order.status.toLowerCase() != 'delivered') { // Added 'delivered' here
-                                        final newStatus = _nextStatus(order.status);
-                                        debugPrint("WebsiteOrdersScreen: Attempting to change status for order ID ${order.orderId} from ${order.status} to $newStatus.");
-
-                                        final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-                                        bool success = await orderProvider.updateAndRefreshOrder(order.orderId, newStatus);
-                                        if (success) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('Order ${order.orderId} status updated to ${newStatus.toUpperCase()}.')),
-                                          );
-                                        } else {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('Failed to update status for order ${order.orderId}. Please try again.')),
-                                          );
-                                        }
-                                      } else {
-                                        debugPrint("WebsiteOrdersScreen: Order ID ${order.orderId} is already Completed/Delivered. No status change.");
-                                      }
-                                    },
-                                    child: Container(
-                                      width: 200, // Fixed width as per reference
-                                      height: 80, // Fixed height as per reference
-                                      alignment: Alignment.center, // Center text vertically and horizontally
+                                    )
+                                  else
+                                  // For completed orders, show status as text only
+                                    Container(
+                                      width: 200,
+                                      height: 80,
+                                      alignment: Alignment.center,
                                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                                       decoration: BoxDecoration(
                                         color: order.statusColor,
@@ -396,10 +519,9 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                       ),
                                       child: Text(
                                         order.statusLabel,
-                                        style: TextStyle(fontSize: 32, color: _getTextColor(order.status)),
+                                        style: const TextStyle(fontSize: 32, color: Colors.black),
                                       ),
                                     ),
-                                  ),
                                 ],
                               ),
                             ),
@@ -412,6 +534,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
               ),
             ),
             const VerticalDivider(width: 1, thickness: 0.5, color: Colors.black),
+
 
             // --- Right Panel (Order Details) ---
             Expanded(

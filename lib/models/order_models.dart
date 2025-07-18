@@ -22,10 +22,15 @@ class PaymentDetails {
   final String paymentType;
   final double? amountReceived;
   final double discountPercentage;
+  final double totalCharge;
+  final double changeDue;
 
   PaymentDetails({
     required this.paymentType,
     this.amountReceived,
     required this.discountPercentage,
-  });
+    required this.totalCharge,
+  }) : changeDue = (paymentType == 'Cash' && amountReceived != null)
+      ? (amountReceived - totalCharge).clamp(0.0, double.infinity)
+      : 0.0;
 }

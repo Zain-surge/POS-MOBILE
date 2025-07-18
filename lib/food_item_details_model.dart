@@ -506,7 +506,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       child: const Text(
                         'Cancel',
                         style: TextStyle(color: Colors.black,
-                          fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
@@ -523,7 +523,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       child: const Text(
                         'Add to Cart',
                         style: TextStyle(
-                          color: Colors.white,
+                            color: Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
                       ),

@@ -88,7 +88,7 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
                     child: Text(
                       'Customer Details  (${widget.orderType.toUpperCase()})',
                       style: TextStyle(
-                        fontSize: 25,
+                        fontSize: 23,
                         fontWeight: FontWeight.bold,
                         color: Colors.black,
                         fontFamily: 'Poppins',

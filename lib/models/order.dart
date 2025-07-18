@@ -127,11 +127,8 @@ class Order {
 
     print('🔍 DEBUG - Full JSON received: $json');
     print('🔍 DEBUG - order_total_price: ${json['order_total_price']}');
-    print('🔍 DEBUG - total_price: ${json['total_price']}');
-    print('🔍 DEBUG - total: ${json['total']}');
-    print('🔍 DEBUG - orderTotalPrice: ${json['orderTotalPrice']}');
 
-    // Try multiple possible field names for the total
+
     double totalPrice = 0.0;
 
     // Check various possible field names
@@ -237,17 +234,19 @@ class Order {
     switch (status.toLowerCase()) {
       case 'pending':
       case 'accepted': // Map API 'accepted' to UI 'pending' color
+      case 'yellow':
         return HexColor.fromHex('FFF6D4'); // Yellow shade
+
       case 'ready':
       case 'preparing': // Map API 'preparing' to UI 'ready' color
-        return HexColor.fromHex('DEF5D4'); // Green shade
-      case 'completed':
-      case 'delivered':
-        return HexColor.fromHex('D6D6D6'); // Grey shade
-      case 'blue': // For 'blue' status from API
-        return Colors.blue.shade100;
       case 'green':
         return HexColor.fromHex('DEF5D4'); // Green shade
+
+      case 'completed':
+      case 'delivered':
+      case 'blue': // For 'blue' status from API
+        return HexColor.fromHex('D6D6D6');
+
       default:
         print("DEBUG: Unrecognized order status for color: $status. Returning transparent.");
         return Colors.transparent; // Fallback for truly unrecognized statuses

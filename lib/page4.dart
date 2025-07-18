@@ -462,61 +462,6 @@ class _Page4State extends State<Page4> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.start,
                                   children: [
-                                    // Decrement button with hand cursor
-                                    MouseRegion(
-                                      cursor: SystemMouseCursors.click,
-                                      child: GestureDetector(
-                                        onTap: () {
-                                          setState(() {
-                                            if (item.quantity > 1) {
-                                              item.decrementQuantity();
-                                            }
-                                          });
-                                        },
-                                        child: Container(
-                                          width: 35,
-                                          height: 35,
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFCB6CE6),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: const Icon(
-                                            Icons.remove,
-                                            color: Colors.white,
-                                            size: 20,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-
-                                    const SizedBox(width: 15),
-
-                                    // Increment button with hand cursor
-                                    MouseRegion(
-                                      cursor: SystemMouseCursors.click,
-                                      child: GestureDetector(
-                                        onTap: () {
-                                          setState(() {
-                                            item.incrementQuantity();
-                                          });
-                                        },
-                                        child: Container(
-                                          width: 35,
-                                          height: 35,
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFCB6CE6),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: const Icon(
-                                            Icons.add,
-                                            color: Colors.white,
-                                            size: 20,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-
-                                    const SizedBox(width: 15),
 
                                     // Delete button with hand cursor
                                     MouseRegion(
@@ -536,18 +481,63 @@ class _Page4State extends State<Page4> {
                                         child: Container(
                                           width: 35,
                                           height: 35,
-                                          decoration: BoxDecoration(
-                                            color: Colors.red,
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
                                           child: const Icon(
                                             Icons.delete,
-                                            color: Colors.white,
-                                            size: 20,
+                                            color: Colors.black,
+                                            size: 30,
                                           ),
                                         ),
                                       ),
                                     ),
+
+                                    // Decrement button with hand cursor
+                                    MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            if (item.quantity > 1) {
+                                              item.decrementQuantity();
+                                            }
+                                          });
+                                        },
+                                        child: Container(
+                                          width: 35,
+                                          height: 35,
+                                          child: const Icon(
+                                            Icons.remove,
+                                            color: Colors.black,
+                                            size: 30,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(width: 15),
+
+                                    // Increment button with hand cursor
+                                    MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            item.incrementQuantity();
+                                          });
+                                        },
+                                        child: Container(
+                                          width: 35,
+                                          height: 35,
+                                          child: const Icon(
+                                            Icons.add,
+                                            color: Colors.black,
+                                            size: 30,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(width: 15),
+
                                   ],
                                 ),
                               ],
@@ -719,11 +709,12 @@ class _Page4State extends State<Page4> {
     }
   }
 
+// In your Page4
+
   Future<void> _handleOrderCompletion({
     required CustomerDetails customerDetails,
     required PaymentDetails paymentDetails,
   }) async {
-    // Check if cart is empty first
     if (_cartItems.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -738,18 +729,10 @@ class _Page4State extends State<Page4> {
     String id1 = generateTransactionId();
     print("Generated Transaction ID: $id1");
 
-    // Calculate totals
-    final double subtotal = double.parse(_calculateTotalPrice().toStringAsFixed(2));
-    double discountedSubtotal = subtotal;
-    double discountAmount = 0.0;
-    if (paymentDetails.discountPercentage != null && paymentDetails.discountPercentage! > 0) {
-      discountAmount = (subtotal * (paymentDetails.discountPercentage! / 100));
-      discountedSubtotal = subtotal - discountAmount;
-    }
-
-    const double vatRate = 0.05; // 5% VAT
-    final double vatAmount = double.parse((discountedSubtotal * vatRate).toStringAsFixed(2));
-    final double totalCharge = double.parse((discountedSubtotal + vatAmount).toStringAsFixed(2));
+    final double finalTotalCharge = paymentDetails.totalCharge;
+    final double finalChangeDue = paymentDetails.changeDue;
+    final double finalDiscountPercentage = paymentDetails.discountPercentage;
+    final double finalAmountReceived = paymentDetails.amountReceived ?? 0.0;
 
     final orderData = {
       "guest": {
@@ -758,18 +741,19 @@ class _Page4State extends State<Page4> {
         "phone_number": customerDetails.phoneNumber,
         "street_address": customerDetails.streetAddress ?? "N/A",
         "city": customerDetails.city ?? "N/A",
-        "county": customerDetails.city ?? "N/A",
+        "county": customerDetails.city ?? "N/A", // Still using city for county if not explicitly provided
         "postal_code": customerDetails.postalCode ?? "N/A",
       },
       "transaction_id": id1,
       "payment_type": paymentDetails.paymentType,
-      "amount_received": paymentDetails.amountReceived,
-      "discount_percentage": paymentDetails.discountPercentage,
+      "amount_received": finalAmountReceived,
+      "discount_percentage": finalDiscountPercentage,
       "order_type": _actualOrderType,
-      "total_price": totalCharge,
+      "total_price": finalTotalCharge, // Use totalCharge from paymentDetails
       "extra_notes": _cartItems.map((item) => item.comment ?? '').join(', ').trim(),
-      "status": "pending",
-      "order_source": "epos",
+      "status": "yellow",
+      "change_due": finalChangeDue, // Use changeDue from paymentDetails
+      "order_source": "EPOS",
       "items": _cartItems.map((cartItem) {
         String description = cartItem.foodItem.name;
         if (cartItem.selectedOptions != null && cartItem.selectedOptions!.isNotEmpty) {
@@ -796,10 +780,10 @@ class _Page4State extends State<Page4> {
     await _handlePrintingAndOrderDirect(
       orderData: orderData,
       id1: id1,
-      subtotal: discountedSubtotal,
-      vatAmount: vatAmount,
-      totalCharge: totalCharge,
+      subtotal: finalTotalCharge,
+      totalCharge: finalTotalCharge,
       extraNotes: extraNotes,
+      changeDue: finalChangeDue,
     );
   }
 
@@ -808,9 +792,9 @@ class _Page4State extends State<Page4> {
     required Map<String, dynamic> orderData,
     required String id1,
     required double subtotal,
-    required double vatAmount,
     required double totalCharge,
     required String extraNotes,
+    required double changeDue,
   }) async {
     if (!mounted) return;
 
@@ -821,9 +805,9 @@ class _Page4State extends State<Page4> {
         orderType: _actualOrderType,
         cartItems: _cartItems,
         subtotal: subtotal,
-        vatAmount: vatAmount,
         totalCharge: totalCharge,
         extraNotes: extraNotes.isNotEmpty ? extraNotes : null,
+        changeDue: changeDue,
       );
     } catch (e) {
       print('Background printing failed: $e');
@@ -852,7 +836,6 @@ class _Page4State extends State<Page4> {
             duration: Duration(seconds: 2),
           ),
         );
-
         // Reset UI state to go back to cart widget
         setState(() {
           _cartItems.clear();
@@ -958,7 +941,6 @@ class _Page4State extends State<Page4> {
       ),
     );
   }
-
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 120),
@@ -987,10 +969,27 @@ class _Page4State extends State<Page4> {
               style: const TextStyle(color: Colors.black),
             ),
           ),
+          const SizedBox(width: 10),
+
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () {
+                // TODO: Implement the action for when the edit image is tapped
+              },
+              child: Image.asset(
+                'assets/images/edit.png',
+                width: 30,
+                height: 30,
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
+
+
   Widget _buildCategoryTabs() {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1229,13 +1228,13 @@ class _Page4State extends State<Page4> {
 
           _navItem('More.png', 5, onTap: () {
             Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SettingsScreen(
-                    initialBottomNavItemIndex: 5,
-                  ),
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SettingsScreen(
+                  initialBottomNavItemIndex: 5,
                 ),
-              );
+              ),
+            );
           }),
         ],
       ),

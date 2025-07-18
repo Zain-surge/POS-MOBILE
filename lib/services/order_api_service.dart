@@ -3,11 +3,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
-import 'dart:async'; // Required for StreamController
+import 'dart:async';
 
-import '../models/order.dart'; // Ensure your Order model is correctly defined here
+import '../models/order.dart';
 
-// Define the structure for shop status data, if not already in models
 class ShopStatusData {
   final bool shopOpen;
 
@@ -21,9 +20,6 @@ class ShopStatusData {
 }
 
 class OrderApiService {
-  // Base URL for HTTP requests (using the new thingproxy)
-  // IMPORTANT: The backend URL should be appended AFTER the proxy URL,
-  // as the proxy itself takes the target URL as part of its path.
   static const String _httpProxyUrl = 'https://thingproxy.freeboard.io/fetch/';
   static const String _backendBaseUrl = 'https://thevillage-backend.onrender.com';
 
@@ -44,7 +40,7 @@ class OrderApiService {
   final _shopStatusUpdatedController = StreamController<ShopStatusData>.broadcast();
   final _connectionStatusController = StreamController<bool>.broadcast();
 
-  // NEW: StreamController for orders that have been explicitly 'accepted'
+  // StreamController for orders that have been explicitly 'accepted'
   final _acceptedOrderController = StreamController<Order>.broadcast();
 
   // Getters for the streams
@@ -52,17 +48,17 @@ class OrderApiService {
   Stream<List<dynamic>> get offersUpdatedStream => _offersUpdatedController.stream;
   Stream<ShopStatusData> get shopStatusUpdatedStream => _shopStatusUpdatedController.stream;
   Stream<bool> get connectionStatusStream => _connectionStatusController.stream;
-  // NEW: Getter for the accepted orders stream
+  //Getter for the accepted orders stream
   Stream<Order> get acceptedOrderStream => _acceptedOrderController.stream;
 
-  // NEW: Method to add an order to the accepted stream
+  //Method to add an order to the accepted stream
   void addAcceptedOrder(Order order) {
     _acceptedOrderController.add(order);
     print('OrderApiService: Order ${order.orderId} added to accepted stream.');
   }
 
   void _initSocket() {
-    // Socket.IO typically connects directly, no proxy needed here
+    // Socket.IO connects directly, no proxy needed
     _socket = IO.io(
       _backendBaseUrl, // Use the direct backend URL for sockets
       IO.OptionBuilder()
@@ -139,7 +135,7 @@ class OrderApiService {
     _offersUpdatedController.close();
     _shopStatusUpdatedController.close();
     _connectionStatusController.close();
-    _acceptedOrderController.close(); // NEW: Close the new controller
+    _acceptedOrderController.close(); // Close the new controller
     _socket.dispose();
   }
 
@@ -154,6 +150,7 @@ class OrderApiService {
     final url = _buildProxyUrl('/orders/today'); // Use the helper
     try {
       final response = await http.get(url);
+      print(response.body);
 
       if (response.statusCode == 200) {
         List jsonResponse = json.decode(response.body);
@@ -169,8 +166,34 @@ class OrderApiService {
   // Update order status
   static Future<bool> updateOrderStatus(int orderId, String newStatus) async {
     final url = _buildProxyUrl('/orders/update-status'); // Use the helper
+
+    // --- NEW LOGIC: Map internal status names to backend color codes ---
+    String statusToSend;
+    switch (newStatus.toLowerCase()) {
+      case 'pending':
+        statusToSend = 'yellow';
+        break;
+      case 'ready':
+      case 'preparing':
+        statusToSend = 'green';
+        break;
+      case 'completed':
+      case 'delivered':
+        statusToSend = 'blue';
+        break;
+      default:
+        statusToSend = newStatus.toLowerCase();
+        print('Warning: No color mapping found for status "$newStatus". Sending as is.');
+        break;
+    }
+    // --- END NEW LOGIC ---
+
     print('DEBUG: Attempting to send update status request to URL: $url');
-    print('DEBUG: Sending body: ${jsonEncode(<String, dynamic>{'order_id': orderId, 'status': newStatus})}');
+    print('DEBUG: Sending body: ${jsonEncode(<String, dynamic>{
+      'order_id': orderId,
+      'status': statusToSend, // Use the mapped status
+      'driver_id': null, // ADDED: driver_id with null value
+    })}');
 
     try {
       final response = await http.post(
@@ -180,7 +203,8 @@ class OrderApiService {
         },
         body: jsonEncode(<String, dynamic>{
           'order_id': orderId,
-          'status': newStatus,
+          'status': statusToSend, // Use the mapped status
+          'driver_id': null, // ADDED: driver_id with null value
         }),
       );
 
@@ -188,10 +212,10 @@ class OrderApiService {
       print('DEBUG: Response body: ${response.body}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        print('Successfully updated order status ${orderId} to ${newStatus}');
+        print('Successfully updated order status $orderId to $newStatus (sent as $statusToSend)');
         return true;
       } else {
-        print('Failed to update order status ${orderId} to ${newStatus}: ${response.statusCode} - ${response.body}');
+        print('Failed to update order status $orderId to $newStatus (sent as $statusToSend): ${response.statusCode} - ${response.body}');
         return false;
       }
     } catch (e) {

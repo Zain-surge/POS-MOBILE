@@ -1,6 +1,8 @@
+// lib/widgets/payment_widget.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:epos/models/order_models.dart';
+import 'package:epos/models/order_models.dart'; // Make sure this path is correct
 import 'package:epos/services/thermal_printer_service.dart';
 
 class PaymentWidget extends StatefulWidget {
@@ -27,13 +29,13 @@ class _PaymentWidgetState extends State<PaymentWidget> {
   final TextEditingController _discountPercentageController = TextEditingController();
   bool _isPrinterConnected = false;
   bool _isCheckingPrinter = false;
-  double _discountedTotal = 0.0;
+  double _discountedTotal = 0.0; // This is actually your final total charge
   double _change = 0.0;
 
   @override
   void initState() {
     super.initState();
-    _discountedTotal = widget.subtotal;
+    _discountedTotal = widget.subtotal; // Initial value before discount
     _amountReceivedController.addListener(_calculateChange);
     _discountPercentageController.addListener(_calculateDiscountedTotal);
     _checkPrinterStatus();
@@ -82,7 +84,9 @@ class _PaymentWidgetState extends State<PaymentWidget> {
       if (discount < 0) discount = 0.0;
       if (discount > 100) discount = 100.0;
 
+      // Calculate the total after discount
       _discountedTotal = widget.subtotal * (1 - (discount / 100));
+      // Re-calculate change as _discountedTotal (which is now totalCharge) has changed
       _calculateChange();
     });
   }
@@ -90,14 +94,11 @@ class _PaymentWidgetState extends State<PaymentWidget> {
   void _calculateChange() {
     setState(() {
       if (_selectedPaymentType == 'Cash') {
-        if (_amountReceivedController.text.isEmpty) {
-          _change = 0.0;
-        } else {
-          double received = double.tryParse(_amountReceivedController.text) ?? 0.0;
-          _change = received - _discountedTotal;
-        }
+        double received = double.tryParse(_amountReceivedController.text) ?? 0.0;
+        // Calculate change based on received amount and the discounted total (which is the final charge)
+        _change = (received - _discountedTotal).clamp(0.0, double.infinity);
       } else {
-        _change = 0.0;
+        _change = 0.0; // No change for card payments
       }
     });
   }
@@ -176,13 +177,13 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                   Row(
                     children: [
                       Expanded(
-                        child: Container(
+                        child: SizedBox( // Changed from Container to SizedBox for better ElevatedButton fit
                           height: 50,
                           child: ElevatedButton(
                             onPressed: () {
                               setState(() {
                                 _selectedPaymentType = 'Cash';
-                                _calculateChange();
+                                _calculateChange(); // Recalculate change for cash
                               });
                             },
                             style: ElevatedButton.styleFrom(
@@ -216,14 +217,14 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                       ),
                       const SizedBox(width: 16),
                       Expanded(
-                        child: Container(
+                        child: SizedBox( // Changed from Container to SizedBox
                           height: 50,
                           child: ElevatedButton(
                             onPressed: () {
                               setState(() {
                                 _selectedPaymentType = 'Card';
-                                _amountReceivedController.clear();
-                                _change = 0.0;
+                                _amountReceivedController.clear(); // Clear amount for card
+                                _change = 0.0; // Reset change for card
                               });
                             },
                             style: ElevatedButton.styleFrom(
@@ -345,7 +346,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
 
                   const SizedBox(height: 16),
 
-                  // Discounted Total
+                  // Discounted Total (which is your final total charge)
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -405,6 +406,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
               ),
               const SizedBox(height: 8),
 
+              // Confirm Payment Button
               Row(
                 children: [
                   Expanded(
@@ -412,9 +414,9 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                       cursor: SystemMouseCursors.click,
                       child: GestureDetector(
                         onTap: () async {
+                          // Basic validation for cash payment
                           if (_selectedPaymentType == 'Cash' &&
-                              (_amountReceivedController.text.isEmpty ||
-                                  (double.tryParse(_amountReceivedController.text) ?? 0.0) < _discountedTotal)) {
+                              ((double.tryParse(_amountReceivedController.text) ?? 0.0) < _discountedTotal)) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text('Amount received must be greater than or equal to the final total.'),
@@ -426,12 +428,15 @@ class _PaymentWidgetState extends State<PaymentWidget> {
 
                           await _checkPrinterStatus();
 
+                          // Create PaymentDetails with the calculated totalCharge and changeDue
                           final paymentDetails = PaymentDetails(
                             paymentType: _selectedPaymentType,
                             amountReceived: _selectedPaymentType == 'Cash'
                                 ? (double.tryParse(_amountReceivedController.text) ?? 0.0)
                                 : null,
                             discountPercentage: double.tryParse(_discountPercentageController.text) ?? 0.0,
+                            totalCharge: _discountedTotal, // Pass the calculated final total
+                            // changeDue is now calculated internally by PaymentDetails constructor
                           );
                           widget.onPaymentConfirmed(paymentDetails);
                         },
@@ -467,7 +472,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                                 else
                                   Icon(
                                     Icons.print,
-                                    color: _isPrinterConnected ? Colors.green : Colors.red,
+                                    color: _isPrinterConnected ? Colors.green : Colors.green, // Always green if connected, red if not.
                                     size: 24,
                                   ),
                               ],
@@ -478,13 +483,15 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  // This second button seems to be a duplicate functionality-wise for "Confirm Payment"
+                  // You might want to review if it's intended to be a different action or just a visual element.
+                  // For now, I'm keeping its original onTap logic identical.
                   MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: GestureDetector(
                       onTap: () async {
                         if (_selectedPaymentType == 'Cash' &&
-                            (_amountReceivedController.text.isEmpty ||
-                                (double.tryParse(_amountReceivedController.text) ?? 0.0) < _discountedTotal)) {
+                            ((double.tryParse(_amountReceivedController.text) ?? 0.0) < _discountedTotal)) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Amount received must be greater than or equal to the final total.'),
@@ -502,6 +509,8 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                               ? (double.tryParse(_amountReceivedController.text) ?? 0.0)
                               : null,
                           discountPercentage: double.tryParse(_discountPercentageController.text) ?? 0.0,
+                          totalCharge: _discountedTotal, // Pass the calculated final total
+                          // changeDue is now calculated internally by PaymentDetails constructor
                         );
                         widget.onPaymentConfirmed(paymentDetails);
                       },

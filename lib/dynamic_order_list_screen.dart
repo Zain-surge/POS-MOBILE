@@ -75,11 +75,10 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
       List<Order> tempCompleted = [];
 
       for (var order in filteredOrders) {
-        if (order.status.toLowerCase() != 'ready' && order.status.toLowerCase() != 'completed') {
-          order = order.copyWith(status: 'Pending');
-        }
+        final String currentBackendStatus = order.status.toLowerCase();
 
-        if (order.status.toLowerCase() == 'completed') {
+
+        if (currentBackendStatus == 'blue') {
           tempCompleted.add(order);
         } else {
           tempActive.add(order);
@@ -460,7 +459,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
             const VerticalDivider(
                 width: 1, thickness: 0.5, color: Colors.black),
 
-            // right panel
+             // right panel
             Expanded(
               flex: 1,
               child: Container(
@@ -793,9 +792,9 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
             },
           ),
           BottomNavItem(
-              image: 'More.png', // Make sure you have 'assets/images/home.png'
-              index: 5,
-              selectedIndex: _selectedBottomNavItem,
+            image: 'More.png', // Make sure you have 'assets/images/home.png'
+            index: 5,
+            selectedIndex: _selectedBottomNavItem,
               onTap: () {
                 Navigator.push(
                   context,

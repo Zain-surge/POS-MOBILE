@@ -55,8 +55,6 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
 
     // Logic for Website Orders
     if (source == 'website') {
-      // Website orders should ONLY be displayed if their status is 'accepted'.
-      // 'pending' and 'yellow' website orders are for notifications, not this list.
       shouldDisplay = (status == 'accepted');
       if (!shouldDisplay) {
         print('ActiveOrdersList: Skipping website order ${order.orderId} (Source: $source, Status: $status) - not accepted.');
@@ -64,18 +62,12 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
     }
     // Logic for EPOS Orders (and any other non-website sources)
     else if (source == 'epos') {
-      // EPOS orders should be displayed unless they are 'completed', 'delivered', or 'declined'.
-      // Any other status (including initial 'pending' or 'yellow' for EPOS) means it's active.
-      shouldDisplay = !['completed', 'delivered', 'declined'].contains(status);
+
+      shouldDisplay = !['completed', 'delivered', 'declined', 'blue'].contains(status);
       if (!shouldDisplay) {
         print('ActiveOrdersList: Skipping EPOS order ${order.orderId} (Source: $source, Status: $status) - non-active EPOS status.');
       }
     }
-    // Handle other potential sources if needed, otherwise default to not displaying
-    // else {
-    //   shouldDisplay = false;
-    // }
-
     setState(() {
       if (shouldDisplay) {
         int existingIndex = _activeOrders.indexWhere((o) => o.orderId == order.orderId);
@@ -142,7 +134,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
         if (source == 'website') {
           shouldDisplay = (status == 'accepted');
         } else if (source == 'epos') {
-          shouldDisplay = !['completed', 'delivered', 'declined'].contains(status);
+          shouldDisplay = !['completed', 'delivered', 'declined', 'blue'].contains(status);
         }
 
         if (shouldDisplay) {
@@ -221,7 +213,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
     if (source == 'website') {
       return 'Web ${type == 'delivery' ? 'Delivery' : 'Pickup'}';
     } else if (source == 'epos') {
-      return 'EPOS ${type == 'delivery' ? 'Delivery' : type == 'dinein' ? 'Dine-In' : 'Take-Out'}';
+      return 'EPOS ${type == 'delivery' ? 'Delivery' : type == 'dinein' ? 'Dine-In' : 'Take-Away'}';
     }
     return '${source.toUpperCase()} ${type.toUpperCase()}';
   }
