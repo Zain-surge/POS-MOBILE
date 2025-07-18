@@ -213,7 +213,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
     if (source == 'website') {
       return 'Web ${type == 'delivery' ? 'Delivery' : 'Pickup'}';
     } else if (source == 'epos') {
-      return 'EPOS ${type == 'delivery' ? 'Delivery' : type == 'dinein' ? 'Dine-In' : 'Take-Away'}';
+      return 'EPOS ${type == 'delivery' ? 'Delivery' : type == 'dinein' ? 'Dine-In' : 'Take Away'}';
     }
     return '${source.toUpperCase()} ${type.toUpperCase()}';
   }

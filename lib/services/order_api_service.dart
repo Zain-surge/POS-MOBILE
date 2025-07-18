@@ -6,6 +6,7 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:async';
 
 import '../models/order.dart';
+import '../models/customer_search_model.dart'; // NEW import for CustomerSearchResponse
 
 class ShopStatusData {
   final bool shopOpen;
@@ -221,6 +222,50 @@ class OrderApiService {
     } catch (e) {
       print('Error updating order status: $e');
       return false;
+    }
+  }
+
+  // --- NEW METHOD FOR CUSTOMER SEARCH ---
+  static Future<CustomerSearchResponse?> searchCustomerByPhoneNumber(String phoneNumber) async {
+    String cleanedPhoneNumber = phoneNumber.replaceAll(RegExp(r'\s+'), '');
+    final url = _buildProxyUrl('/orders/search-customer'); // Remove query parameter
+
+    print('PHONE NUMBER: Attempting to search customer with URL: $url');
+    print('PHONE NUMBER: Sending phone number: $cleanedPhoneNumber');
+
+    try {
+      final response = await http.post( // Changed from GET to POST
+        url,
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+        body: jsonEncode(<String, dynamic>{ // Add request body
+          'phone_number': cleanedPhoneNumber,
+        }),
+      );
+
+      print('DEBUG: Received response for customer search: ${response.statusCode}');
+      print('DEBUG: Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = json.decode(response.body);
+        if (responseData.isNotEmpty) {
+          return CustomerSearchResponse.fromJson(responseData);
+        } else {
+          // No customer found (empty response object)
+          return null;
+        }
+      } else if (response.statusCode == 404) {
+        // Explicitly handle 404 for "not found"
+        print('Customer not found for phone number: $cleanedPhoneNumber (Status 404)');
+        return null;
+      } else {
+        print('Failed to search customer. Status: ${response.statusCode}, Body: ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      print('Error during customer search: $e');
+      return null;
     }
   }
 }

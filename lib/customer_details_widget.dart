@@ -1,6 +1,10 @@
+// lib/customer_details_widget.dart
+
 import 'package:flutter/material.dart';
 import 'package:epos/models/order_models.dart';
-import 'package:phone_numbers_parser/phone_numbers_parser.dart';
+import 'package:epos/services/order_api_service.dart'; // Import your API service
+import 'package:epos/models/customer_search_model.dart'; // Import the new customer model
+// import 'package:phone_numbers_parser/phone_numbers_parser.dart'; // REMOVE THIS IMPORT if you haven't already
 
 class CustomerDetailsWidget extends StatefulWidget {
   final double subtotal;
@@ -29,6 +33,8 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _postalCodeController = TextEditingController();
 
+  bool _isSearching = false; // New state variable for loading indicator
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -45,20 +51,102 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
   final RegExp _emailRegExp = RegExp(
       r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+");
 
+  // --- REVISED _validateUKPhoneNumber FUNCTION USING REGEX ---
   bool _validateUKPhoneNumber(String phoneNumber) {
+    if (phoneNumber.isEmpty) return false;
+
+    // Remove any spaces, hyphens, or parentheses for a cleaner check
+    String cleanedNumber = phoneNumber.replaceAll(RegExp(r'[()\s-]'), '');
+
+    // Regex for common UK phone numbers:
+    // ^                           Start of the string
+    // (?:(?:\+|00)44|0)          Starts with +44, 0044, or 0 (non-capturing group)
+    // \d{9,10}                    Followed by 9 or 10 digits (total 10-11 digits after 0, or 11-12 after +44/0044)
+    // $                           End of the string
+    final RegExp finalUkPhoneRegex = RegExp(r'^(?:(?:\+|00)44|0)\d{9,10}$');
+
+    return finalUkPhoneRegex.hasMatch(cleanedNumber);
+  }
+  // --- END REVISED _validateUKPhoneNumber FUNCTION ---
+
+
+  Future<void> _searchCustomer() async {
+    // Validate phone number field first
+    if (_phoneController.text.isEmpty || !_validateUKPhoneNumber(_phoneController.text)) {
+      // If validation fails, show the error message in the TextFormField
+      _formKey.currentState?.validate();
+      return;
+    }
+
+    setState(() {
+      _isSearching = true; // Show loading indicator
+    });
+
+    // Clean the phone number before sending to the API.
+    // The regex ensures it's already in a mostly clean format,
+    // but remove any remaining spaces/hyphens for the API call.
+    String phoneNumberToSend = _phoneController.text.trim().replaceAll(RegExp(r'[()\s-]'), '');
+
     try {
-      // Remove all spaces and non-digit characters except +
-      String cleanedNumber = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
+      final CustomerSearchResponse? customer =
+      await OrderApiService.searchCustomerByPhoneNumber(phoneNumberToSend);
 
-      // Parse the phone number for UK region
-      PhoneNumber parsedNumber = PhoneNumber.parse(cleanedNumber, destinationCountry: IsoCode.GB);
+      if (customer != null) {
+        // Customer found, fill the fields
+        _nameController.text = customer.name;
+        _emailController.text = customer.email ?? ''; // Use empty string if email is null
+        _phoneController.text = customer.phoneNumber; // Use backend's cleaned number
 
-      // Check if it's a valid UK number
-      return parsedNumber.isValid() && parsedNumber.countryCode == '44';
+        if (widget.orderType.toLowerCase() == 'delivery') {
+          if (customer.address != null) {
+            _addressController.text = customer.address!.street;
+            _cityController.text = customer.address!.city;
+            // county is optional, currently not used in UI but can be added if needed
+            _postalCodeController.text = customer.address!.postalCode;
+          } else {
+            // Clear address fields if no address returned even for a delivery order
+            _addressController.clear();
+            _cityController.clear();
+            _postalCodeController.clear();
+          }
+        } else {
+          // If it's not a delivery order, always clear address fields after search
+          _addressController.clear();
+          _cityController.clear();
+          _postalCodeController.clear();
+        }
+
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Customer found and details filled!')),
+        );
+      } else {
+        // Customer not found (API returned null/empty response or 404)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Phone number not found. Please enter details manually.')),
+        );
+        // Clear all relevant fields for manual entry, but keep phone number
+        _nameController.clear();
+        _emailController.clear();
+        if (widget.orderType.toLowerCase() == 'delivery') {
+          _addressController.clear();
+          _cityController.clear();
+          _postalCodeController.clear();
+        }
+      }
     } catch (e) {
-      return false;
+      // This catch block handles actual API errors (e.g., network issues, server errors other than 404/empty 200)
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error searching customer: ${e.toString()}')),
+      );
+      debugPrint('Error searching customer: $e'); // Log detailed error for debugging
+    } finally {
+      setState(() {
+        _isSearching = false; // Hide loading indicator
+      });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +175,7 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
                     ),
                     child: Text(
                       'Customer Details  (${widget.orderType.toUpperCase()})',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 23,
                         fontWeight: FontWeight.bold,
                         color: Colors.black,
@@ -178,14 +266,14 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
                               borderRadius: BorderRadius.circular(15),
                             ),
                             child: IconButton(
-                              icon: const Icon(
+                              icon: _isSearching // Show CircularProgressIndicator if searching
+                                  ? const CircularProgressIndicator(color: Colors.white)
+                                  : const Icon(
                                 Icons.search,
                                 color: Colors.white,
                                 size: 28,
                               ),
-                              onPressed: () {
-                                // TODO: Implementation later - search functionality
-                              },
+                              onPressed: _isSearching ? null : _searchCustomer, // Disable button if searching
                             ),
                           ),
                         ],
@@ -418,12 +506,11 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
               Row(
                 children: [
                   Expanded(
-                    child: MouseRegion( // Wrap the GestureDetector with MouseRegion
-                      cursor: SystemMouseCursors.click, // Set cursor to hand pointer
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
                       child: GestureDetector(
                         onTap: () {
                           if (_formKey.currentState!.validate()) {
-                            // If all validations pass, proceed with submission
                             final customerDetails = CustomerDetails(
                               name: _nameController.text.trim(),
                               phoneNumber: _phoneController.text.trim(),
@@ -457,12 +544,10 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  MouseRegion( // Wrap the Image.asset with MouseRegion
-                    cursor: SystemMouseCursors.click, // Set cursor to hand pointer
-                    child: GestureDetector( // Add GestureDetector if you want the image to be tappable
+                  MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
                       onTap: () {
-                        // You can add the same validation and submission logic here,
-                        // or any other action you want when the men.png image is tapped.
                         if (_formKey.currentState!.validate()) {
                           final customerDetails = CustomerDetails(
                             name: _nameController.text.trim(),
