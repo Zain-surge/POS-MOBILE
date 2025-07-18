@@ -338,6 +338,43 @@ class ApiService {
       throw Exception("Error fetching sales report: $e");
     }
   }
+  // --- MODIFIED METHOD: setItemAvailability ---
+  static Future<FoodItem> setItemAvailability(int itemId, bool availability) async {
+    final url = Uri.parse('https://proxy.corsfix.com/?url=https://thevillage-backend.onrender.com/item/set-availability');
+    print("setItemAvailability (PUT): Attempting to update item availability for ID: $itemId to $availability");
 
+    try {
+      final response = await http.put(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: json.encode({
+          'item_id': itemId,
+          'availability': availability,
+        }),
+      );
+
+      print("setItemAvailability (PUT): Response Code: ${response.statusCode}");
+      //print("setItemAvailability (PUT): Response Body: ${response.body}");
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = json.decode(response.body);
+        // The response body should still contain 'item' which holds the updated item details
+        if (responseData.containsKey('item')) {
+          return FoodItem.fromJson(responseData['item']);
+        } else {
+          throw Exception('Failed to set item availability: "item" key missing in response.');
+        }
+      } else {
+        final errorBody = json.decode(response.body);
+        throw Exception('Failed to set item availability: ${response.statusCode} - ${errorBody['message'] ?? 'Unknown error'}');
+      }
+    } catch (e) {
+      print("setItemAvailability (PUT): Error setting item availability: $e");
+      throw Exception('Error setting item availability: $e');
+    }
+  }
 
 }

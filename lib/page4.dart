@@ -1,5 +1,4 @@
 // lib/page4.dart
-
 import 'package:epos/website_orders_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
@@ -41,6 +40,7 @@ class _Page4State extends State<Page4> {
   List<CartItem> _cartItems = [];
   bool _isModalOpen = false;
   FoodItem? _modalFoodItem;
+  String _searchQuery = '';
 
   late String selectedServiceImage;
   late String _actualOrderType;
@@ -53,6 +53,10 @@ class _Page4State extends State<Page4> {
 
   final GlobalKey _leftPanelKey = GlobalKey(); // GlobalKey for the left panel
   Rect _leftPanelRect = Rect.zero; // Rect to store dimensions
+
+  // --- NEW STATE VARIABLE FOR EDIT MODE ---
+  bool _isEditMode = false;
+
 
   final List<Category> categories = [
     Category(name: 'PIZZA', image: 'assets/images/PizzasS.png'),
@@ -86,6 +90,17 @@ class _Page4State extends State<Page4> {
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _getLeftPanelDimensions();
     });
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return; // Important: Check if the widget is still mounted
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red, // Often used for error messages
+        duration: const Duration(seconds: 3), // Optional: how long it shows
+      ),
+    );
   }
 
   // Method to get the dimensions and position of the left panel
@@ -162,10 +177,53 @@ class _Page4State extends State<Page4> {
     const uuid = Uuid();
     return uuid.v4(); // Generate a UUID v4 string
   }
-
-
-//final double subtotal = double.parse(_calculateTotalPrice().toStringAsFixed(2));
+   //final double subtotal = double.parse(_calculateTotalPrice().toStringAsFixed(2));
   //double itemTotalPrice = double.parse((cartItem.pricePerUnit * cartItem.quantity).toStringAsFixed(2));
+
+
+// --- MODIFIED _toggleItemAvailability (FINAL CLARIFICATION WITH CONSISTENCY) ---
+  Future<void> _toggleItemAvailability(FoodItem item) async {
+
+    final currentAvailability = item.availability;
+    final optimisticAvailability = !currentAvailability;
+
+    final originalItemState = item;
+
+    setState(() {
+      final itemIndex = foodItems.indexWhere((i) => i.id == item.id);
+      if (itemIndex != -1) {
+        foodItems[itemIndex] = item.copyWith(availability: optimisticAvailability);
+      }
+    });
+
+    try {
+      final updatedItemFromApi = await ApiService.setItemAvailability(
+        item.id,
+        optimisticAvailability, // Send the new availability state
+      );
+
+      setState(() {
+        final itemIndex = foodItems.indexWhere((i) => i.id == item.id);
+        if (itemIndex != -1) {
+          foodItems[itemIndex] = originalItemState.copyWith(
+            availability: updatedItemFromApi.availability, // Use the confirmed availability from backend
+          );
+        }
+      });
+
+      _showErrorSnackBar('${item.name} availability successfully set to ${updatedItemFromApi.availability ? "Available" : "Unavailable"}.');
+
+    } catch (e) {
+      setState(() {
+        final itemIndex = foodItems.indexWhere((i) => i.id == item.id);
+        if (itemIndex != -1) {
+          foodItems[itemIndex] = originalItemState; // Revert to original state
+        }
+      });
+      _showErrorSnackBar('Failed to update ${item.name} availability: $e');
+      debugPrint('Error toggling item availability for ${item.name}: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -456,12 +514,13 @@ class _Page4State extends State<Page4> {
                                   ],
                                 ),
 
-                                const SizedBox(height: 15),
+                                const SizedBox(height: 40),
 
                                 // Quantity controls row (below size/crust) with MouseRegion
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.start,
                                   children: [
+                                    const SizedBox(width: 50),
 
                                     // Delete button with hand cursor
                                     MouseRegion(
@@ -481,10 +540,9 @@ class _Page4State extends State<Page4> {
                                         child: Container(
                                           width: 35,
                                           height: 35,
-                                          child: const Icon(
-                                            Icons.delete,
-                                            color: Colors.black,
-                                            size: 30,
+                                          child: Image.asset(
+                                            'assets/images/Bin.png',
+                                            fit: BoxFit.contain,
                                           ),
                                         ),
                                       ),
@@ -513,8 +571,6 @@ class _Page4State extends State<Page4> {
                                       ),
                                     ),
 
-                                    const SizedBox(width: 15),
-
                                     // Increment button with hand cursor
                                     MouseRegion(
                                       cursor: SystemMouseCursors.click,
@@ -535,7 +591,6 @@ class _Page4State extends State<Page4> {
                                         ),
                                       ),
                                     ),
-
                                     const SizedBox(width: 15),
 
                                   ],
@@ -708,8 +763,6 @@ class _Page4State extends State<Page4> {
       });
     }
   }
-
-// In your Page4
 
   Future<void> _handleOrderCompletion({
     required CustomerDetails customerDetails,
@@ -941,54 +994,6 @@ class _Page4State extends State<Page4> {
       ),
     );
   }
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 120),
-      child: Row(
-        children: [
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: "Search in items",
-                hintStyle: const TextStyle(color: Colors.grey),
-                contentPadding: const EdgeInsets.symmetric(
-                    vertical: 0, horizontal: 15),
-                filled: true,
-                fillColor: Colors.white,
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(50),
-                  borderSide: const BorderSide(color: Colors.grey),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(50),
-                  borderSide: const BorderSide(
-                      color: Color(0xFFF2D9F9), width: 2),
-                ),
-              ),
-              style: const TextStyle(color: Colors.black),
-            ),
-          ),
-          const SizedBox(width: 10),
-
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () {
-                // TODO: Implement the action for when the edit image is tapped
-              },
-              child: Image.asset(
-                'assets/images/edit.png',
-                width: 30,
-                height: 30,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
 
   Widget _buildCategoryTabs() {
     return LayoutBuilder(
@@ -1080,16 +1085,112 @@ class _Page4State extends State<Page4> {
     );
   }
 
+
+// --- Start of _buildSearchBar - MODIFIED ---
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 120),
+      child: Row(
+        children: [
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: "Search in items",
+                hintStyle: const TextStyle(color: Colors.grey),
+                contentPadding: const EdgeInsets.symmetric(
+                    vertical: 0, horizontal: 15),
+                filled: true,
+                fillColor: Colors.white,
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(50),
+                  borderSide: const BorderSide(color: Colors.grey),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(50),
+                  borderSide: const BorderSide(
+                      color: Color(0xFFF2D9F9), width: 2),
+                ),
+              ),
+              style: const TextStyle(color: Colors.black),
+              onChanged: (query) {
+                setState(() {
+                  _searchQuery = query; // Update the search query state
+                });
+                // debugPrint('Search query: $query'); // You can keep this for debugging
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          // --- NEW EDIT BUTTON ---
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _isEditMode = !_isEditMode; // Toggle edit mode
+                });
+                _showErrorSnackBar(_isEditMode ? 'Edit Mode ON' : 'Edit Mode OFF');
+              },
+              child: Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: _isEditMode ? const Color(0xFFCB6CE6) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(50),
+                ),
+                child: Image.asset(
+                  'assets/images/EDIT.png',
+                  width: 45,
+                  height: 45,
+                  color: _isEditMode ? Colors.white : null, // Change color if active
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+// --- End of _buildSearchBar ---
+
+
+// --- Start of _buildItemGrid - MODIFIED ---
   Widget _buildItemGrid() {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final selectedCategoryName = categories[selectedCategory].name
-        .toLowerCase();
-    final filteredItems = foodItems
-        .where((item) => item.category.toLowerCase() == selectedCategoryName)
-        .toList();
+    if (categories.isEmpty || selectedCategory < 0 || selectedCategory >= categories.length) {
+      return const Center(child: Text('No categories available or selected category is invalid.'));
+    }
+
+    final selectedCategoryName = categories[selectedCategory].name.toLowerCase();
+
+    // Start with items filtered by category
+    Iterable<FoodItem> currentItems = foodItems
+        .where((item) => item.category.toLowerCase() == selectedCategoryName);
+
+    // Apply search filtering if a query exists
+    if (_searchQuery.isNotEmpty) {
+      final lowerCaseQuery = _searchQuery.toLowerCase();
+      currentItems = currentItems.where((item) {
+        // You can search by name, description, or other relevant fields
+        return item.name.toLowerCase().contains(lowerCaseQuery) ||
+            (item.description?.toLowerCase().contains(lowerCaseQuery) ?? false) ||
+            (item.subType?.toLowerCase().contains(lowerCaseQuery) ?? false);
+      });
+    }
+
+    final filteredItems = currentItems.toList(); // Convert to List after all filtering
+
+    if (filteredItems.isEmpty) {
+      // Customize this message based on whether there's a search query
+      if (_searchQuery.isNotEmpty) {
+        return Center(child: Text('No items found matching "$_searchQuery" in this category.'));
+      } else {
+        return const Center(child: Text('No items found in this category.'));
+      }
+    }
 
     return GridView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 15),
@@ -1104,13 +1205,16 @@ class _Page4State extends State<Page4> {
         final item = filteredItems[index];
         return GestureDetector(
           onTap: () {
-            setState(() {
-              _isModalOpen = true; // Open the modal
-              _modalFoodItem = item; // Set the item to display in the modal
-            });
-            SchedulerBinding.instance.addPostFrameCallback((_) {
-              _getLeftPanelDimensions();
-            });
+            if (!_isEditMode) {
+              setState(() {
+                _isModalOpen = true;
+                _modalFoodItem = item;
+              });
+              // Ensure this is called only if it's necessary for your modal
+              SchedulerBinding.instance.addPostFrameCallback((_) {
+                _getLeftPanelDimensions();
+              });
+            }
           },
           child: Container(
             decoration: BoxDecoration(
@@ -1125,47 +1229,97 @@ class _Page4State extends State<Page4> {
                 ),
               ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      item.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        fontFamily: 'Poppins',
+            child: Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                            if (_isEditMode)
+                              Text(
+                                item.availability ? 'Available' : 'Unavailable',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontFamily: 'Poppins',
+                                  color: item.availability ? Colors.green[700] : Colors.red[700],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      if (!_isEditMode)
+                        MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: Container(
+                            width: 40,
+                            height: 45,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFCB6CE6),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.add,
+                              color: Colors.black,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (_isEditMode)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () {
+                          _toggleItemAvailability(item);
+                        },
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[400],
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            item.availability ? Icons.remove : Icons.add,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: Container(
-                      width: 40,
-                      height: 45,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFCB6CE6),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.add,
-                        color: Colors.black,
-                        size: 22,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              ],
             ),
           ),
         );
       },
     );
   }
+// --- End of _buildItemGrid ---
+
+
 
   Widget _buildBottomNavBar() {
     return Container(
