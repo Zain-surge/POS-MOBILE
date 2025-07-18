@@ -6,7 +6,7 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:async';
 
 import '../models/order.dart';
-import '../models/customer_search_model.dart'; // NEW import for CustomerSearchResponse
+import '../models/customer_search_model.dart';
 
 class ShopStatusData {
   final bool shopOpen;
@@ -44,6 +44,10 @@ class OrderApiService {
   // StreamController for orders that have been explicitly 'accepted'
   final _acceptedOrderController = StreamController<Order>.broadcast();
 
+  // --- NEW StreamController for order_status_or_driver_changed event ---
+  final _orderStatusOrDriverChangedController = StreamController<Map<String, dynamic>>.broadcast();
+
+
   // Getters for the streams
   Stream<Order> get newOrderStream => _newOrderController.stream;
   Stream<List<dynamic>> get offersUpdatedStream => _offersUpdatedController.stream;
@@ -51,6 +55,10 @@ class OrderApiService {
   Stream<bool> get connectionStatusStream => _connectionStatusController.stream;
   //Getter for the accepted orders stream
   Stream<Order> get acceptedOrderStream => _acceptedOrderController.stream;
+
+  // --- NEW Getter for order_status_or_driver_changed stream ---
+  Stream<Map<String, dynamic>> get orderStatusOrDriverChangedStream => _orderStatusOrDriverChangedController.stream;
+
 
   //Method to add an order to the accepted stream
   void addAcceptedOrder(Order order) {
@@ -104,6 +112,18 @@ class OrderApiService {
       }
     });
 
+    // --- NEW: Listener for "order_status_or_driver_changed" ---
+    _socket.on("order_status_or_driver_changed", (data) {
+      print("🔄 Socket: Order status or driver updated (Real-time): $data");
+      if (data is Map<String, dynamic>) {
+        _orderStatusOrDriverChangedController.add(data);
+      } else {
+        print('Received non-Map data for order_status_or_driver_changed: $data');
+      }
+    });
+    // --- END NEW LISTENER ---
+
+
     _socket.onDisconnect((_) {
       print('🔴 Disconnected from socket');
       _connectionStatusController.add(false);
@@ -137,6 +157,7 @@ class OrderApiService {
     _shopStatusUpdatedController.close();
     _connectionStatusController.close();
     _acceptedOrderController.close(); // Close the new controller
+    _orderStatusOrDriverChangedController.close(); // Close the new controller
     _socket.dispose();
   }
 

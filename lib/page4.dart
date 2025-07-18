@@ -211,7 +211,7 @@ class _Page4State extends State<Page4> {
         }
       });
 
-      _showErrorSnackBar('${item.name} availability successfully set to ${updatedItemFromApi.availability ? "Available" : "Unavailable"}.');
+      //_showErrorSnackBar('${item.name} availability successfully set to ${updatedItemFromApi.availability ? "Available" : "Unavailable"}.');
 
     } catch (e) {
       setState(() {
@@ -220,7 +220,7 @@ class _Page4State extends State<Page4> {
           foodItems[itemIndex] = originalItemState; // Revert to original state
         }
       });
-      _showErrorSnackBar('Failed to update ${item.name} availability: $e');
+      //_showErrorSnackBar('Failed to update ${item.name} availability: $e');
       debugPrint('Error toggling item availability for ${item.name}: $e');
     }
   }
@@ -806,6 +806,7 @@ class _Page4State extends State<Page4> {
       "extra_notes": _cartItems.map((item) => item.comment ?? '').join(', ').trim(),
       "status": "yellow",
       "change_due": finalChangeDue, // Use changeDue from paymentDetails
+      //'driver_id': null, // ADDED: driver_id with null value
       "order_source": "EPOS",
       "items": _cartItems.map((cartItem) {
         String description = cartItem.foodItem.name;
@@ -1086,7 +1087,7 @@ class _Page4State extends State<Page4> {
   }
 
 
-// --- Start of _buildSearchBar - MODIFIED ---
+// --- Start of _buildSearchBar - FINAL VERSION ---
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 120),
@@ -1115,34 +1116,32 @@ class _Page4State extends State<Page4> {
               style: const TextStyle(color: Colors.black),
               onChanged: (query) {
                 setState(() {
-                  _searchQuery = query; // Update the search query state
+                  _searchQuery = query;
                 });
-                // debugPrint('Search query: $query'); // You can keep this for debugging
               },
             ),
           ),
-          const SizedBox(width: 10),
-          // --- NEW EDIT BUTTON ---
+          const SizedBox(width: 50),
           MouseRegion(
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
               onTap: () {
                 setState(() {
-                  _isEditMode = !_isEditMode; // Toggle edit mode
+                  _isEditMode = !_isEditMode;
                 });
-                _showErrorSnackBar(_isEditMode ? 'Edit Mode ON' : 'Edit Mode OFF');
+               // _showErrorSnackBar(_isEditMode ? 'Edit Mode ON' : 'Edit Mode OFF');
               },
               child: Container(
+                width: 40,
+                height: 40,
                 padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(
-                  color: _isEditMode ? const Color(0xFFCB6CE6) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(50),
+                  color: _isEditMode ? Colors.black : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12), // Rounded square
                 ),
                 child: Image.asset(
                   'assets/images/EDIT.png',
-                  width: 45,
-                  height: 45,
-                  color: _isEditMode ? Colors.white : null, // Change color if active
+                  color: _isEditMode ? Colors.white : null,
                 ),
               ),
             ),
@@ -1152,6 +1151,8 @@ class _Page4State extends State<Page4> {
     );
   }
 // --- End of _buildSearchBar ---
+
+
 
 
 // --- Start of _buildItemGrid - MODIFIED ---
@@ -1164,27 +1165,36 @@ class _Page4State extends State<Page4> {
       return const Center(child: Text('No categories available or selected category is invalid.'));
     }
 
-    final selectedCategoryName = categories[selectedCategory].name.toLowerCase();
+    final selectedCategoryName = categories[selectedCategory].name;
 
-    // Start with items filtered by category
-    Iterable<FoodItem> currentItems = foodItems
-        .where((item) => item.category.toLowerCase() == selectedCategoryName);
+    // Map category name to correct backend key
+    String mappedCategoryKey;
+    if (selectedCategoryName.toLowerCase() == 'shawarmas') {
+      mappedCategoryKey = 'Shawarma';
+    } else if (selectedCategoryName.toLowerCase() == 'kids meal') {
+      mappedCategoryKey = 'KidsMeal';
+    } else {
+      mappedCategoryKey = selectedCategoryName.toLowerCase();
+    }
+
+    // Start with items filtered by mapped category
+    Iterable<FoodItem> currentItems = foodItems.where(
+          (item) => item.category.toLowerCase() == mappedCategoryKey.toLowerCase(),
+    );
 
     // Apply search filtering if a query exists
     if (_searchQuery.isNotEmpty) {
       final lowerCaseQuery = _searchQuery.toLowerCase();
       currentItems = currentItems.where((item) {
-        // You can search by name, description, or other relevant fields
         return item.name.toLowerCase().contains(lowerCaseQuery) ||
             (item.description?.toLowerCase().contains(lowerCaseQuery) ?? false) ||
             (item.subType?.toLowerCase().contains(lowerCaseQuery) ?? false);
       });
     }
 
-    final filteredItems = currentItems.toList(); // Convert to List after all filtering
+    final filteredItems = currentItems.toList();
 
     if (filteredItems.isEmpty) {
-      // Customize this message based on whether there's a search query
       if (_searchQuery.isNotEmpty) {
         return Center(child: Text('No items found matching "$_searchQuery" in this category.'));
       } else {
@@ -1210,7 +1220,6 @@ class _Page4State extends State<Page4> {
                 _isModalOpen = true;
                 _modalFoodItem = item;
               });
-              // Ensure this is called only if it's necessary for your modal
               SchedulerBinding.instance.addPostFrameCallback((_) {
                 _getLeftPanelDimensions();
               });
@@ -1317,7 +1326,7 @@ class _Page4State extends State<Page4> {
       },
     );
   }
-// --- End of _buildItemGrid ---
+
 
 
 

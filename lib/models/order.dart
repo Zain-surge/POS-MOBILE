@@ -1,6 +1,7 @@
-// lib/models/order.dart
+// lib/models/order.dart (MODIFIED)
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // Import for DateFormat
 
 extension HexColor on Color {
   static Color fromHex(String hexString) {
@@ -87,6 +88,7 @@ class Order {
   final double orderTotalPrice;
   final String? orderExtraNotes;
   final List<OrderItem> items;
+  final int? driverId; // <--- NEW: Add driverId property
 
   Order({
     required this.orderId,
@@ -107,6 +109,7 @@ class Order {
     required this.orderTotalPrice,
     this.orderExtraNotes,
     required this.items,
+    this.driverId, // <--- NEW: Initialize driverId in constructor
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -168,11 +171,12 @@ class Order {
       city: json['city'],
       county: json['county'],
       postalCode: json['postal_code'],
-      orderTotalPrice: totalPrice, // Use the calculated total
+      orderTotalPrice: totalPrice,
       orderExtraNotes: json['order_extra_notes'],
       items: (json['items'] as List?)
           ?.map((itemJson) => OrderItem.fromJson(itemJson))
           .toList() ?? [],
+      driverId: json['driver_id'] as int?, // <--- NEW: Parse driver_id from JSON
     );
   }
 
@@ -185,6 +189,7 @@ class Order {
     'status': status,
     'order_source': orderSource,
     'items': items.map((item) => item.toJson()).toList(),
+    if (driverId != null) 'driver_id': driverId, // Include driverId in toJson if not null
   };
 
   Order copyWith({
@@ -206,6 +211,7 @@ class Order {
     double? orderTotalPrice,
     String? orderExtraNotes,
     List<OrderItem>? items,
+    int? driverId, // <--- NEW: Add driverId to copyWith
   }) {
     return Order(
       orderId: orderId ?? this.orderId,
@@ -226,50 +232,64 @@ class Order {
       orderTotalPrice: orderTotalPrice ?? this.orderTotalPrice,
       orderExtraNotes: orderExtraNotes ?? this.orderExtraNotes,
       items: items ?? this.items,
+      driverId: driverId ?? this.driverId, // <--- NEW: Assign driverId in copyWith
     );
   }
 
   // --- MODIFIED: statusColor getter to handle all relevant statuses ---
   Color get statusColor {
+    // Logic for "ON ITS WAY" and "COMPLETED" is in DynamicOrderListScreen now
+    // This getter should map the *internal status* (which will be 'yellow', 'green', 'blue' etc.)
+    // to a color.
     switch (status.toLowerCase()) {
-      case 'pending':
-      case 'accepted': // Map API 'accepted' to UI 'pending' color
       case 'yellow':
-        return HexColor.fromHex('FFF6D4'); // Yellow shade
+      case 'pending': // Map EPOS 'Pending' to yellow
+        return HexColor.fromHex('FFF6D4'); // Light yellow
 
-      case 'ready':
-      case 'preparing': // Map API 'preparing' to UI 'ready' color
       case 'green':
-        return HexColor.fromHex('DEF5D4'); // Green shade
+      case 'ready': // Map EPOS 'Ready' to green
+        return HexColor.fromHex('DEF5D4'); // Light green
 
-      case 'completed':
-      case 'delivered':
-      case 'blue': // For 'blue' status from API
-        return HexColor.fromHex('D6D6D6');
+      case 'blue':
+      case 'completed': // Map EPOS 'Completed' to blue
+        return HexColor.fromHex('D6D6D6'); //Grey shade
 
+      case 'red':
+      case 'cancelled':
+        return Colors.red[100]!; // Light red
       default:
         print("DEBUG: Unrecognized order status for color: $status. Returning transparent.");
-        return Colors.transparent; // Fallback for truly unrecognized statuses
+        return Colors.grey[200]!; // Changed from transparent to a light grey fallback
     }
   }
 
   // --- MODIFIED: statusLabel getter to match the desired labels ---
+  // This getter returns the "internal" status label (Pending, Ready, Completed).
+  // The specific "ON ITS WAY" and "COMPLETED" labels driven by driver activity
+  // are now handled in `DynamicOrderListScreen` before display.
   String get statusLabel {
     switch (status.toLowerCase()) {
+      case 'yellow':
       case 'pending':
-      case 'accepted':
+      case 'accepted': // If backend sends 'accepted' but you want to show 'Pending'
         return 'Pending';
+      case 'green':
       case 'ready':
-      case 'preparing':
+      case 'preparing': // If backend sends 'preparing' but you want to show 'Ready'
         return 'Ready';
+      case 'blue':
       case 'completed':
-      case 'delivered':
+      case 'delivered': // If backend sends 'delivered' but you want to show 'Completed'
         return 'Completed';
+      case 'red':
+      case 'cancelled':
+        return 'Cancelled';
       default:
         return 'Unknown';
     }
   }
-// Address display in website order incoming
+
+  // Address display in website order incoming
   String get displayAddressSummary {
     final postcode = postalCode ?? '';
     final street = streetAddress ?? '';

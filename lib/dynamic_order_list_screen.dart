@@ -1,12 +1,13 @@
+// lib/dynamic_order_list_screen.dart (MODIFIED)
+
 import 'package:flutter/material.dart';
 import 'package:epos/models/order.dart';
-import 'package:epos/services/order_api_service.dart';
+import 'package:epos/services/order_api_service.dart'; // Your existing OrderApiService
 import 'package:epos/bottom_nav_item.dart';
 import 'package:epos/website_orders_screen.dart';
 import 'package:epos/page4.dart';
 import 'package:epos/settings_screen.dart';
-
-
+import 'dart:async'; // Import for StreamSubscription
 
 extension HexColor on Color {
   static Color fromHex(String hexString) {
@@ -37,13 +38,145 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
   Order? _selectedOrder;
   late int _selectedBottomNavItem;
 
+  // --- NEW: StreamSubscription for socket updates ---
+  late StreamSubscription<Map<String, dynamic>> _orderStatusSubscription;
+
   @override
   void initState() {
     super.initState();
     _selectedBottomNavItem = widget.initialBottomNavItemIndex;
     debugPrint("DynamicOrderListScreen: initState called for type: ${widget.orderType}");
     _loadOrders();
+    // --- NEW: Initialize and listen to socket updates ---
+    _initializeSocketListener();
   }
+
+  // --- NEW METHOD: Initialize Socket Listener ---
+  void _initializeSocketListener() {
+    // Get the singleton instance of OrderApiService
+    final orderApiService = OrderApiService();
+
+    // Subscribe to the stream for order status/driver changes
+    _orderStatusSubscription = orderApiService.orderStatusOrDriverChangedStream.listen((payload) {
+      _handleOrderStatusOrDriverChange(payload);
+    });
+
+    debugPrint("DynamicOrderListScreen: Subscribed to orderStatusOrDriverChangedStream.");
+  }
+
+  // --- NEW METHOD: Handle Order Status/Driver Change from Socket ---
+  void _handleOrderStatusOrDriverChange(Map<String, dynamic> payload) {
+    final int? orderId = payload['order_id'] as int?;
+    final String? newStatusBackend = payload['new_status'] as String?; // Backend status (green, blue, yellow)
+    final int? oldDriverId = payload['old_driver_id'] as int?;
+    final int? newDriverId = payload['new_driver_id'] as int?;
+
+    if (orderId == null || newStatusBackend == null) {
+      debugPrint('Socket payload missing order_id or new_status: $payload');
+      return;
+    }
+
+    setState(() {
+      // Look for the order in both active and completed lists
+      int? orderIndexInActive = activeOrders.indexWhere((order) => order.orderId == orderId);
+      int? orderIndexInCompleted = completedOrders.indexWhere((order) => order.orderId == orderId);
+
+      Order? targetOrder;
+      if (orderIndexInActive != -1) {
+        targetOrder = activeOrders[orderIndexInActive];
+      } else if (orderIndexInCompleted != -1) {
+        targetOrder = completedOrders[orderIndexInCompleted];
+      }
+
+      if (targetOrder != null) {
+        // Map backend status (green/blue) to EPOS display status (Ready/Completed)
+        String newEposStatus = targetOrder.status; // Default to current EPOS status
+        String newDisplayLabel = targetOrder.statusLabel; // Default to current display label
+
+        // Your specific logic for "ON ITS WAY" and "COMPLETED"
+        if (newStatusBackend == 'green' && newDriverId != null && newDriverId != oldDriverId) {
+          newEposStatus = 'Ready'; // Maps to "On its Way" visually, but internally "Ready" or "Preparing"
+          newDisplayLabel = 'ON ITS WAY';
+          debugPrint('Socket: Order $orderId updated to ON ITS WAY (new driver: $newDriverId)');
+        } else if (newStatusBackend == 'blue' && newDriverId != null) {
+          newEposStatus = 'Completed';
+          newDisplayLabel = 'COMPLETED';
+          debugPrint('Socket: Order $orderId updated to COMPLETED (driver: $newDriverId)');
+        } else if (newStatusBackend == 'yellow') {
+          newEposStatus = 'Pending';
+          newDisplayLabel = 'Pending';
+          debugPrint('Socket: Order $orderId updated to Pending');
+        } else {
+          // For any other status or if driver conditions aren't met,
+          // just map the backend status to your EPOS internal status.
+          // You might have specific display labels for "red", "yellow" etc.
+          switch (newStatusBackend) {
+            case 'yellow': newEposStatus = 'Pending'; newDisplayLabel = 'Pending'; break;
+            case 'red': newEposStatus = 'Cancelled'; newDisplayLabel = 'Cancelled'; break;
+          // Add other mappings if your backend sends them
+            default:
+              newEposStatus = newStatusBackend; // Use backend status directly if no mapping
+              newDisplayLabel = newStatusBackend.toUpperCase(); // Or a generic label
+              break;
+          }
+          debugPrint('Socket: Order $orderId updated to internal status: $newEposStatus (display: $newDisplayLabel)');
+        }
+
+        // Create an updated order object
+        Order updatedOrder = targetOrder.copyWith(
+          status: newEposStatus, // Update internal EPOS status
+          driverId: newDriverId, // Update driver ID
+          // The `statusLabel` and `statusColor` getters in your Order model will automatically
+          // update based on the new `status` property.
+        );
+
+        // Re-categorize the order if its status changed such that it moves between active/completed
+        if (newEposStatus.toLowerCase() == 'completed') {
+          if (orderIndexInActive != -1) {
+            activeOrders.removeAt(orderIndexInActive);
+            completedOrders.add(updatedOrder);
+            completedOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          } else if (orderIndexInCompleted != -1) {
+            completedOrders[orderIndexInCompleted] = updatedOrder;
+            completedOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt)); // Re-sort in case date changes (unlikely)
+          }
+        } else { // It's an active status (pending, ready, on its way etc.)
+          if (orderIndexInCompleted != -1) { // If it was completed but now active again
+            completedOrders.removeAt(orderIndexInCompleted);
+            activeOrders.add(updatedOrder);
+            activeOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          } else if (orderIndexInActive != -1) {
+            activeOrders[orderIndexInActive] = updatedOrder;
+            activeOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt)); // Re-sort in case needed
+          }
+        }
+
+        // If the selected order was the one that changed, update _selectedOrder
+        if (_selectedOrder?.orderId == orderId) {
+          _selectedOrder = updatedOrder;
+        }
+
+        // Adjust selected order if current selected disappears (e.g., moves to completed and list becomes empty)
+        if (_selectedOrder == null || (!activeOrders.contains(_selectedOrder) && !completedOrders.contains(_selectedOrder))) {
+          if (activeOrders.isNotEmpty) {
+            _selectedOrder = activeOrders.first;
+          } else if (completedOrders.isNotEmpty) {
+            _selectedOrder = completedOrders.first;
+          } else {
+            _selectedOrder = null;
+          }
+        }
+
+        debugPrint("Order ${orderId} updated by socket. New status: $newEposStatus, Display Label: $newDisplayLabel");
+      } else {
+        debugPrint('Socket: Order with ID $orderId not found in current lists. Attempting full reload.');
+        // If an order not currently displayed gets an update (e.g., a new order
+        // that matches filters or a very old one), a full reload might be safer.
+        _loadOrders();
+      }
+    });
+  }
+
 
   @override
   void didUpdateWidget(covariant DynamicOrderListScreen oldWidget) {
@@ -61,6 +194,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
 
   @override
   void dispose() {
+    _orderStatusSubscription.cancel(); // --- NEW: Cancel the stream subscription ---
     super.dispose();
   }
 
@@ -75,13 +209,30 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
       List<Order> tempCompleted = [];
 
       for (var order in filteredOrders) {
-        final String currentBackendStatus = order.status.toLowerCase();
+        // IMPORTANT: Ensure your Order model's `status` and `driverId` are parsed correctly from API
+        // And that your Order model has `statusLabel` and `statusColor` getters that map
+        // your internal `status` (e.g., "Ready", "Completed", "Pending") to the desired display.
+
+        // When loading, we also need to apply the "ON ITS WAY" logic for initial display
+        String initialDisplayStatus = order.statusLabel; // Get default from Order model's getter
+
+        if (order.status.toLowerCase() == 'green' && order.driverId != null) {
+          initialDisplayStatus = 'ON ITS WAY';
+        } else if (order.status.toLowerCase() == 'blue' && order.driverId != null) {
+          initialDisplayStatus = 'COMPLETED';
+        }
+
+        Order orderWithInitialDisplay = order.copyWith(
+          // Ensure `currentDisplayStatus` field is in your Order model if you want to store it directly
+          // For now, relying on `statusLabel` getter from Order model and potentially updating it here.
+          // If you add `currentDisplayStatus` to Order model, pass it here.
+        );
 
 
-        if (currentBackendStatus == 'blue') {
-          tempCompleted.add(order);
+        if (orderWithInitialDisplay.status.toLowerCase() == 'blue') {
+          tempCompleted.add(orderWithInitialDisplay);
         } else {
-          tempActive.add(order);
+          tempActive.add(orderWithInitialDisplay);
         }
       }
 
@@ -196,43 +347,66 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
     String newStatus;
     switch (current.toLowerCase()) {
       case 'pending':
-        newStatus = 'Ready';
+        newStatus = 'Ready'; // EPOS internal status for 'preparing' / 'on its way'
         break;
       case 'ready':
         newStatus = 'Completed';
         break;
       case 'completed':
-        newStatus = 'Completed';
+        newStatus = 'Completed'; // Stays completed
         break;
       default:
-        newStatus = 'Pending';
+        newStatus = 'Pending'; // Fallback
     }
     debugPrint("nextStatus: Returning '$newStatus'.");
     return newStatus;
   }
 
   void _updateOrderStatusAndRelist(Order orderToUpdate, String newStatus) async {
+    // Determine the backend status string
+    String backendStatusToSend;
+    switch (newStatus.toLowerCase()) {
+      case 'pending':
+        backendStatusToSend = 'yellow';
+        break;
+      case 'ready': // This corresponds to 'preparing' or 'on its way' from EPOS
+        backendStatusToSend = 'green';
+        break;
+      case 'completed':
+        backendStatusToSend = 'blue';
+        break;
+      default:
+        backendStatusToSend = newStatus.toLowerCase();
+    }
+
     // Optimistic UI update
     setState(() {
-      int? originalIndexInActive = activeOrders.indexWhere((o) => o.orderId == orderToUpdate.orderId);
-      int? originalIndexInCompleted = completedOrders.indexWhere((o) => o.orderId == orderToUpdate.orderId);
+      int originalIndexInActive = activeOrders.indexWhere((o) => o.orderId == orderToUpdate.orderId);
+      int originalIndexInCompleted = completedOrders.indexWhere((o) => o.orderId == orderToUpdate.orderId);
 
+      // Create an updated order for the UI. The crucial part here is
+      // to reflect the *new display label* if it changes due to this EPOS action.
+      // The `statusLabel` and `statusColor` getters in your `Order` model should
+      // handle the mapping from your internal `newStatus` (Pending/Ready/Completed)
+      // to the appropriate display string and color.
       Order updatedOrder = orderToUpdate.copyWith(status: newStatus);
 
+      // Re-categorize the order in UI based on the new EPOS status
       if (newStatus.toLowerCase() == 'completed') {
         if (originalIndexInActive != -1) {
           activeOrders.removeAt(originalIndexInActive);
         }
         completedOrders.add(updatedOrder);
         completedOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-      } else {
-        if (originalIndexInActive != -1) {
-          activeOrders[originalIndexInActive] = updatedOrder;
-        } else if (originalIndexInCompleted != -1) {
+      } else { // If moving to Pending or Ready
+        if (originalIndexInCompleted != -1) { // If it was completed but now active again
           completedOrders.removeAt(originalIndexInCompleted);
           activeOrders.add(updatedOrder);
           activeOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-        } else {
+        } else if (originalIndexInActive != -1) {
+          activeOrders[originalIndexInActive] = updatedOrder;
+          activeOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        } else { // Should not typically happen unless order was missing from both lists
           activeOrders.add(updatedOrder);
           activeOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
         }
@@ -249,23 +423,23 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
     });
 
     try {
-      final success = await OrderApiService.updateOrderStatus(orderToUpdate.orderId, newStatus);
+      // Send the backend status (green, blue, yellow) to the API
+      final success = await OrderApiService.updateOrderStatus(orderToUpdate.orderId, backendStatusToSend);
       if (!success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Failed to update status on server. Re-syncing...")),
         );
-        _loadOrders();
+        _loadOrders(); // Revert or re-sync if API call fails
       } else {
-        debugPrint("Status for Order ID ${orderToUpdate.orderId} successfully updated to '$newStatus' on backend.");
+        debugPrint("Status for Order ID ${orderToUpdate.orderId} successfully updated to '$newStatus' (backend: $backendStatusToSend) on backend.");
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error communicating with server: $e. Re-syncing...")),
       );
-      _loadOrders();
+      _loadOrders(); // Revert or re-sync if error
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -328,11 +502,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                       ],
                     ),
                     const SizedBox(height: 20),
-
-
-
-
-                    //left
                     Expanded(
                       child: allOrdersForDisplay.isEmpty
                           ? Center(
@@ -356,6 +525,22 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                               ),
                             );
                           }
+                          // Check if the order is part of the current orderType
+                          // Only display orders that match the screen's orderType
+                          if (order.orderType.toLowerCase() != widget.orderType.toLowerCase()) {
+                            return const SizedBox.shrink(); // Hide orders of different types
+                          }
+
+
+                          // Determine the display label for the order's status
+                          String currentDisplayStatus = order.statusLabel; // Default from Order model
+                          if (order.status.toLowerCase() == 'green' && order.driverId != null) {
+                            currentDisplayStatus = 'ON ITS WAY';
+                          } else if (order.status.toLowerCase() == 'blue' && order.driverId != null) {
+                            currentDisplayStatus = 'COMPLETED';
+                          }
+
+
                           bool isSelected = _selectedOrder?.orderId == order.orderId;
                           int? serialNumber;
                           if (activeOrders.contains(order)) {
@@ -417,6 +602,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                                   const SizedBox(width: 10),
                                   GestureDetector(
                                     onTap: () {
+                                      // Only allow status change if not already completed
                                       if (order.status.toLowerCase() != 'completed') {
                                         final newStatus = _nextStatus(order.status);
                                         debugPrint("DynamicOrderListScreen: Changing status for order ID ${order.orderId} from ${order.status} to $newStatus.");
@@ -436,7 +622,8 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                                         borderRadius: BorderRadius.circular(50),
                                       ),
                                       child: Text(
-                                        order.statusLabel,
+                                        // Use the dynamic `currentDisplayStatus` here
+                                        currentDisplayStatus,
                                         style: const TextStyle(fontSize: 32,
                                             color: Colors.black),
                                       ),
@@ -449,17 +636,12 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                         },
                       ),
                     ),
-
-
-
                   ],
                 ),
               ),
             ),
             const VerticalDivider(
                 width: 1, thickness: 0.5, color: Colors.black),
-
-             // right panel
             Expanded(
               flex: 1,
               child: Container(
@@ -485,7 +667,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                       ],
                     ),
                     const SizedBox(height: 20),
-
                     Text(
                       _selectedOrder!.customerName,
                       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -508,7 +689,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                     const SizedBox(height: 20),
                     const Divider(),
                     const SizedBox(height: 10),
-
                     Expanded(
                       child: ListView.builder(
                         itemCount: _selectedOrder!.items.length,

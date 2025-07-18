@@ -111,7 +111,7 @@ class ApiService {
       );
 
       print("toggleShopStatus: Response Code: ${response.statusCode}");
-      print("toggleShopStatus: Response Body: ${response.body}");
+     // print("toggleShopStatus: Response Body: ${response.body}");
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -151,7 +151,7 @@ class ApiService {
         );
 
         print("toggleShopStatus: Proxy Response Code: ${response.statusCode}");
-        print("toggleShopStatus: Proxy Response Body: ${response.body}");
+       // print("toggleShopStatus: Proxy Response Body: ${response.body}");
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
@@ -185,7 +185,7 @@ class ApiService {
       );
 
       print("updateShopTimings: Response Code: ${response.statusCode}");
-      print("updateShopTimings: Response Body: ${response.body}");
+      //print("updateShopTimings: Response Body: ${response.body}");
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -221,7 +221,7 @@ class ApiService {
       );
 
       print("updateShopTimings: Fallback Response Code: ${response.statusCode}");
-      print("updateShopTimings: Fallback Response Body: ${response.body}");
+     // print("updateShopTimings: Fallback Response Body: ${response.body}");
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -272,7 +272,7 @@ class ApiService {
       );
 
       print("updateOfferStatus: Response Code: ${response.statusCode}");
-      print("updateOfferStatus: Response Body: ${response.body}");
+     // print("updateOfferStatus: Response Body: ${response.body}");
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -306,7 +306,7 @@ class ApiService {
       );
 
       print("updateOfferStatus: Fallback Response Code: ${response.statusCode}");
-      print("updateOfferStatus: Fallback Response Body: ${response.body}");
+     // print("updateOfferStatus: Fallback Response Body: ${response.body}");
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
