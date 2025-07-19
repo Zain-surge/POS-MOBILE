@@ -22,7 +22,6 @@ dependencies:
   print_bluetooth_thermal: ^1.1.0
   flutter_blue_plus: ^1.35.5
   provider: ^6.1.5
-  thermal_printer: ^1.0.5
   esc_pos_utils_plus: ^2.0.4
   usb_serial: ^0.5.2
   pdf: ^3.11.3

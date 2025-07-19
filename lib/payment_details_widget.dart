@@ -472,7 +472,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                                 else
                                   Icon(
                                     Icons.print,
-                                    color: _isPrinterConnected ? Colors.green : Colors.green, // Always green if connected, red if not.
+                                    color: _isPrinterConnected ? Colors.green : Colors.red, // Always green if connected, red if not.
                                     size: 24,
                                   ),
                               ],
