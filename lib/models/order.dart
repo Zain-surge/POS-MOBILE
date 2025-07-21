@@ -236,37 +236,28 @@ class Order {
     );
   }
 
-  // --- MODIFIED: statusColor getter to handle all relevant statuses ---
+  // --- MODIFIED: statusColor getter (GENERIC COLORS) ---
   Color get statusColor {
-    // Logic for "ON ITS WAY" and "COMPLETED" is in DynamicOrderListScreen now
-    // This getter should map the *internal status* (which will be 'yellow', 'green', 'blue' etc.)
-    // to a color.
     switch (status.toLowerCase()) {
       case 'yellow':
-      case 'pending': // Map EPOS 'Pending' to yellow
+      case 'pending':
+      case 'accepted':
         return HexColor.fromHex('FFF6D4'); // Light yellow
-
       case 'green':
-      case 'ready': // Map EPOS 'Ready' to green
+      case 'ready':
+      case 'preparing':
         return HexColor.fromHex('DEF5D4'); // Light green
-
       case 'blue':
-      case 'completed': // Map EPOS 'Completed' to blue
-        return HexColor.fromHex('D6D6D6'); //Grey shade
-
+      case 'completed':
+      case 'delivered':
+        return HexColor.fromHex('D6D6D6');
       case 'red':
-      case 'cancelled':
         return Colors.red[100]!; // Light red
       default:
-        print("DEBUG: Unrecognized order status for color: $status. Returning transparent.");
-        return Colors.grey[200]!; // Changed from transparent to a light grey fallback
+        return Colors.grey[200]!; // Fallback
     }
   }
 
-  // --- MODIFIED: statusLabel getter to match the desired labels ---
-  // This getter returns the "internal" status label (Pending, Ready, Completed).
-  // The specific "ON ITS WAY" and "COMPLETED" labels driven by driver activity
-  // are now handled in `DynamicOrderListScreen` before display.
   String get statusLabel {
     switch (status.toLowerCase()) {
       case 'yellow':
@@ -282,8 +273,7 @@ class Order {
       case 'delivered': // If backend sends 'delivered' but you want to show 'Completed'
         return 'Completed';
       case 'red':
-      case 'cancelled':
-        return 'Cancelled';
+        return 'Delivered';
       default:
         return 'Unknown';
     }

@@ -1002,8 +1002,8 @@ class _Page4State extends State<Page4> {
         double screenWidth = MediaQuery.of(context).size.width;
         double baseUnit = screenWidth / 35;
         // --- 1. Image Size
-        double itemWidth = baseUnit * 4.9;
-        double itemHeight = baseUnit * 3.2;
+        double itemWidth = baseUnit * 4.6;
+        double itemHeight = baseUnit * 2.9;
         // --- 2. Font Size
         double textFontSize = baseUnit * 0.52;
         double textContainerPaddingVertical = baseUnit * 0.02;
