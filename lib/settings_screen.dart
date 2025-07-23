@@ -1617,9 +1617,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         const Divider(
-          height: 1,
+          height: 3,
           thickness: 1,
-          color: Colors.grey,
+          color: const Color(0xFFB2B2B2),
         ),
         Container(
           height: 90,

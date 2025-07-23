@@ -6,6 +6,8 @@ import 'package:epos/services/order_api_service.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import 'package:flutter/gestures.dart';
+import 'package:provider/provider.dart'; // <--- NEW IMPORT
+import 'package:epos/order_counts_provider.dart'; // <--- NEW IMPORT
 
 extension HexColor on Color {
   static Color fromHex(String hexString) {
@@ -17,7 +19,13 @@ extension HexColor on Color {
 }
 
 class ActiveOrdersList extends StatefulWidget {
-  const ActiveOrdersList({super.key});
+  // REMOVE the onOrderCountsChanged callback
+  // final Function(Map<String, int>)? onOrderCountsChanged; // <--- REMOVE THIS LINE
+
+  const ActiveOrdersList({
+    super.key,
+    // this.onOrderCountsChanged, // <--- REMOVE THIS FROM CONSTRUCTOR
+  });
 
   @override
   State<ActiveOrdersList> createState() => _ActiveOrdersListState();
@@ -46,6 +54,40 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
     super.dispose();
   }
 
+  // Method to count orders by type and update the provider
+  void _updateOrderCounts() {
+    // Get the provider instance without listening (since we are modifying it)
+    final orderCountsProvider = Provider.of<OrderCountsProvider>(context, listen: false);
+
+    Map<String, int> counts = {
+      'takeaway': 0,
+      'dinein': 0,
+      'delivery': 0,
+      'website': 0,
+    };
+
+    for (var order in _activeOrders) {
+      String orderType = order.orderType.toLowerCase();
+      String orderSource = order.orderSource.toLowerCase();
+
+      if (orderSource == 'website') {
+        counts['website'] = counts['website']! + 1;
+      } else {
+        if (orderType == 'takeaway') {
+          counts['takeaway'] = counts['takeaway']! + 1;
+        } else if (orderType == 'dinein') {
+          counts['dinein'] = counts['dinein']! + 1;
+        } else if (orderType == 'delivery') {
+          counts['delivery'] = counts['delivery']! + 1;
+        }
+      }
+    }
+
+    print('ActiveOrdersList: Calculated order counts: $counts');
+    // Update the provider with the new counts
+    orderCountsProvider.updateActiveOrdersCount(counts);
+  }
+
   // --- Unified Order Processing Logic ---
   void _processIncomingOrder(Order order) {
     final status = order.status.toLowerCase();
@@ -62,12 +104,12 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
     }
     // Logic for EPOS Orders (and any other non-website sources)
     else if (source == 'epos') {
-
       shouldDisplay = !['completed', 'delivered', 'declined', 'blue'].contains(status);
       if (!shouldDisplay) {
         print('ActiveOrdersList: Skipping EPOS order ${order.orderId} (Source: $source, Status: $status) - non-active EPOS status.');
       }
     }
+
     setState(() {
       if (shouldDisplay) {
         int existingIndex = _activeOrders.indexWhere((o) => o.orderId == order.orderId);
@@ -84,7 +126,6 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
         _activeOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       } else {
         // If not to be displayed, ensure it's removed from the active list if present
-        // Store if the selected order was the one being removed BEFORE removal
         bool wasSelectedOrder = (_selectedOrder != null && _selectedOrder!.orderId == order.orderId);
 
         _activeOrders.removeWhere((o) => o.orderId == order.orderId); // Perform removal
@@ -96,20 +137,22 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
         print('ActiveOrdersList: Order ${order.orderId} removed from active list (Source: $source, Status: ${order.status}).');
       }
     });
-  }
 
+    // Update order counts after any change
+    _updateOrderCounts();
+  }
 
   void _listenForNewOrdersFromSocket() {
     _newOrderSocketSubscription = OrderApiService().newOrderStream.listen((newOrder) {
       print('ActiveOrdersList: Received new order from socket: ${newOrder.orderId} (Source: ${newOrder.orderSource}), Status: ${newOrder.status}');
-      _processIncomingOrder(newOrder); // Use the unified processing logic
+      _processIncomingOrder(newOrder);
     });
   }
 
   void _listenForAcceptedOrders() {
     _acceptedOrderStreamSubscription = OrderApiService().acceptedOrderStream.listen((acceptedOrder) {
       print('ActiveOrdersList: Received accepted order via stream: ${acceptedOrder.orderId}');
-      _processIncomingOrder(acceptedOrder); // Use the unified processing logic
+      _processIncomingOrder(acceptedOrder);
     });
   }
 
@@ -130,7 +173,6 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
 
         bool shouldDisplay = false;
 
-        // Apply the same display logic as in _processIncomingOrder
         if (source == 'website') {
           shouldDisplay = (status == 'accepted');
         } else if (source == 'epos') {
@@ -151,12 +193,13 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
         _activeOrders = initiallyActive;
         _isLoadingOrders = false;
         if (_selectedOrder != null && !_activeOrders.any((o) => o.orderId == _selectedOrder!.orderId)) {
-          _selectedOrder = null; // Deselect if the order is no longer active
+          _selectedOrder = null;
         }
       });
 
       print('ActiveOrdersList: Displaying ${_activeOrders.length} active orders after initial fetch.');
 
+      _updateOrderCounts(); // Update order counts after initial fetch
     } catch (e) {
       print('Error fetching active orders: $e');
       setState(() {
@@ -171,29 +214,33 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
   }
 
   Widget _buildOrderSummaryContent(Order order) {
-    final textStyle = const TextStyle(fontSize: 22, color: Colors.black87, fontFamily: 'Poppins');
+    final textStyle = const TextStyle(fontSize: 19, color: Colors.black, fontFamily: 'Poppins');
 
     if (order.orderSource.toLowerCase() == 'epos') {
       final itemNames = order.items.map((item) => ' ${item.itemName}').join(', ');
-      return Center(
+      return Align(
+        alignment: Alignment.centerLeft,
         child: Text(
           itemNames.isNotEmpty ? itemNames : 'No items',
           style: textStyle,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
+          textAlign: TextAlign.left,
         ),
       );
+
     } else if (order.orderSource.toLowerCase() == 'website') {
-      return Center(
+      return Align(
+        alignment: Alignment.centerLeft,
         child: Text(
           order.displayAddressSummary,
           style: textStyle,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
+          textAlign: TextAlign.left,
         ),
       );
+
     }
     return Center(
       child: Text(
@@ -249,6 +296,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
 
   @override
   Widget build(BuildContext context) {
+    // ... (rest of the build method, remains unchanged)
     if (_isLoadingOrders) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -512,22 +560,24 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
         ),
       );
     } else {
-      const double fixedBoxHeight = 70.0;
+      const double fixedBoxHeight = 50.0;
 
       return Column(
         children: [
+          const SizedBox(height: 30),
           Padding(
-            padding: const EdgeInsets.only(top: 30.0, bottom: 20.0),
+            padding: const EdgeInsets.only(top: 10.0, bottom: 10.0),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 5),
               decoration: BoxDecoration(
                 color: const Color(0xFFF3D9FF),
-                borderRadius: BorderRadius.circular(30),
+                borderRadius: BorderRadius.circular(50),
               ),
               child: const Text(
                 'Active Orders',
+                textAlign:TextAlign.left,
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: 27,
                   fontWeight: FontWeight.bold,
                   color: Colors.black,
                   fontFamily: 'Poppins',
@@ -536,6 +586,16 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
             ),
           ),
 
+          // --- ADD THE HORIZONTAL DIVIDER  ---
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 60.0),
+            child: Divider(
+              height: 0,
+              thickness: 2.5,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 30),
           Expanded(
             child: ListView.builder(
               itemCount: _activeOrders.length,
@@ -550,11 +610,11 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                       });
                     },
                     child: Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      margin: const EdgeInsets.symmetric( vertical: 6, horizontal: 8),
                       elevation: 0,
                       color: Colors.transparent,
                       child: Padding(
-                        padding: const EdgeInsets.all(4.0),
+                        padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 4.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -565,7 +625,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                                   flex: 4,
                                   child: Container(
                                     height: fixedBoxHeight,
-                                    padding: const EdgeInsets.all(12.0),
+                                    padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 10.0),
                                     decoration: BoxDecoration(
                                       color: HexColor.fromHex('FFF6D4'),
                                       borderRadius: BorderRadius.circular(35),
@@ -573,12 +633,12 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                                     child: _buildOrderSummaryContent(order),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
+                                const SizedBox(width: 20),
                                 Expanded(
                                   flex: 2,
                                   child: Container(
                                     height: fixedBoxHeight,
-                                    padding: const EdgeInsets.all(12.0),
+                                    padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 6.0),
                                     decoration: BoxDecoration(
                                       color: HexColor.fromHex('FFF6D4'),
                                       borderRadius: BorderRadius.circular(35),
@@ -587,7 +647,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                                     child: Text(
                                       _getDisplayOrderType(order),
                                       style: const TextStyle(
-                                        fontSize: 18,
+                                        fontSize: 16,
                                         fontWeight: FontWeight.normal,
                                         color: Colors.black,
                                         fontFamily: 'Poppins',

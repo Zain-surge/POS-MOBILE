@@ -1,14 +1,17 @@
-// lib/dynamic_order_list_screen.dart (MODIFIED)
+// lib/dynamic_order_list_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:epos/models/order.dart';
-import 'package:epos/services/order_api_service.dart'; // Your existing OrderApiService
-import 'package:epos/bottom_nav_item.dart';
+import 'package:epos/services/order_api_service.dart';
 import 'package:epos/website_orders_screen.dart';
-import 'package:epos/page4.dart';
+import 'package:epos/page4.dart'; // Ensure Page4 is correctly imported for navigation
 import 'package:epos/settings_screen.dart';
-import 'dart:async'; // Import for StreamSubscription
+import 'dart:async';
+import 'package:provider/provider.dart';
+import 'package:epos/order_counts_provider.dart';
 
+
+// Extension for HexColor (if you're using it elsewhere, otherwise it could be moved)
 extension HexColor on Color {
   static Color fromHex(String hexString) {
     final buffer = StringBuffer();
@@ -33,12 +36,11 @@ class DynamicOrderListScreen extends StatefulWidget {
 }
 
 class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
-  List<Order> activeOrders = []; // List for pending/ready orders
-  List<Order> completedOrders = []; // List for completed orders
+  List<Order> activeOrders = [];
+  List<Order> completedOrders = [];
   Order? _selectedOrder;
   late int _selectedBottomNavItem;
 
-  // --- NEW: StreamSubscription for socket updates ---
   late StreamSubscription<Map<String, dynamic>> _orderStatusSubscription;
 
   @override
@@ -47,56 +49,38 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
     _selectedBottomNavItem = widget.initialBottomNavItemIndex;
     debugPrint("DynamicOrderListScreen: initState called for type: ${widget.orderType}");
     _loadOrders();
-    // --- NEW: Initialize and listen to socket updates ---
     _initializeSocketListener();
   }
 
-  // --- NEW METHOD: Initialize Socket Listener ---
   void _initializeSocketListener() {
-    // Get the singleton instance of OrderApiService
     final orderApiService = OrderApiService();
-
-    // Subscribe to the stream for order status/driver changes
     _orderStatusSubscription = orderApiService.orderStatusOrDriverChangedStream.listen((payload) {
       _handleOrderStatusOrDriverChange(payload);
     });
-
     debugPrint("DynamicOrderListScreen: Subscribed to orderStatusOrDriverChangedStream.");
   }
 
-  // --- MODIFIED METHOD: Handle Order Status/Driver Change from Socket ---
   void _handleOrderStatusOrDriverChange(Map<String, dynamic> payload) {
     final int? orderId = payload['order_id'] as int?;
-    final String? newStatusBackend = payload['new_status'] as String?; // Backend status (green, blue, yellow)
-    final int? newDriverId = payload['new_driver_id'] as int?; // Only new_driver_id is relevant here
+    final String? newStatusBackend = payload['new_status'] as String?;
+    final int? newDriverId = payload['new_driver_id'] as int?;
 
     if (orderId == null || newStatusBackend == null) {
       debugPrint('Socket payload missing order_id or new_status: $payload');
       return;
     }
 
+    // Get access to the OrderCountsProvider
+    final orderCountsProvider = Provider.of<OrderCountsProvider>(context, listen: false);
+
+
     setState(() {
       int? orderIndexInActive = activeOrders.indexWhere((order) => order.orderId == orderId);
       int? orderIndexInCompleted = completedOrders.indexWhere((order) => order.orderId == orderId);
 
       Order? targetOrder;
-      List<Order> sourceList; // To keep track if it came from active or completed
-      int originalIndex;
-
-      if (orderIndexInActive != -1) {
-        targetOrder = activeOrders[orderIndexInActive];
-        sourceList = activeOrders;
-        originalIndex = orderIndexInActive;
-      } else if (orderIndexInCompleted != -1) {
-        targetOrder = completedOrders[orderIndexInCompleted];
-        sourceList = completedOrders;
-        originalIndex = orderIndexInCompleted;
-      } else {
-        // Order not found, might be a new order that now matches filter or a very old one.
-        debugPrint('Socket: Order with ID $orderId not found in current lists. Attempting full reload.');
-        _loadOrders();
-        return; // Exit as full reload will handle the state
-      }
+      List<Order>? sourceList;
+      int? originalIndex;
 
       // Determine the new INTERNAL status for the Order model
       String newInternalStatus;
@@ -105,34 +89,44 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
         case 'green': newInternalStatus = 'ready'; break;
         case 'blue': newInternalStatus = 'completed'; break;
         case 'red': newInternalStatus = 'cancelled'; break;
-        default: newInternalStatus = newStatusBackend; // Fallback to raw if unknown
+        default: newInternalStatus = newStatusBackend;
       }
 
-      Order updatedOrder = targetOrder.copyWith(
-        status: newInternalStatus, // Update the internal status
-        driverId: newDriverId, // Update driver ID
+      // Find the order and remove it from its current list
+      if (orderIndexInActive != -1) {
+        targetOrder = activeOrders.removeAt(orderIndexInActive);
+        sourceList = activeOrders;
+        // Decrement the count for the order's original type if it's moving out of 'active'
+        if (newInternalStatus == 'completed' || newInternalStatus == 'blue') {
+          orderCountsProvider.decrementOrderCount(targetOrder.orderType);
+        }
+      } else if (orderIndexInCompleted != -1) {
+        targetOrder = completedOrders.removeAt(orderIndexInCompleted);
+        sourceList = completedOrders;
+        // Increment the count for the order's type if it's moving back to 'active'
+        if (newInternalStatus != 'completed' && newInternalStatus != 'blue') {
+          orderCountsProvider.incrementOrderCount(targetOrder.orderType);
+        }
+      } else {
+        debugPrint('Socket: Order with ID $orderId not found in current lists. Attempting full reload.');
+        _loadOrders(); // Full reload will re-fetch counts as well
+        return;
+      }
+
+      Order updatedOrder = targetOrder!.copyWith(
+        status: newInternalStatus,
+        driverId: newDriverId,
       );
 
-      // --- Re-categorization logic based on newInternalStatus ---
-      // Decide if the order should be in 'completed' or 'active' list
+      // Re-categorization logic based on newInternalStatus
       bool shouldBeCompleted = (newInternalStatus == 'completed' || newInternalStatus == 'blue' || newInternalStatus == 'delivered');
 
       if (shouldBeCompleted) {
-        if (sourceList == activeOrders) {
-          activeOrders.removeAt(originalIndex);
-          completedOrders.add(updatedOrder);
-        } else { // Already in completed list, just update
-          completedOrders[originalIndex] = updatedOrder;
-        }
-        completedOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt)); // Newest first
-      } else { // It's an active status (pending, ready, cancelled etc.)
-        if (sourceList == completedOrders) { // If it moved from completed to active
-          completedOrders.removeAt(originalIndex);
-          activeOrders.add(updatedOrder);
-        } else { // Already in active list, just update
-          activeOrders[originalIndex] = updatedOrder;
-        }
-        activeOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt)); // Newest first
+        completedOrders.add(updatedOrder);
+        completedOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      } else {
+        activeOrders.add(updatedOrder);
+        activeOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       }
 
       // If the selected order was the one that changed, update _selectedOrder
@@ -140,7 +134,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
         _selectedOrder = updatedOrder;
       }
 
-      // Adjust selected order if current selected disappears (e.g., moves to completed and list becomes empty)
+      // Adjust selected order if current selected disappears
       if (_selectedOrder == null || (!activeOrders.any((o) => o.orderId == _selectedOrder!.orderId) && !completedOrders.any((o) => o.orderId == _selectedOrder!.orderId))) {
         _selectedOrder = activeOrders.isNotEmpty ? activeOrders.first :
         (completedOrders.isNotEmpty ? completedOrders.first : null);
@@ -149,11 +143,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
       debugPrint("Socket: Order ${orderId} updated. Internal status: ${updatedOrder.status}, Driver ID: ${updatedOrder.driverId}");
     });
   }
-
-
-
-
-
 
   @override
   void didUpdateWidget(covariant DynamicOrderListScreen oldWidget) {
@@ -171,7 +160,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
 
   @override
   void dispose() {
-    _orderStatusSubscription.cancel(); // --- NEW: Cancel the stream subscription ---
+    _orderStatusSubscription.cancel();
     super.dispose();
   }
 
@@ -186,12 +175,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
       List<Order> tempCompleted = [];
 
       for (var order in filteredOrders) {
-        // IMPORTANT: Ensure your Order model's `status` and `driverId` are parsed correctly from API
-        // And that your Order model has `statusLabel` and `statusColor` getters that map
-        // your internal `status` (e.g., "Ready", "Completed", "Pending") to the desired display.
-
-        // When loading, we also need to apply the "ON ITS WAY" logic for initial display
-        String initialDisplayStatus = order.statusLabel; // Get default from Order model's getter
+        String initialDisplayStatus = order.statusLabel;
 
         if (order.status.toLowerCase() == 'green' && order.driverId != null) {
           initialDisplayStatus = 'ON ITS WAY';
@@ -199,12 +183,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
           initialDisplayStatus = 'COMPLETED';
         }
 
-        Order orderWithInitialDisplay = order.copyWith(
-          // Ensure `currentDisplayStatus` field is in your Order model if you want to store it directly
-          // For now, relying on `statusLabel` getter from Order model and potentially updating it here.
-          // If you add `currentDisplayStatus` to Order model, pass it here.
-        );
-
+        Order orderWithInitialDisplay = order.copyWith(); // Use copyWith to ensure immutability
 
         if (orderWithInitialDisplay.status.toLowerCase() == 'blue') {
           tempCompleted.add(orderWithInitialDisplay);
@@ -298,7 +277,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
     switch (categoryName.toUpperCase()) {
       case 'PIZZA':
         return 'assets/images/PizzasS.png';
-      case 'SHAWARMAS':
+      case 'SHAWARMA': // Note: API might return "Shawarma" singular
         return 'assets/images/ShawarmaS.png';
       case 'BURGERS':
         return 'assets/images/BurgersS.png';
@@ -308,12 +287,16 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
         return 'assets/images/GarlicBreadS.png';
       case 'WRAPS':
         return 'assets/images/WrapsS.png';
-      case 'KIDS MEAL':
+      case 'KIDSMEAL': // Note: API might return "KidsMeal"
         return 'assets/images/KidsMealS.png';
       case 'SIDES':
         return 'assets/images/SidesS.png';
       case 'DRINKS':
         return 'assets/images/DrinksS.png';
+      case 'MILKSHAKE':
+        return 'assets/images/MilkshakeS.png';
+      case 'DIPS':
+        return 'assets/images/DipsS.png';
       default:
         return 'assets/images/default.png';
     }
@@ -324,7 +307,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
     String newStatus;
     switch (current.toLowerCase()) {
       case 'pending':
-        newStatus = 'Ready'; // EPOS internal status for 'preparing' / 'on its way'
+        newStatus = 'Ready';
         break;
       case 'ready':
         newStatus = 'Completed';
@@ -333,20 +316,19 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
         newStatus = 'Completed'; // Stays completed
         break;
       default:
-        newStatus = 'Pending'; // Fallback
+        newStatus = 'Pending';
     }
     debugPrint("nextStatus: Returning '$newStatus'.");
     return newStatus;
   }
 
   void _updateOrderStatusAndRelist(Order orderToUpdate, String newStatus) async {
-    // Determine the backend status string
     String backendStatusToSend;
     switch (newStatus.toLowerCase()) {
       case 'pending':
         backendStatusToSend = 'yellow';
         break;
-      case 'ready': // This corresponds to 'preparing' or 'on its way' from EPOS
+      case 'ready':
         backendStatusToSend = 'green';
         break;
       case 'completed':
@@ -356,6 +338,9 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
         backendStatusToSend = newStatus.toLowerCase();
     }
 
+    // Get access to the OrderCountsProvider
+    final orderCountsProvider = Provider.of<OrderCountsProvider>(context, listen: false);
+
     // Optimistic UI update
     setState(() {
       int originalIndexInActive = activeOrders.indexWhere((o) => o.orderId == orderToUpdate.orderId);
@@ -363,23 +348,26 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
 
       Order updatedOrder = orderToUpdate.copyWith(status: newStatus);
 
-      // Re-categorize the order in UI based on the new EPOS status
+      // Handle count updates based on status change
       if (newStatus.toLowerCase() == 'completed') {
         if (originalIndexInActive != -1) {
           activeOrders.removeAt(originalIndexInActive);
+          orderCountsProvider.decrementOrderCount(orderToUpdate.orderType); // Decrement when moving to completed
         }
         completedOrders.add(updatedOrder);
         completedOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-      } else { // If moving to Pending or Ready
-        if (originalIndexInCompleted != -1) { // If it was completed but now active again
+      } else {
+        if (originalIndexInCompleted != -1) {
           completedOrders.removeAt(originalIndexInCompleted);
           activeOrders.add(updatedOrder);
+          orderCountsProvider.incrementOrderCount(orderToUpdate.orderType); // Increment when moving from completed
           activeOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
         } else if (originalIndexInActive != -1) {
           activeOrders[originalIndexInActive] = updatedOrder;
           activeOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-        } else { // Should not typically happen unless order was missing from both lists
+        } else {
           activeOrders.add(updatedOrder);
+          orderCountsProvider.incrementOrderCount(orderToUpdate.orderType); // Increment if newly added to active
           activeOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
         }
       }
@@ -395,44 +383,73 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
     });
 
     try {
-      // Send the backend status (green, blue, yellow) to the API
       final success = await OrderApiService.updateOrderStatus(orderToUpdate.orderId, backendStatusToSend);
       if (!success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Failed to update status on server. Re-syncing...")),
-        );
-        _loadOrders(); // Revert or re-sync if API call fails
+        if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Failed to update status on server. Re-syncing...")),
+          );
+        }
+        _loadOrders();
       } else {
         debugPrint("Status for Order ID ${orderToUpdate.orderId} successfully updated to '$newStatus' (backend: $backendStatusToSend) on backend.");
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error communicating with server: $e. Re-syncing...")),
-      );
-      _loadOrders(); // Revert or re-sync if error
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error communicating with server: $e. Re-syncing...")),
+        );
+      }
+      _loadOrders();
     }
+  }
+
+  // Helper to get order count for each nav item
+  String? _getNotificationCount(int index, Map<String, int> currentActiveOrdersCount) {
+    int count = 0;
+    switch (index) {
+      case 0: // Takeaway
+        count = currentActiveOrdersCount['takeaway'] ?? 0;
+        break;
+      case 1: // Dine In
+        count = currentActiveOrdersCount['dinein'] ?? 0;
+        break;
+      case 2: // Delivery
+        count = currentActiveOrdersCount['delivery'] ?? 0;
+        break;
+      case 3: // Website
+        count = currentActiveOrdersCount['website'] ?? 0;
+        break;
+      default:
+        return null; // No notification for home/more
+    }
+    return count > 0 ? count.toString() : null;
   }
 
   @override
   Widget build(BuildContext context) {
     debugPrint("DynamicOrderListScreen: build method called. Active orders: ${activeOrders.length}, Completed orders: ${completedOrders.length}");
 
+    // Consume the OrderCountsProvider here to get the latest counts
+    final orderCountsProvider = Provider.of<OrderCountsProvider>(context);
+    final activeOrdersCount = orderCountsProvider.activeOrdersCount;
+
+
     final allOrdersForDisplay = [...activeOrders];
     if (completedOrders.isNotEmpty) {
       allOrdersForDisplay.add(Order(
-        orderId: -1,
+        orderId: -1, // Placeholder for the divider
         paymentType: '', transactionId: '', orderType: '', status: '', createdAt: DateTime.now(),
         changeDue: 0.0, orderSource: '', customerName: '', orderTotalPrice: 0.0, items: [],
       ));
       allOrdersForDisplay.addAll(completedOrders);
     }
 
-
     return Scaffold(
       body: SafeArea(
         child: Row(
           children: [
-            Expanded(     //left panel
+            Expanded(
               flex: 2,
               child: Container(
                 padding: const EdgeInsets.all(16.0),
@@ -498,13 +515,11 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                               ),
                             );
                           }
-                          // Only display orders that match the screen's orderType
                           if (order.orderType.toLowerCase() != widget.orderType.toLowerCase()) {
-                            return const SizedBox.shrink(); // Hide orders of different types
+                            return const SizedBox.shrink();
                           }
 
-                          // Determine the display label for the order's status
-                          String currentDisplayStatus = order.statusLabel; // Default from Order model
+                          String currentDisplayStatus = order.statusLabel;
                           if (order.status.toLowerCase() == 'green' && order.driverId != null) {
                             currentDisplayStatus = 'ON ITS WAY';
                           } else if (order.status.toLowerCase() == 'blue' && order.driverId != null) {
@@ -515,7 +530,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                           if (activeOrders.contains(order)) {
                             serialNumber = activeOrders.indexOf(order) + 1;
                           }
-                          bool isSelected = _selectedOrder?.orderId == order.orderId;
+                          // bool isSelected = _selectedOrder?.orderId == order.orderId; // This variable is not used to control selection color here
 
                           return GestureDetector(
                             onTap: () {
@@ -528,7 +543,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                               margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 60),
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: Colors.transparent,
+                                color: Colors.transparent, // No special background for selected state in this list
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Row(
@@ -571,7 +586,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
 
                                   GestureDetector(
                                     onTap: () {
-                                      // Only allow status change if not already completed
                                       if (order.status.toLowerCase() != 'completed' && order.status.toLowerCase() != 'delivered') {
                                         final newStatus = _nextStatus(order.status);
                                         debugPrint("DynamicOrderListScreen: Changing status for order ID ${order.orderId} from ${order.status} to $newStatus.");
@@ -591,7 +605,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                                         borderRadius: BorderRadius.circular(50),
                                       ),
                                       child: Text(
-                                        // Use the dynamic `currentDisplayStatus` here
                                         currentDisplayStatus,
                                         style: const TextStyle(fontSize: 32,
                                             color: Colors.black),
@@ -609,10 +622,15 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                 ),
               ),
             ),
-            const VerticalDivider(
-                width: 1, thickness: 0.5, color: Colors.black),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20.0),
+              child: const VerticalDivider(
+                width: 2.5,
+                thickness: 2.5,
+                color: Colors.grey,
+              ),
+            ),
 
-            //Right Panel
             Expanded(
               flex: 1,
               child: Container(
@@ -741,7 +759,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
 
                                       Container(
                                         width: 1.2,
-                                        height: 180,
+                                        height: 150,
                                         color: Colors.black,
                                         margin: const EdgeInsets.symmetric(horizontal: 0),
                                       ),
@@ -752,8 +770,8 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                                           crossAxisAlignment: CrossAxisAlignment.center,
                                           children: [
                                             Container(
-                                              width: 110,
-                                              height: 110,
+                                              width: 90,
+                                              height: 90,
                                               decoration: BoxDecoration(
                                                 borderRadius: BorderRadius.circular(12),
                                               ),
@@ -817,7 +835,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                     const SizedBox(height: 10),
 
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.start,
@@ -835,6 +853,21 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                                 style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                               ),
                             ),
+                            const SizedBox(width: 10),
+                            MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: GestureDetector(
+                                onTap: () {
+                                  // no implementation yet
+                                  print("No implementation yet");
+                                },
+                                child: Image.asset(
+                                  'assets/images/printer.png',
+                                  width: 50,
+                                  height: 50,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -847,106 +880,122 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNavBar(context),
+      // Pass activeOrdersCount to _buildBottomNavBar
+      bottomNavigationBar: _buildBottomNavBar(activeOrdersCount),
     );
   }
 
-  Widget _buildBottomNavBar(BuildContext context) {
-    debugPrint("DynamicOrderListScreen: _buildBottomNavBar called.");
+  // --- MODIFIED _buildBottomNavBar to use _navItem directly and accept activeOrdersCount ---
+  Widget _buildBottomNavBar(Map<String, int> activeOrdersCount) {
+    debugPrint("DynamicOrderListScreen: _buildBottomNavBar called with counts.");
     return Container(
       height: 80,
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Colors.black, width: 0.5)),
         color: Colors.white,
       ),
+     child: Padding(
+       padding: const EdgeInsets.symmetric(horizontal: 45.0),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          BottomNavItem(
-            image: 'TakeAway.png',
-            index: 0,
-            selectedIndex: _selectedBottomNavItem,
+          _navItem(
+            'TakeAway.png',
+            0,
+            notification: _getNotificationCount(0, activeOrdersCount),
+            color: Colors.amber, // Yellow notification for take away
             onTap: () {
               debugPrint("DynamicOrderListScreen: Navigating to EPOS Takeaway.");
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                  const DynamicOrderListScreen(
-                    orderType: 'takeaway',
-                    initialBottomNavItemIndex: 0,
+              if (_selectedBottomNavItem != 0) { // Only navigate if not already on this screen
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                    const DynamicOrderListScreen(
+                      orderType: 'takeaway',
+                      initialBottomNavItemIndex: 0,
+                    ),
                   ),
-                ),
-              );
+                );
+              }
             },
           ),
-          BottomNavItem(
-            image: 'DineIn.png',
-            index: 1,
-            selectedIndex: _selectedBottomNavItem,
+          _navItem(
+            'DineIn.png',
+            1,
+            notification: _getNotificationCount(1, activeOrdersCount),
+            color: Colors.amber, // Yellow notification for dine in
             onTap: () {
               debugPrint("DynamicOrderListScreen: Navigating to EPOS Dine In.");
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                  const DynamicOrderListScreen(
-                    orderType: 'dinein',
-                    initialBottomNavItemIndex: 1,
+              if (_selectedBottomNavItem != 1) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                    const DynamicOrderListScreen(
+                      orderType: 'dinein',
+                      initialBottomNavItemIndex: 1,
+                    ),
                   ),
-                ),
-              );
+                );
+              }
             },
           ),
-          BottomNavItem(
-            image: 'Delivery.png',
-            index: 2,
-            selectedIndex: _selectedBottomNavItem,
+          _navItem(
+            'Delivery.png',
+            2,
+            notification: _getNotificationCount(2, activeOrdersCount),
+            color: Colors.amber, // Yellow notification for delivery
             onTap: () {
               debugPrint("DynamicOrderListScreen: Navigating to EPOS Delivery.");
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                  const DynamicOrderListScreen(
-                    orderType: 'delivery',
-                    initialBottomNavItemIndex: 2,
+              if (_selectedBottomNavItem != 2) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                    const DynamicOrderListScreen(
+                      orderType: 'delivery',
+                      initialBottomNavItemIndex: 2,
+                    ),
                   ),
-                ),
-              );
+                );
+              }
             },
           ),
-          BottomNavItem(
-            image: 'web.png',
-            index: 3,
-            selectedIndex: _selectedBottomNavItem,
+          _navItem(
+            'web.png',
+            3,
+            notification: _getNotificationCount(3, activeOrdersCount),
+            color: Colors.amber, // Yellow notification for website
             onTap: () {
               debugPrint("DynamicOrderListScreen: Navigating to Website Orders.");
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                  const WebsiteOrdersScreen(
-                    initialBottomNavItemIndex: 3,
+              if (_selectedBottomNavItem != 3) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                    const WebsiteOrdersScreen(
+                      initialBottomNavItemIndex: 3,
+                    ),
                   ),
-                ),
-              );
+                );
+              }
             },
           ),
-          BottomNavItem(
-            image: 'home.png', // Make sure you have 'assets/images/home.png'
-            index: 4,
-            selectedIndex: _selectedBottomNavItem,
+          _navItem(
+            'home.png',
+            4,
             onTap: () {
               debugPrint("DynamicOrderListScreen: Navigating to Page4 (Home Screen).");
               Navigator.pushReplacementNamed(context, '/service-selection');
             },
           ),
-          BottomNavItem(
-            image: 'More.png', // Make sure you have 'assets/images/home.png'
-            index: 5,
-            selectedIndex: _selectedBottomNavItem,
-              onTap: () {
+          _navItem(
+            'More.png',
+            5,
+            onTap: () {
+              debugPrint("DynamicOrderListScreen: Navigating to Settings Screen.");
+              if (_selectedBottomNavItem != 5) {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -956,8 +1005,97 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                   ),
                 );
               }
+            },
           ),
         ],
+      ),
+    ),
+    );
+  }
+
+  // This _navItem is a duplicate from Page4 but is necessary here
+  // unless you make a common widget for it. For now, duplicating is simpler.
+  Widget _navItem(String image, int index,
+      {String? notification, Color? color, required VoidCallback onTap}) {
+
+    bool isSelected = _selectedBottomNavItem == index;
+
+    String displayImage = image;
+
+    if (isSelected) {
+      if (image == 'TakeAway.png') {
+        displayImage = 'TakeAwaywhite.png';
+      } else if (image == 'DineIn.png') {
+        displayImage = 'DineInwhite.png';
+      } else if (image == 'Delivery.png') {
+        displayImage = 'Deliverywhite.png';
+      } else if (image.contains('.png')) {
+        // For other icons that have a white version when selected
+        displayImage = image.replaceAll('.png', 'white.png');
+      }
+    } else {
+      // Logic to switch back to original color version if not selected
+      if (image == 'TakeAwaywhite.png') {
+        displayImage = 'TakeAway.png';
+      } else if (image == 'DineInwhite.png') {
+        displayImage = 'DineIn.png';
+      } else if (image == 'Deliverywhite.png') {
+        displayImage = 'Delivery.png';
+      } else if (image.contains('white.png')) {
+        displayImage = image.replaceAll('white.png', '.png');
+      }
+    }
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () {
+          // No setState here, as navigation handles the selection change
+          onTap(); // Execute the specific tap action
+        },
+        child: Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.black : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Image.asset(
+                'assets/images/$displayImage',
+                width: index == 2 ? 92 : 60, // Special sizing for Delivery icon
+                height: index == 2 ? 92 : 60,
+                color: isSelected ? Colors.white : const Color(0xFF616161),
+              ),
+              if (notification != null && notification.isNotEmpty)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: color ?? Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 20,
+                      minHeight: 20,
+                    ),
+                    child: Text(
+                      notification,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

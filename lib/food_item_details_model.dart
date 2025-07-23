@@ -72,7 +72,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   @override
   void initState() {
     super.initState();
-    if (widget.foodItem.price.isNotEmpty) {
+    if (widget.foodItem.price.keys.length == 1 && widget.foodItem.price.isNotEmpty) {
       _selectedSize = widget.foodItem.price.keys.first;
     } else {
       _selectedSize = null;
@@ -106,8 +106,10 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
 
     if (_selectedSize != null && widget.foodItem.price.containsKey(_selectedSize)) {
       price = widget.foodItem.price[_selectedSize] ?? 0.0;
-    } else if (widget.foodItem.price.isNotEmpty) {
-      price = widget.foodItem.price.values.firstOrNull ?? 0.0;
+    }  else if (widget.foodItem.price.keys.length == 1 && widget.foodItem.price.isNotEmpty) {
+      price = widget.foodItem.price.values.first;
+    } else {
+      return 0.0;
     }
 
     if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads') {
@@ -170,6 +172,19 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   }
 
   void _addToCart() {
+
+    if (widget.foodItem.price.keys.length > 1 && _selectedSize == null) {
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a size before adding to cart.'),
+          duration: Duration(seconds: 2),
+          backgroundColor: Colors.grey,
+        ),
+      );
+      return; // Stop the function execution
+    }
+
     final List<String> selectedOptions = [];
 
     if (_selectedSize != null && widget.foodItem.price.keys.length > 1) {
@@ -232,308 +247,326 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     });
 
     final double modalWidth = min(
-      MediaQuery.of(context).size.width * 0.5,
-      800.0,
+      MediaQuery.of(context).size.width * 0.8,
+      1500.0,
     );
 
-    return Container(
-      width: modalWidth,
-      constraints: BoxConstraints(
-        maxWidth: 800,
-        maxHeight: MediaQuery.of(context).size.height * 0.9,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: Colors.grey.shade100,
-          width: 1.0,
+    bool canAddToCart = true;
+    if (widget.foodItem.price.keys.length > 1 && _selectedSize == null) {
+      canAddToCart = false;
+    }
+
+    return GestureDetector( // <--- HERE! Wrap the entire modal content
+      onTap: () {
+        // This will unfocus the TextField and close the keyboard
+        FocusScope.of(context).unfocus();
+        print('Modal background tapped, keyboard dismissed (if open).'); // For debugging
+      },
+      child: Container(
+        width: modalWidth,
+        constraints: BoxConstraints(
+          maxWidth: 1500,
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
         ),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-            decoration: const BoxDecoration(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(14),
-                topRight: Radius.circular(14),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: Colors.grey.shade100,
+            width: 1.0,
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              decoration: const BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(14),
+                  topRight: Radius.circular(14),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      widget.foodItem.name.toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  InkWell(
+                    onTap: _closeModal,
+                    child: const Text(
+                      '×',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 30,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    widget.foodItem.name.toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
+
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ...(
+                        (['Pizza', 'Garlic Breads', 'Shawarmas', 'Wraps', 'Burgers'].contains(widget.foodItem.category) &&
+                            widget.foodItem.price.keys.length > 1)
+                            ? [_buildSizeWithQuantitySection()] // If true, return a list with this widget
+                            : [_buildQuantityControlOnly()]      // If false, return a list with this widget
                     ),
-                  ),
-                ),
-                const Spacer(),
-                InkWell(
-                  onTap: _closeModal,
-                  child: const Text(
-                    '×',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 30,
-                      fontWeight: FontWeight.normal,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ...(
-                      (['Pizza', 'Garlic Breads', 'Shawarmas', 'Wraps', 'Burgers'].contains(widget.foodItem.category) &&
-                          widget.foodItem.price.keys.length > 1)
-                          ? [_buildSizeWithQuantitySection()] // If true, return a list with this widget
-                          : [_buildQuantityControlOnly()]      // If false, return a list with this widget
-                  ),
 
 
-                  if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads') ...[
-                    _buildOptionCategoryButtons(),
-                    _buildSelectedOptionDisplay(),
-                  ] else if (widget.foodItem.category == 'Shawarmas' || widget.foodItem.category == 'Wraps' || widget.foodItem.category == 'Burgers') ...[
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: _makeItAMeal,
-                              onChanged: (bool? value) {
+                    if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads') ...[
+                      _buildOptionCategoryButtons(),
+                      _buildSelectedOptionDisplay(),
+                    ] else if (widget.foodItem.category == 'Shawarmas' || widget.foodItem.category == 'Wraps' || widget.foodItem.category == 'Burgers') ...[
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: _makeItAMeal,
+                                onChanged: (bool? value) {
+                                  setState(() {
+                                    _makeItAMeal = value!;
+                                    _selectedDrink = null;
+                                    _updatePriceDisplay();
+                                  });
+                                },
+                                activeColor: const Color(0xFFCB6CE6),
+                              ),
+                              const Text('Make it a meal ', style: TextStyle(fontSize: 16, color: Colors.white)),
+                            ],
+                          ),
+                          if (_makeItAMeal) ...[
+                            const SizedBox(height: 8),
+                            const Text('Select Drink', style: TextStyle(fontWeight: FontWeight.normal, fontSize: 16, color: Colors.white)),
+                            DropdownButtonFormField<String>(
+                              value: _selectedDrink,
+                              hint: const Text('Select a drink', style: TextStyle(color: Colors.white)),
+                              items: _allDrinks.map((drink) {
+                                return DropdownMenuItem(
+                                  value: drink,
+                                  child: Text(drink),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
                                 setState(() {
-                                  _makeItAMeal = value!;
-                                  _selectedDrink = null;
-                                  _updatePriceDisplay();
+                                  _selectedDrink = value;
                                 });
                               },
-                              activeColor: const Color(0xFFCB6CE6),
+                              decoration: InputDecoration(
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Colors.grey[100]!),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Colors.grey[100]!),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: const BorderSide(color: Color(0xFFCB6CE6)),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
                             ),
-                            const Text('Make it a meal ', style: TextStyle(fontSize: 16)),
                           ],
-                        ),
-                        if (_makeItAMeal) ...[
-                          const SizedBox(height: 8),
-                          const Text('Select Drink', style: TextStyle(fontWeight: FontWeight.normal, fontSize: 16)),
-                          DropdownButtonFormField<String>(
-                            value: _selectedDrink,
-                            hint: const Text('Select a drink'),
-                            items: _allDrinks.map((drink) {
-                              return DropdownMenuItem(
-                                value: drink,
-                                child: Text(drink),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedDrink = value;
-                              });
-                            },
-                            decoration: InputDecoration(
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: Colors.grey[100]!),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: Colors.grey[100]!),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(color: Color(0xFFCB6CE6)),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            ),
-                          ),
+                          const SizedBox(height: 20),
                         ],
-                        const SizedBox(height: 20),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
 
-                  if (widget.foodItem.category == 'Burgers') ...[
+                    if (widget.foodItem.category == 'Burgers') ...[
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: _noSalad,
+                                onChanged: (bool? value) {
+                                  setState(() {
+                                    _noSalad = value!;
+                                  });
+                                },
+                                activeColor: const Color(0xFFCB6CE6),
+                              ),
+                              const Text('No Salad', style: TextStyle(fontSize: 16, color: Colors.white)),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: _noSauce,
+                                onChanged: (bool? value) {
+                                  setState(() {
+                                    _noSauce = value!;
+                                  });
+                                },
+                                activeColor: const Color(0xFFCB6CE6),
+                              ),
+                              const Text('No Sauce', style: TextStyle(fontSize: 16, color: Colors.white)),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    ],
+
+                    if (widget.foodItem.category == 'Milkshake') ...[
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: _noCream,
+                                onChanged: (bool? value) {
+                                  setState(() {
+                                    _noCream = value!;
+                                  });
+                                },
+                                activeColor: const Color(0xFFCB6CE6),
+                              ),
+                              const Text('No Cream', style: TextStyle(fontSize: 16, color: Colors.white)),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    ],
+
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: _noSalad,
-                              onChanged: (bool? value) {
-                                setState(() {
-                                  _noSalad = value!;
-                                });
-                              },
-                              activeColor: const Color(0xFFCB6CE6),
-                            ),
-                            const Text('No Salad', style: TextStyle(fontSize: 16)),
-                          ],
+                        const Text(
+                          'Review Notes',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 22,
+                            color: Colors.white,
+                          ),
                         ),
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: _noSauce,
-                              onChanged: (bool? value) {
-                                setState(() {
-                                  _noSauce = value!;
-                                });
-                              },
-                              activeColor: const Color(0xFFCB6CE6),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _reviewNotesController,
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[100]!),
                             ),
-                            const Text('No Sauce', style: TextStyle(fontSize: 16)),
-                          ],
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[100]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: Colors.white),
+                            ),
+
+                            hintText: 'Add any special requests or notes...',
+                            hintStyle: const TextStyle(color: Colors.white),
+                            contentPadding: const EdgeInsets.all(12),
+                          ),
+                          maxLines: 3,
                         ),
                         const SizedBox(height: 20),
                       ],
                     ),
                   ],
+                ),
+              ),
+            ),
 
-                  if (widget.foodItem.category == 'Milkshake') ...[
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: _noCream,
-                              onChanged: (bool? value) {
-                                setState(() {
-                                  _noCream = value!;
-                                });
-                              },
-                              activeColor: const Color(0xFFCB6CE6),
-                            ),
-                            const Text('No Cream', style: TextStyle(fontSize: 16)),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                      ],
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                border: Border(top: BorderSide(color: Colors.grey[100]!)),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(14),
+                  bottomRight: Radius.circular(14),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Total: €${(_calculatedPricePerUnit * _quantity).toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
-                  ],
-
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                  Row(
                     children: [
-                      const Text(
-                        'Review Notes',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 22,
+                      ElevatedButton(
+                        onPressed: _closeModal,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey[100],
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _reviewNotesController,
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(
+                      const SizedBox(width: 15),
+                      ElevatedButton(
+                        onPressed: canAddToCart ? _addToCart : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:  canAddToCart ? Colors.black : Colors.grey,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                          shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: Colors.grey[100]!),
                           ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: Colors.grey[100]!),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: Color(0xFFCB6CE6)),
-                          ),
-                          hintText: 'Add any special requests or notes...',
-                          contentPadding: const EdgeInsets.all(12),
                         ),
-                        maxLines: 3,
+                        child: const Text(
+                          'Add to Cart',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 20),
                     ],
                   ),
                 ],
               ),
             ),
-          ),
-
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              border: Border(top: BorderSide(color: Colors.grey[100]!)),
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(14),
-                bottomRight: Radius.circular(14),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Total: €${(_calculatedPricePerUnit * _quantity).toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Row(
-                  children: [
-                    ElevatedButton(
-                      onPressed: _closeModal,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey[100],
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 15),
-                    ElevatedButton(
-                      onPressed: _addToCart,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text(
-                        'Add to Cart',
-                        style: TextStyle(
-                            color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -653,7 +686,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           children: [
             Container(
               width: 120,
-              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               decoration: BoxDecoration(
                 color: Colors.black,
                 borderRadius: BorderRadius.circular(8),
@@ -661,8 +694,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               child: const Text(
                 'Size',
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.normal,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
@@ -687,10 +720,10 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                           });
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                           decoration: BoxDecoration(
                             color: isActive ? Colors.grey : Colors.black,
-                            borderRadius: BorderRadius.circular(25),
+                            borderRadius: BorderRadius.circular(40),
                             border: Border.all(
                               color: isActive ? Colors.white : Colors.grey,
                               width: 2,
@@ -700,7 +733,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                             '$displaySize"',
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 14,
+                              fontSize: 18,
                             ),
                           ),
                         ),
@@ -740,17 +773,17 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       });
                     },
                     child: Container(
-                      width: 40,
-                      height: 40,
+                      width: 50,
+                      height: 50,
                       decoration: BoxDecoration(
                         color: _isRemoveButtonPressed ? Colors.grey : Colors.black,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.grey),
+                        border: Border.all(color: Colors.grey[100]!),
                       ),
                       child: const Icon(
                         Icons.remove,
                         color: Colors.white,
-                        size: 20,
+                        size: 25,
                       ),
                     ),
                   ),
@@ -767,7 +800,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                     child: Text(
                       '$_quantity',
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -794,17 +827,17 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       });
                     },
                     child: Container(
-                      width: 40,
-                      height: 40,
+                      width: 50,
+                      height: 50,
                       decoration: BoxDecoration(
                         color: _isAddButtonPressed ? Colors.grey : Colors.black,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.grey),
+                        border: Border.all(color: Colors.grey[100]!),
                       ),
                       child: const Icon(
                         Icons.add,
                         color: Colors.white,
-                        size: 20,
+                        size: 25,
                       ),
                     ),
                   ),
@@ -837,7 +870,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                     });
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 18),
                     decoration: BoxDecoration(
                       color: isSelected ? Colors.grey[100] : Colors.black, // Background color change
                       borderRadius: BorderRadius.circular(8),
@@ -847,7 +880,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       textAlign: TextAlign.center,
                       style: TextStyle( // Removed 'const' because color will change dynamically
                         color: isSelected ? Colors.black : Colors.white, // Text color based on selection
-                        fontSize: 14,
+                        fontSize: 20,
                         fontWeight: FontWeight.bold, // Text is always bold
                       ),
                     ),
@@ -889,27 +922,17 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   }
 
   Widget _buildToppingsDisplay(List<String> reorderedToppings) {
-    // We'll still use these calculations as a guide, but won't force 'toppingBoxWidth'
     final double modalWidth = min(
-      MediaQuery.of(context).size.width * 0.5,
-      800.0,
+      MediaQuery.of(context).size.width * 0.9,
+      900.0,
     );
-
-    // This is the padding from the SingleChildScrollView that wraps this content.
-    // Make sure this accurately reflects the actual horizontal padding applied to the content.
-    final double horizontalPaddingOfParent = 20.0 * 2; // From SingleChildScrollView's padding
-
-    // The actual available width for the Wrap is the modalWidth minus its parent's horizontal padding.
+    final double horizontalPaddingOfParent = 20.0 * 0.99;
     final double availableWidthForWrap = modalWidth - horizontalPaddingOfParent;
 
-    // Let's assume an average item width for calculation purposes, or a target minimum.
-    // Instead of calculating a strict 'toppingBoxWidth', think about what's the maximum
-    // comfortable width for each item to allow 4 per row.
+
     const double itemSpacing = 10.0;
     const int desiredColumns = 4;
 
-    // Calculate the approximate width needed if items were equally sized
-    // This is for conceptual understanding; we won't directly use this for SizedBox.width
     final double idealItemWidth = (availableWidthForWrap - (itemSpacing * (desiredColumns - 1))) / desiredColumns;
 
     return Column(
@@ -917,19 +940,18 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       children: [
         Wrap(
           spacing: itemSpacing,
-          runSpacing: 10,
+          runSpacing: 15,
           alignment: WrapAlignment.start, // Ensure items start from the left
           children: reorderedToppings.map((topping) {
             final bool isActive = _selectedToppings.contains(topping);
             final bool isDefault = (widget.foodItem.defaultToppings ?? []).contains(topping) ||
                 (widget.foodItem.defaultCheese ?? []).contains(topping);
 
-            return ConstrainedBox( // Use ConstrainedBox to provide a min/max width
+            return ConstrainedBox(
               constraints: BoxConstraints(
-                minWidth: 0, // Allow it to shrink if needed
+                minWidth: 0,
                 maxWidth: (availableWidthForWrap / desiredColumns) - itemSpacing, // Max width per item for 4 columns
-                // A small adjustment to maxWidth might be needed if there's any unaccounted for space.
-                // For example: maxWidth: (availableWidthForWrap / desiredColumns) - itemSpacing - 1.0,
+
               ),
               child: InkWell(
                 onTap: () {
@@ -943,7 +965,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                   });
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15), // Add horizontal padding for text
+                  padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 15), // Add horizontal padding for text
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: isActive
@@ -956,7 +978,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: isActive ? Colors.black : Colors.white,
-                      fontSize: 14,
+                      fontSize: 18,
                       fontWeight: isDefault ? FontWeight.bold : FontWeight.normal,
                     ),
                     maxLines: 1,
@@ -977,8 +999,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 15,
+          runSpacing: 15,
           children: _allBases.map((base) {
             final bool isActive = _selectedBase == base;
             return InkWell(
@@ -989,7 +1011,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                 });
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
                   color: isActive ? Colors.grey[100] : Colors.black,
                   borderRadius: BorderRadius.circular(8),
@@ -998,7 +1020,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                   base,
                   style: TextStyle(
                     color: isActive ? Colors.black : Colors.white,
-                    fontSize: 14,
+                    fontSize: 18,
                   ),
                 ),
               ),
@@ -1015,8 +1037,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 15,
+          runSpacing: 15,
           children: _allCrusts.map((crust) {
             final bool isActive = _selectedCrust == crust;
             return InkWell(
@@ -1027,7 +1049,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                 });
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
                   color: isActive ? Colors.grey[100] : Colors.black,
                   borderRadius: BorderRadius.circular(8),
@@ -1036,7 +1058,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                   crust,
                   style: TextStyle(
                     color: isActive? Colors.black : Colors.white,
-                    fontSize: 14,
+                    fontSize: 18,
                   ),
                 ),
               ),
@@ -1053,8 +1075,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 15,
+          runSpacing: 15,
           children: _allSauces.map((sauce) {
             final bool isActive = _selectedSauces.contains(sauce);
             return InkWell(
@@ -1069,7 +1091,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                 });
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
                   color: isActive ? Colors.grey[100] : Colors.black,
                   borderRadius: BorderRadius.circular(8),
@@ -1078,7 +1100,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                   sauce,
                   style: TextStyle(
                     color: isActive ? Colors.black : Colors.white,
-                    fontSize: 14,
+                    fontSize: 18,
                   ),
                 ),
               ),

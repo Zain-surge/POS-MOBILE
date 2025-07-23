@@ -3,12 +3,13 @@
 import 'package:flutter/material.dart';
 import 'package:epos/page3.dart';
 import 'package:epos/page4.dart';
-import 'package:epos/services/api_service.dart'; // <--- Corrected import line
+import 'package:epos/services/api_service.dart';
 import 'package:epos/models/food_item.dart';
 import 'package:epos/main_app_wrapper.dart';
-import 'package:epos/providers/order_provider.dart';
 import 'package:epos/services/order_api_service.dart';
 import 'package:provider/provider.dart';
+import 'package:epos/order_counts_provider.dart'; // <--- NEW IMPORT
+import 'package:epos/providers/order_provider.dart';
 
 // Define a GlobalKey for ScaffoldMessengerState
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
@@ -20,9 +21,11 @@ void main() {
   runApp(
     MultiProvider(
       providers: [
+        // Using OrderCountsProvider instead of OrderProvider
         ChangeNotifierProvider(create: (_) => OrderProvider()),
+        ChangeNotifierProvider(create: (_) => OrderCountsProvider()), // <--- CHANGED
       ],
-      child: const MainAppWrapper( // MainAppWrapper wraps MyApp
+      child: const MainAppWrapper(
         child: MyApp(),
       ),
     ),
@@ -44,13 +47,13 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    _fetchMenuItems();
+    _fetchMenuItems(); // Only fetch menu items here now
   }
 
   Future<void> _fetchMenuItems() async {
     try {
       print(' Fetching menu items at app startup...');
-      final items = await ApiService.fetchMenuItems(); // This should now resolve
+      final items = await ApiService.fetchMenuItems();
       print('✅ Menu items fetched successfully: ${items.length} items');
 
       setState(() {
@@ -70,7 +73,6 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'EPOS',
-      // Assign the global key to the MaterialApp's scaffoldMessengerKey
       scaffoldMessengerKey: scaffoldMessengerKey,
       theme: ThemeData(
         primarySwatch: Colors.purple,
@@ -105,7 +107,6 @@ class _MyAppState extends State<MyApp> {
               builder: (context) => Page3(foodItems: foodItems ?? []),
             );
           case '/page4':
-          // Expect arguments as a Map<String, String>
             final Map<String, String>? args = settings.arguments as Map<String, String>?;
 
             final String? initialSelectedServiceImage = args?['initialSelectedServiceImage'];
@@ -120,7 +121,8 @@ class _MyAppState extends State<MyApp> {
               builder: (context) => Page4(
                 initialSelectedServiceImage: initialSelectedServiceImage,
                 foodItems: foodItems ?? [],
-                selectedOrderType: selectedOrderType, // Provide the required parameter
+                selectedOrderType: selectedOrderType,
+                // activeOrdersCount is now obtained via Provider in Page4
               ),
             );
           default:
@@ -134,58 +136,59 @@ class _MyAppState extends State<MyApp> {
   }
 
   Widget _buildLoadingScreen() {
+    // ... (same as before)
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFCB6CE6)),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Loading...',
-              style: TextStyle(
-                fontSize: 18,
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            if (error != null) ...[
-              const SizedBox(height: 20),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                child: Text(
-                  'Error: $error',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.red,
-                    fontFamily: 'Poppins',
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    isLoading = true;
-                    error = null;
-                  });
-                  _fetchMenuItems();
-                },
-                child: const Text('Retry'),
-              ),
-            ],
-          ],
-        ),
-      ),
+          child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+          const CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFCB6CE6)),
+    ),
+    const SizedBox(height: 20),
+    const Text(
+    'Loading...',
+    style: TextStyle(
+    fontSize: 18,
+    fontFamily: 'Poppins',
+    fontWeight: FontWeight.w500,
+    ),
+    ),
+    if (error != null) ...[
+    const SizedBox(height: 20),
+    Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 40),
+    child: Text(
+    'Error: $error',
+    style: const TextStyle(
+    fontSize: 14,
+    color: Colors.red,
+    fontFamily: 'Poppins',
+    ),
+    textAlign: TextAlign.center,
+    ),
+    ),
+    const SizedBox(height: 20),
+    ElevatedButton(
+    onPressed: () {
+    setState(() {
+    isLoading = true;
+    error = null;
+    });
+    _fetchMenuItems();
+    },
+    child: const Text('Retry'),
+    ),
+    ],
+    ],),
+    ),
     );
   }
 
   Widget _buildHomeScreen() {
     if (error != null) {
+      // ... (same as before)
       return Scaffold(
         backgroundColor: Colors.white,
         body: Center(
