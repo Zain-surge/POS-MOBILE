@@ -185,35 +185,62 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
     }
     return 'No website orders found.';
   }
+// In _WebsiteOrdersScreenState class
 
-  String _nextStatus(String current) {
-    print("WebsiteOrdersScreen: nextStatus: Current status is '$current'.");
-    String newStatus;
-    switch (current.toLowerCase()) {
-      case 'pending':
-      case 'accepted':
-      case 'yellow':
-        newStatus = 'ready';
-        break;
-      case 'ready':
-      case 'preparing':
-      case 'green':
-        newStatus = 'completed';
-        break;
-      case 'completed':
-      case 'delivered':
-      case 'blue':
-        newStatus = 'completed';
-        break;
-      case 'cancelled':
-      case 'red':
-        newStatus = 'cancelled';
-        break;
-      default:
-        newStatus = 'ready';
+  String _nextStatus(Order order) {
+    print("WebsiteOrdersScreen: nextStatus: Current status is '${order.status}'. Order Type: ${order.orderType}");
+
+    final String currentStatusLower = order.status.toLowerCase();
+    final String orderTypeLower = order.orderType.toLowerCase();
+
+    // Determine if it's a Website Delivery order
+    final bool isWebsiteDeliveryOrder = orderTypeLower == 'delivery';
+
+    if (isWebsiteDeliveryOrder) {
+      switch (currentStatusLower) {
+        case 'pending':
+        case 'accepted':
+        case 'yellow':
+          return 'Ready'; // Allow PENDING delivery to go to READY
+        case 'ready':
+        case 'preparing':
+        case 'green':
+        // For website delivery, if it's already 'ready', it cannot proceed further
+        // from this app's logic, based on the backend's implicit rule (you mentioned "from epos order can't be updated beyond ready").
+        // We'll treat website delivery similarly if it has the same limitation.
+          return 'Ready'; // Stays 'ready' (frontend enforcement)
+        case 'completed':
+        case 'delivered':
+        case 'blue':
+          return 'Completed'; // Stays completed
+        case 'cancelled':
+        case 'red':
+          return 'Completed'; // Stays cancelled
+        default:
+          return 'Ready'; // Fallback
+      }
+    } else {
+      // For all other website order types (e.g., 'pickup')
+      switch (currentStatusLower) {
+        case 'pending':
+        case 'accepted':
+        case 'yellow':
+          return 'Ready';
+        case 'ready':
+        case 'preparing':
+        case 'green':
+          return 'Completed'; // Pickup can go directly to 'completed' after 'ready'
+        case 'completed':
+        case 'delivered':
+        case 'blue':
+          return 'Completed'; // Stays completed
+        case 'cancelled':
+        case 'red':
+          return 'Completed'; // Stays cancelled
+        default:
+          return 'Ready'; // Fallback
+      }
     }
-    print("WebsiteOrdersScreen: nextStatus: Returning '$newStatus'.");
-    return newStatus;
   }
 
   String _getCategoryIcon(String categoryName) {
@@ -240,6 +267,14 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
         return 'assets/images/MilkshakeS.png';
       case 'DIPS':
         return 'assets/images/DipsS.png';
+      case 'DESSERTS':
+        return 'assets/images/Desserts.png';
+      case 'CHICKEN':
+        return 'assets/images/Chicken.png';
+      case 'KEBABS':
+        return 'assets/images/Kebabs.png';
+      case 'WINGS':
+        return 'assets/images/Wings.png';
       default:
         return 'assets/images/default.png';
     }
@@ -355,9 +390,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                               setState(() {
                                 _selectedOrderType = 'pickup';
                                 _separateOrders(Provider.of<OrderProvider>(context, listen: false).websiteOrders);
-                                // The _onOrderProviderChange will correctly update the counts.
-                                // No explicit _updateWebsiteOrderCountsInProvider call needed here,
-                                // as it's handled by the listener if the underlying order data changes.
+
                               });
                             },
                             child: Container(
@@ -365,16 +398,16 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               margin: const EdgeInsets.symmetric(horizontal: 8),
                               decoration: BoxDecoration(
-                                color: _selectedOrderType == 'pickup' ? Colors.grey[800] : Colors.black,
+                                color: _selectedOrderType == 'pickup' ? Colors.grey[100] : Colors.black,
                                 borderRadius: BorderRadius.circular(23),
                               ),
-                              child: const Center(
+                              child:  Center(
                                 child: Text(
                                   'Pickup',
                                   style: TextStyle(
                                     fontSize: 28,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                    color: _selectedOrderType == 'pickup' ?  Colors.black : Colors.white,
                                   ),
                                 ),
                               ),
@@ -396,16 +429,16 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               margin: const EdgeInsets.symmetric(horizontal: 8),
                               decoration: BoxDecoration(
-                                color: _selectedOrderType == 'delivery' ? Colors.grey[800] : Colors.black,
+                                color: _selectedOrderType == 'delivery' ? Colors.grey[100] : Colors.black,
                                 borderRadius: BorderRadius.circular(23),
                               ),
-                              child: const Center(
+                              child: Center(
                                 child: Text(
                                   'Delivery',
                                   style: TextStyle(
                                     fontSize: 28,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                    color: _selectedOrderType == 'delivery' ?  Colors.black : Colors.white,
                                   ),
                                 ),
                               ),
@@ -433,7 +466,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                             return const Padding(
                               padding: EdgeInsets.symmetric(vertical: 10.0, horizontal: 60),
                               child: Divider(
-                                color: Colors.black,
+                                color: const Color(0xFFB2B2B2),
                                 thickness: 2,
                               ),
                             );
@@ -450,19 +483,23 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
 
                           if (order.orderType.toLowerCase() == 'delivery') {
                             if (order.status.toLowerCase() == 'green' && order.driverId != null) {
-                              finalDisplayLabel = 'ON ITS WAY';
-                              finalDisplayColor = HexColor.fromHex('FFF6D4');
-                            } else if (order.status.toLowerCase() == 'blue' || order.status.toLowerCase() == 'completed' || order.status.toLowerCase() == 'delivered') {
-                              finalDisplayLabel = 'DELIVERED';
+                              finalDisplayLabel = 'On Its Way';
+                              finalDisplayColor = HexColor.fromHex('DEF5D4');
+                            } else if (order.status.toLowerCase() == 'blue' && order.driverId != null) {
+                              finalDisplayLabel = 'Completed';
                               finalDisplayColor = HexColor.fromHex('D6D6D6');
-                            } else if (order.status.toLowerCase() == 'green' || order.status.toLowerCase() == 'ready') {
+                            } else if (order.status.toLowerCase() == 'green' && order.driverId == null) {
+                              finalDisplayLabel = 'Ready';
+                              finalDisplayColor = HexColor.fromHex('DEF5D4');
+                            }
+                            else if (order.status.toLowerCase() == 'green' || order.status.toLowerCase() == 'ready') {
                               finalDisplayLabel = 'Ready';
                               finalDisplayColor = HexColor.fromHex('DEF5D4');
                             } else if (order.status.toLowerCase() == 'yellow' || order.status.toLowerCase() == 'pending' || order.status.toLowerCase() == 'accepted') {
                               finalDisplayLabel = 'Pending';
                               finalDisplayColor = HexColor.fromHex('FFF6D4');
                             } else if (order.status.toLowerCase() == 'red' || order.status.toLowerCase() == 'cancelled') {
-                              finalDisplayLabel = 'Cancelled';
+                              finalDisplayLabel = 'Completed';
                               finalDisplayColor = Colors.red[100]!;
                             } else {
                               finalDisplayLabel = order.statusLabel;
@@ -476,10 +513,10 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                               finalDisplayLabel = 'Ready';
                               finalDisplayColor = HexColor.fromHex('DEF5D4');
                             } else if (order.status.toLowerCase() == 'blue' || order.status.toLowerCase() == 'completed' || order.status.toLowerCase() == 'delivered') {
-                              finalDisplayLabel = 'COLLECTED';
+                              finalDisplayLabel = 'Completed';
                               finalDisplayColor = HexColor.fromHex('D6D6D6');
                             } else if (order.status.toLowerCase() == 'red' || order.status.toLowerCase() == 'cancelled') {
-                              finalDisplayLabel = 'Cancelled';
+                              finalDisplayLabel = 'Completed';
                               finalDisplayColor = Colors.red[100]!;
                             } else {
                               finalDisplayLabel = order.statusLabel;
@@ -538,65 +575,82 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
-
-                                  GestureDetector(
+                                  const SizedBox(width: 10), // This was the line 574 mentioned in error. The comma is correct if another child follows.
+                                  GestureDetector( // This is the start of the next child, so the comma above it is fine.
                                     onTap: () async {
-                                      bool wasActive = !(order.status.toLowerCase() == 'completed' ||
+                                      // First, check if the order is already in a final state (completed, delivered, cancelled)
+                                      final bool isFinalState = order.status.toLowerCase() == 'completed' ||
                                           order.status.toLowerCase() == 'delivered' ||
                                           order.status.toLowerCase() == 'blue' ||
                                           order.status.toLowerCase() == 'cancelled' ||
-                                          order.status.toLowerCase() == 'red');
+                                          order.status.toLowerCase() == 'red';
 
-                                      if (wasActive) {
-                                        final newStatus = _nextStatus(order.status);
-                                        debugPrint("WebsiteOrdersScreen: Attempting to change status for order ID ${order.orderId} from ${order.status} to $newStatus.");
-
-                                        final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-                                        final orderCountsProvider = Provider.of<OrderCountsProvider>(context, listen: false);
-
-
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Updating order ${order.orderId}...'),
-                                            duration: const Duration(seconds: 1),
-                                          ),
-                                        );
-
-                                        bool success = await orderProvider.updateAndRefreshOrder(order.orderId, newStatus);
-
-                                        if (success) {
-                                          bool willBeActive = !(newStatus.toLowerCase() == 'completed' ||
-                                              newStatus.toLowerCase() == 'delivered' ||
-                                              newStatus.toLowerCase() == 'blue' ||
-                                              newStatus.toLowerCase() == 'cancelled' ||
-                                              newStatus.toLowerCase() == 'red');
-
-                                          if (wasActive && !willBeActive) {
-                                            orderCountsProvider.decrementOrderCount('website');
-                                            print("WebsiteOrdersScreen: Decremented 'website' count for order ${order.orderId}");
-                                          } else if (!wasActive && willBeActive) {
-                                            orderCountsProvider.incrementOrderCount('website');
-                                            print("WebsiteOrdersScreen: Incremented 'website' count for order ${order.orderId}");
-                                          }
-
-                                          if (mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text('Order ${order.orderId} status updated to ${newStatus.toUpperCase()}.')),
-                                            );
-                                          }
-                                        } else {
-                                          if (mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text('Failed to update status for order ${order.orderId}. Please try again.')),
-                                            );
-                                          }
-                                        }
-                                      } else {
+                                      if (isFinalState) {
                                         debugPrint("WebsiteOrdersScreen: Order ID ${order.orderId} is already in a final state. No status change.");
                                         if (mounted) {
                                           ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('Order ${order.orderId} is already completed.')),
+                                            SnackBar(content: Text('Order ${order.orderId} is already ${order.statusLabel}.')),
+                                          );
+                                        }
+                                        return; // Do nothing if it's already in a final state
+                                      }
+
+                                      // Determine the next intended status using the intelligent function
+                                      final String nextIntendedStatus = _nextStatus(order); // Pass the full order object
+
+                                      // Specific rule for Website Delivery Orders:
+                                      // If it's a delivery order and currently 'ready', AND the _nextStatus function also says 'ready'
+                                      // (meaning it cannot progress further from this app), then show a message and stop.
+                                      final bool isWebsiteDeliveryOrder = order.orderType.toLowerCase() == 'delivery';
+
+                                      if (isWebsiteDeliveryOrder && order.status.toLowerCase() == 'ready' && nextIntendedStatus.toLowerCase() == 'ready') {
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                                content: Text("Website Delivery orders cannot be updated beyond 'Ready' from this screen.")),
+                                          );
+                                        }
+                                        return; // Prevent update
+                                      }
+
+                                      debugPrint("WebsiteOrdersScreen: Attempting to change status for order ID ${order.orderId} from ${order.status} to $nextIntendedStatus.");
+
+                                      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+                                      final orderCountsProvider = Provider.of<OrderCountsProvider>(context, listen: false);
+
+                                      // ScaffoldMessenger.of(context).showSnackBar(
+                                      //   SnackBar(
+                                      //     content: Text('Updating order ${order.orderId} to ${nextIntendedStatus.toUpperCase()}...'),
+                                      //     duration: const Duration(seconds: 1),
+                                      //   ),
+                                      // );
+
+                                      // Attempt to update the status via the provider
+                                      bool success = await orderProvider.updateAndRefreshOrder(order.orderId, nextIntendedStatus);
+
+                                      if (success) {
+                                        // The _onOrderProviderChange handler already calls _updateWebsiteOrderCountsInProvider(),
+                                        // so explicit decrement/increment here might be redundant or could lead to double-counting.
+                                        // It's safer to let the centralized _updateWebsiteOrderCountsInProvider handle counts
+                                        // after the orderProvider.updateAndRefreshOrder() fetches the latest data.
+                                        // Removed explicit increment/decrement here:
+                                        // if (wasActive && !willBeActive) {
+                                        //   orderCountsProvider.decrementOrderCount('website');
+                                        //   print("WebsiteOrdersScreen: Decremented 'website' count for order ${order.orderId}");
+                                        // } else if (!wasActive && willBeActive) {
+                                        //   orderCountsProvider.incrementOrderCount('website');
+                                        //   print("WebsiteOrdersScreen: Incremented 'website' count for order ${order.orderId}");
+                                        // }
+
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Order ${order.orderId} status updated to ${nextIntendedStatus.toUpperCase()}.')),
+                                          );
+                                        }
+                                      } else {
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Failed to update status for order ${order.orderId}. Please try again.')),
                                           );
                                         }
                                       }
@@ -607,15 +661,22 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                       alignment: Alignment.center,
                                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                                       decoration: BoxDecoration(
-                                        color: finalDisplayColor,
+                                        color: finalDisplayColor, // Use the determined color
                                         borderRadius: BorderRadius.circular(50),
                                       ),
                                       child: Text(
-                                        finalDisplayLabel,
-                                        style: const TextStyle(fontSize: 32, color: Colors.black),
+                                        // Dynamic text for the button
+                                        order.status.toLowerCase() == 'completed' || order.status.toLowerCase() == 'blue' || order.status.toLowerCase() == 'delivered'
+                                            ? 'Completed' // If it's already completed
+                                            : (order.orderType.toLowerCase() == 'delivery' && order.status.toLowerCase() == 'ready')
+                                            ? 'Ready' // Specific text for 'Ready' delivery orders
+                                            : (order.status.toLowerCase() == 'pending' || order.status.toLowerCase() == 'yellow' || order.status.toLowerCase() == 'accepted')
+                                            ? 'Pending'
+                                            : _nextStatus(order),
+                                        style: const TextStyle(fontSize: 25, color: Colors.black),
                                       ),
                                     ),
-                                  )
+                                  ),
                                 ],
                               ),
                             ),
@@ -627,12 +688,11 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                 ),
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20.0),
               child: const VerticalDivider(
-                width: 2.5,
-                thickness: 2.5,
+                width: 3,
+                thickness: 3,
                 color: Colors.grey,
               ),
             ),
@@ -653,40 +713,62 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                     : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Order Number and Header
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Order no. ${_selectedOrder!.orderId}',
-                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                        ),
-                      ],
+                   // Order Number and Header
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical:5),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _selectedOrder!.postalCode != null && _selectedOrder!.postalCode!.isNotEmpty
+                                    ? '${_selectedOrder!.postalCode} '
+                                    : '',
+                                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
+                              ),
+                              // Display Order Number
+                              Text(
+                                'Order no. ${_selectedOrder!.orderId}',
+                                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            _selectedOrder!.customerName,
+                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
+                          ),
+                          if (_selectedOrder!.streetAddress != null && _selectedOrder!.streetAddress!.isNotEmpty)
+                            Text(
+                              _selectedOrder!.streetAddress!,
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                          if (_selectedOrder!.city != null && _selectedOrder!.city!.isNotEmpty)
+                            Text(
+                              '${_selectedOrder!.city}, ${_selectedOrder!.postalCode ?? ''}',
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                          if (_selectedOrder!.phoneNumber != null && _selectedOrder!.phoneNumber!.isNotEmpty)
+                            Text(
+                              _selectedOrder!.phoneNumber!,
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 20),
+                    // --- ADD THE HORIZONTAL DIVIDER  ---
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 55.0),
+                      child: Divider(
+                        height: 0,
+                        thickness: 3,
+                        color: const Color(0xFFB2B2B2),
+                      ),
+                    ),
 
-                    // Customer Details
-                    Text(
-                      _selectedOrder!.customerName,
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    if (_selectedOrder!.phoneNumber != null && _selectedOrder!.phoneNumber!.isNotEmpty)
-                      Text(
-                        _selectedOrder!.phoneNumber!,
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    if (_selectedOrder!.streetAddress != null && _selectedOrder!.streetAddress!.isNotEmpty)
-                      Text(
-                        _selectedOrder!.streetAddress!,
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    if (_selectedOrder!.city != null && _selectedOrder!.city!.isNotEmpty)
-                      Text(
-                        '${_selectedOrder!.city}, ${_selectedOrder!.postalCode ?? ''}',
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    const SizedBox(height: 20),
-                    const Divider(),
+
                     const SizedBox(height: 10),
 
                     // Order Items List
@@ -768,10 +850,11 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                           ],
                                         ),
                                       ),
+                                      //Divider before image
                                       Container(
                                         width: 1.2,
-                                        height: 180,
-                                        color: Colors.black,
+                                        height: 110,
+                                        color: const Color(0xFFB2B2B2),
                                         margin: const EdgeInsets.symmetric(horizontal: 0),
                                       ),
                                       Expanded(
@@ -780,15 +863,15 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                           crossAxisAlignment: CrossAxisAlignment.center,
                                           children: [
                                             Container(
-                                              width: 110,
-                                              height: 110,
+                                              width: 90,
+                                              height: 64,
                                               decoration: BoxDecoration(
                                                 borderRadius: BorderRadius.circular(12),
                                               ),
                                               clipBehavior: Clip.hardEdge,
                                               child: Image.asset(
                                                 _getCategoryIcon(item.itemType),
-                                                fit: BoxFit.cover,
+                                                fit: BoxFit.contain,
                                               ),
                                             ),
                                             const SizedBox(height: 8),
@@ -796,7 +879,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                               baseItemName,
                                               textAlign: TextAlign.center,
                                               style: const TextStyle(
-                                                fontSize: 20,
+                                                fontSize: 16,
                                                 fontWeight: FontWeight.normal,
                                                 fontFamily: 'Poppins',
                                               ),
@@ -833,7 +916,16 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                       ),
                     ),
 
-                    const Divider(),
+                    // --- ADD THE HORIZONTAL DIVIDER  ---
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 55.0),
+                      child: Divider(
+                        height: 0,
+                        thickness: 3,
+                        color: const Color(0xFFB2B2B2),
+                      ),
+                    ),
+
                     const SizedBox(height: 10),
 
                     Column(
@@ -852,7 +944,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 15),
+                        const SizedBox(height: 13),
 
                         // Total and Change Due Box with Printer Icon
                         Row(
@@ -860,10 +952,10 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Container(
-                              padding: const EdgeInsets.all(15),
+                              padding: const EdgeInsets.all(35),
                               decoration: BoxDecoration(
-                                color: Colors.grey[200],
-                                borderRadius: BorderRadius.circular(10),
+                                color: Colors.black,
+                                borderRadius: BorderRadius.circular(15),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -872,13 +964,13 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       const Text(
-                                        'Total:',
-                                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                                        'Total',
+                                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
                                       ),
-                                      const SizedBox(width: 10),
+                                      const SizedBox(width: 110),
                                       Text(
-                                        '£${_selectedOrder!.orderTotalPrice.toStringAsFixed(2)}',
-                                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                                        '${_selectedOrder!.orderTotalPrice.toStringAsFixed(2)}',
+                                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white,),
                                       ),
                                     ],
                                   ),
@@ -888,13 +980,13 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
                                         const Text(
-                                          'Change Due:',
-                                          style: TextStyle(fontSize: 18),
+                                          'Change Due',
+                                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
                                         ),
-                                        const SizedBox(width: 10),
+                                        const SizedBox(width: 40),
                                         Text(
-                                          '£${_selectedOrder!.changeDue!.toStringAsFixed(2)}',
-                                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                          '${_selectedOrder!.changeDue!.toStringAsFixed(2)}',
+                                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold,  color: Colors.white),
                                         ),
                                       ],
                                     ),
@@ -914,12 +1006,26 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
                                     color: Colors.black,
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(15),
                                   ),
-                                  child: Image.asset(
-                                    'assets/images/printer.png',
-                                    width: 50,
-                                    height: 50,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Image.asset(
+                                        'assets/images/printer.png',
+                                        width: 58,
+                                        height: 58,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      const Text(
+                                        'Print Receipt',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -928,7 +1034,6 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
                   ],
                 ),
               ),

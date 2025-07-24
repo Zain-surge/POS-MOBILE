@@ -196,6 +196,7 @@ class OrderApiService {
         statusToSend = 'yellow';
         break;
       case 'ready':
+      case 'on its way':
       case 'preparing':
         statusToSend = 'green';
         break;

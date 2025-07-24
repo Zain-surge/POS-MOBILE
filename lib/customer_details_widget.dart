@@ -2,9 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:epos/models/order_models.dart';
-import 'package:epos/services/order_api_service.dart'; // Import your API service
-import 'package:epos/models/customer_search_model.dart'; // Import the new customer model
-// import 'package:phone_numbers_parser/phone_numbers_parser.dart'; // REMOVE THIS IMPORT if you haven't already
+import 'package:epos/services/order_api_service.dart';
+import 'package:epos/models/customer_search_model.dart';
+
 
 class CustomerDetailsWidget extends StatefulWidget {
   final double subtotal;

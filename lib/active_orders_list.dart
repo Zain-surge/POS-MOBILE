@@ -214,7 +214,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
   }
 
   Widget _buildOrderSummaryContent(Order order) {
-    final textStyle = const TextStyle(fontSize: 19, color: Colors.black, fontFamily: 'Poppins');
+    final textStyle = const TextStyle(fontSize: 17, color: Colors.black, fontFamily: 'Poppins');
 
     if (order.orderSource.toLowerCase() == 'epos') {
       final itemNames = order.items.map((item) => ' ${item.itemName}').join(', ');

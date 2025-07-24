@@ -10,6 +10,7 @@ import 'package:epos/dynamic_order_list_screen.dart';
 import 'package:epos/website_orders_screen.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../services/api_service.dart';
+import 'package:epos/sales_report_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final int initialBottomNavItemIndex;
@@ -1153,7 +1154,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildSalesReportItem() {
     return GestureDetector(
-      onTap: _showSalesReportDialog,
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const SalesReportScreen(
+              initialBottomNavItemIndex: 5,
+            ),
+          ),
+        );
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
         decoration: BoxDecoration(

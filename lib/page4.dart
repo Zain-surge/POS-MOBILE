@@ -11,7 +11,6 @@ import 'dart:ui';
 import 'package:epos/dynamic_order_list_screen.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:epos/services/thermal_printer_service.dart';
-import 'package:flutter/services.dart';
 import 'package:epos/customer_details_widget.dart';
 import 'package:epos/payment_details_widget.dart';
 import 'package:epos/settings_screen.dart';
@@ -39,18 +38,18 @@ class Page4 extends StatefulWidget {
 class _Page4State extends State<Page4> {
   int selectedCategory = 0;
   List<FoodItem> foodItems = [];
+  String _takeawaySubType = 'takeaway';
   bool isLoading = false;
-  List<CartItem> _cartItems = [];
+  final List<CartItem> _cartItems = [];
   bool _isModalOpen = false;
   FoodItem? _modalFoodItem;
   String _searchQuery = '';
-
+  bool _hasProcessedFirstStep = false;
+  String _selectedPaymentType = 'cash';
   late String selectedServiceImage;
   late String _actualOrderType;
 
   int _selectedBottomNavItem = 4; // This will determine the highlighted nav item
-
-  bool _showCustomerDetails = false;
   bool _showPayment = false;
   CustomerDetails? _customerDetails;
 
@@ -86,9 +85,9 @@ class _Page4State extends State<Page4> {
 
   final List<Category> categories = [
     Category(name: 'PIZZA', image: 'assets/images/PizzasS.png'),
-    Category(name: 'SHAWARMAS', image: 'assets/images/ShawarmaS.png'),
+    //Category(name: 'SHAWARMAS', image: 'assets/images/ShawarmaS.png'),
     Category(name: 'BURGERS', image: 'assets/images/BurgersS.png'),
-    Category(name: 'CALZONES', image: 'assets/images/CalzonesS.png'),
+    // Category(name: 'CALZONES', image: 'assets/images/CalzonesS.png'),
     Category(name: 'GARLIC BREAD', image: 'assets/images/GarlicBreadS.png'),
     Category(name: 'WRAPS', image: 'assets/images/WrapsS.png'),
     Category(name: 'KIDS MEAL', image: 'assets/images/KidsMealS.png'),
@@ -96,16 +95,25 @@ class _Page4State extends State<Page4> {
     Category(name: 'MILKSHAKE', image: 'assets/images/MilkshakeS.png'),
     Category(name: 'DRINKS', image: 'assets/images/DrinksS.png'),
     Category(name: 'DIPS', image: 'assets/images/DipsS.png'),
+    Category(name: 'CHICKEN', image: 'assets/images/Chicken.png'),
+    Category(name: 'DESSERTS', image: 'assets/images/Desserts.png'),
+    Category(name: 'KEBABS', image: 'assets/images/Kebabs.png'),
+    Category(name: 'WINGS', image: 'assets/images/Wings.png'),
   ];
 
-  // Helper to map order type to bottom nav item index
   int _getBottomNavItemIndexForOrderType(String orderType) {
     switch(orderType.toLowerCase()) {
-      case 'takeaway': return 0;
-      case 'dinein': return 1;
-      case 'delivery': return 2;
-      case 'website': return 3;
-      default: return 4; // Default to 'home' or a neutral state
+      case 'takeaway':
+      case 'collection': // Both takeaway and collection map to index 0
+        return 0;
+      case 'dinein':
+        return 1;
+      case 'delivery':
+        return 2;
+      case 'website':
+        return 3;
+      default:
+        return 4; // Default to 'home' or a neutral state
     }
   }
 
@@ -138,6 +146,13 @@ class _Page4State extends State<Page4> {
     selectedServiceImage = widget.initialSelectedServiceImage ?? 'TakeAway.png';
     _actualOrderType = widget.selectedOrderType;
 
+    // Initialize takeaway sub-type based on the selected order type
+    if (_actualOrderType.toLowerCase() == 'collection') {
+      _takeawaySubType = 'collection';
+    } else if (_actualOrderType.toLowerCase() == 'takeaway') {
+      _takeawaySubType = 'takeaway';
+    }
+
     _selectedBottomNavItem = _getBottomNavItemIndexForOrderType(_actualOrderType);
 
     foodItems = widget.foodItems;
@@ -157,6 +172,7 @@ class _Page4State extends State<Page4> {
       _updateScrollButtonVisibility();
     });
   }
+
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return; // Important: Check if the widget is still mounted
@@ -226,6 +242,22 @@ class _Page4State extends State<Page4> {
   }
 
   void _addToCart(CartItem newItem) {
+    // Check if customer details are required but not provided
+    bool requiresCustomerDetails = (_actualOrderType.toLowerCase() == 'delivery' ||
+        _actualOrderType.toLowerCase() == 'takeaway' ||
+        _actualOrderType.toLowerCase() == 'collection');
+
+    if (requiresCustomerDetails && _customerDetails == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please enter customer details first before adding items to cart.'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return; // Exit without adding to cart
+    }
+
     setState(() {
       int existingIndex = _cartItems.indexWhere((item) {
         bool sameFoodItem = item.foodItem.id == newItem.foodItem.id;
@@ -410,7 +442,7 @@ class _Page4State extends State<Page4> {
                         child: const VerticalDivider(
                           width: 2.5,
                           thickness: 2.5,
-                          color: const Color(0xFFB2B2B2),
+                          color: Color(0xFFB2B2B2),
                         ),
                       ),
 
@@ -464,6 +496,7 @@ class _Page4State extends State<Page4> {
   }
 
 
+
   String _getCategoryIcon(String categoryName) {
     switch (categoryName.toUpperCase()) {
       case 'PIZZA':
@@ -474,11 +507,11 @@ class _Page4State extends State<Page4> {
         return 'assets/images/BurgersS.png';
       case 'CALZONES':
         return 'assets/images/CalzonesS.png';
-      case 'GARLIC BREAD':
+      case 'GARLICBREAD':
         return 'assets/images/GarlicBreadS.png';
       case 'WRAPS':
         return 'assets/images/WrapsS.png';
-      case 'KIDS MEAL':
+      case 'KIDSMEAL':
         return 'assets/images/KidsMealS.png';
       case 'SIDES':
         return 'assets/images/SidesS.png';
@@ -488,10 +521,19 @@ class _Page4State extends State<Page4> {
         return 'assets/images/MilkshakeS.png';
       case 'DIPS':
         return 'assets/images/DipsS.png';
+      case 'DESSERTS':
+        return 'assets/images/Desserts.png';
+      case 'CHICKEN':
+        return 'assets/images/Chicken.png';
+      case 'KEBABS':
+        return 'assets/images/Kebabs.png';
+      case 'WINGS':
+        return 'assets/images/Wings.png';
       default:
         return 'assets/images/default.png';
     }
   }
+
 
 
   // Updated _buildCartSummary method with MouseRegion for hand cursor
@@ -510,14 +552,13 @@ class _Page4State extends State<Page4> {
           ],
         ),
         const SizedBox(height: 20),
-
         // --- ADD THE HORIZONTAL DIVIDER  ---
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 60.0),
           child: Divider(
             height: 0,
-            thickness: 2.5,
-            color: Colors.grey,
+            thickness: 3,
+            color: const Color(0xFFB2B2B2),
           ),
         ),
 
@@ -525,12 +566,21 @@ class _Page4State extends State<Page4> {
 
         Expanded(
           child: _cartItems.isEmpty
-              ? const Center(
-            child: Text(
-              'Cart is empty. Add items to see summary.',
-              style: TextStyle(
-                  fontFamily: 'Poppins', fontSize: 16, color: const Color(0xFFB2B2B2),),
-            ),
+              ? Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+
+              if (_customerDetails != null && (_actualOrderType.toLowerCase() == 'delivery' || _actualOrderType.toLowerCase() == 'takeaway'))
+                const SizedBox(height: 16),
+              const Text(
+                'Cart is empty. Add items to see summary.',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  color: Color(0xFFB2B2B2),
+                ),
+              ),
+            ],
           )
               : ListView.builder(
             itemCount: _cartItems.length,
@@ -631,7 +681,7 @@ class _Page4State extends State<Page4> {
                                             ),
                                           );
                                         },
-                                        child: Container(
+                                        child: SizedBox(
                                           width: 35,
                                           height: 35,
                                           child: Image.asset(
@@ -653,7 +703,7 @@ class _Page4State extends State<Page4> {
                                             }
                                           });
                                         },
-                                        child: Container(
+                                        child: SizedBox(
                                           width: 35,
                                           height: 35,
                                           child: const Icon(
@@ -674,7 +724,7 @@ class _Page4State extends State<Page4> {
                                             item.incrementQuantity();
                                           });
                                         },
-                                        child: Container(
+                                        child: SizedBox(
                                           width: 35,
                                           height: 35,
                                           child: const Icon(
@@ -686,7 +736,6 @@ class _Page4State extends State<Page4> {
                                       ),
                                     ),
                                     const SizedBox(width: 15),
-
                                   ],
                                 ),
                               ],
@@ -695,7 +744,7 @@ class _Page4State extends State<Page4> {
 
                           Container(
                             width: 1.2,
-                            height: 180,
+                            height: 130,
                             color: Colors.black,
                             margin: const EdgeInsets.symmetric(horizontal: 10),
                           ),
@@ -707,14 +756,14 @@ class _Page4State extends State<Page4> {
                               children: [
                                 Container(
                                   width: 110,
-                                  height: 110,
+                                  height: 80,
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   clipBehavior: Clip.hardEdge,
                                   child: Image.asset(
                                     _getCategoryIcon(item.foodItem.category),
-                                    fit: BoxFit.cover,
+                                    fit: BoxFit.contain,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
@@ -778,7 +827,14 @@ class _Page4State extends State<Page4> {
           ),
         ),
 
-        const Divider(thickness: 2, color: Color(0xFFCB6CE6)),
+        // --- ADD THE HORIZONTAL DIVIDER  ---
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 60.0),
+          child: Divider(
+            height: 0,
+            color: const Color(0xFFB2B2B2),
+          ),
+        ),
 
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -793,20 +849,59 @@ class _Page4State extends State<Page4> {
 
         Row(
           children: [
+            // Cash Button
             Expanded(
               child: GestureDetector(
-                onTap: () => _proceedToNextStep(),
+                onTap: () {
+                  setState(() {
+                    _selectedPaymentType = 'cash';
+                  });
+                  _proceedToNextStep();
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
-                    color: Colors.black,
+                    color: _selectedPaymentType == 'cash' ? Colors.black : Colors.grey[300],
                     borderRadius: BorderRadius.circular(8),
+                    border: _selectedPaymentType == 'cash' ? null : Border.all(color: Colors.grey),
                   ),
                   child: Center(
                     child: Text(
-                      'Proceed to Charge £${subtotal.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      'Cash',
+                      style: TextStyle(
+                        color: _selectedPaymentType == 'cash' ? Colors.white : Colors.black,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+
+            // Card Button
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedPaymentType = 'card';
+                  });
+                  _proceedToNextStep();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: _selectedPaymentType == 'card' ? Colors.black : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(8),
+                    border: _selectedPaymentType == 'card' ? null : Border.all(color: Colors.grey),
+                  ),
+                  child: Center(
+                    child: Text(
+                      'Card',
+                      style: TextStyle(
+                        color: _selectedPaymentType == 'card' ? Colors.white : Colors.black,
                         fontWeight: FontWeight.bold,
                         fontSize: 20,
                         fontFamily: 'Poppins',
@@ -822,40 +917,6 @@ class _Page4State extends State<Page4> {
         ),
       ],
     );
-  }
-
-  // New method to handle the proceed action
-  void _proceedToNextStep() {
-    if (_cartItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add items to cart first!'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // Check which service is selected and proceed accordingly
-    if (_actualOrderType.toLowerCase() == 'delivery') {
-      // For delivery, create default customer details and go directly to payment
-      _customerDetails = CustomerDetails(
-        name: 'Delivery Customer',
-        phoneNumber: 'To be collected',
-        email: 'delivery@example.com',
-        streetAddress: 'To be collected',
-        city: 'To be collected',
-        postalCode: 'To be collected',
-      );
-      setState(() {
-        _showPayment = true;
-      });
-    } else {
-      // For takeaway/dinein, go to customer details first
-      setState(() {
-        _showCustomerDetails = true;
-      });
-    }
   }
 
   Future<void> _handleOrderCompletion({
@@ -888,14 +949,14 @@ class _Page4State extends State<Page4> {
         "phone_number": customerDetails.phoneNumber,
         "street_address": customerDetails.streetAddress ?? "N/A",
         "city": customerDetails.city ?? "N/A",
-        "county": customerDetails.city ?? "N/A", // Still using city for county if not explicitly provided
+        "county": customerDetails.city ?? "N/A",
         "postal_code": customerDetails.postalCode ?? "N/A",
       },
       "transaction_id": id1,
-      "payment_type": paymentDetails.paymentType,
+      "payment_type": _selectedPaymentType,
       "amount_received": finalAmountReceived,
       "discount_percentage": finalDiscountPercentage,
-      "order_type": _actualOrderType,
+      "order_type": _actualOrderType.toLowerCase() == 'collection' ? 'takeaway' : _actualOrderType,
       "total_price": finalTotalCharge, // Use totalCharge from paymentDetails
       "extra_notes": _cartItems.map((item) => item.comment ?? '').join(', ').trim(),
       "status": "yellow",
@@ -972,7 +1033,7 @@ class _Page4State extends State<Page4> {
   Future<void> _placeOrderDirectly(Map<String, dynamic> orderData) async {
     if (!mounted) return;
 
-    final orderCountsProvider = Provider.of<OrderCountsProvider>(context, listen: false); // Access provider
+    final orderCountsProvider = Provider.of<OrderCountsProvider>(context, listen: false);
 
     try {
       // Place the order in background
@@ -982,7 +1043,6 @@ class _Page4State extends State<Page4> {
 
       // Update provider after successful order
       orderCountsProvider.incrementOrderCount(_actualOrderType);
-
 
       // Show success message
       if (mounted) {
@@ -996,9 +1056,9 @@ class _Page4State extends State<Page4> {
         // Reset UI state to go back to cart widget
         setState(() {
           _cartItems.clear();
-          _showCustomerDetails = false;
           _showPayment = false;
           _customerDetails = null;
+          _hasProcessedFirstStep = false; // Reset the flag after successful order
         });
       }
     } catch (e) {
@@ -1015,32 +1075,62 @@ class _Page4State extends State<Page4> {
     }
   }
 
-  Widget _buildRightPanelContent() {
-    // If showing customer details
-    if (_showCustomerDetails) {
-      return CustomerDetailsWidget(
-        subtotal: _calculateTotalPrice(),
-        orderType: _actualOrderType,
-        onCustomerDetailsSubmitted: (CustomerDetails details) {
-          setState(() {
-            _customerDetails = details;
-            _showCustomerDetails = false;
-            _showPayment = true;
-          });
-        },
-        onBack: () {
-          setState(() {
-            _showCustomerDetails = false;
-          });
-        },
+// Update the _proceedToNextStep method
+  void _proceedToNextStep() {
+    if (_cartItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add items to cart first!'),
+          backgroundColor: Colors.red,
+        ),
       );
+      return;
     }
 
+    // Set the flag when proceeding to next step
+    setState(() {
+      _hasProcessedFirstStep = true;
+    });
+
+    // For dine-in orders, skip customer details and go directly to payment
+    if (_actualOrderType.toLowerCase() == 'dinein') {
+      setState(() {
+        // Create default customer details for dine-in
+        _customerDetails = CustomerDetails(
+          name: 'Dine-in Customer',
+          phoneNumber: 'N/A',
+          email: null,
+          streetAddress: null,
+          city: null,
+          postalCode: null,
+        );
+        _showPayment = true;
+      });
+      return;
+    }
+
+    // For delivery and takeaway, check if customer details are already saved
+    if (_customerDetails != null) {
+      // Customer details already exist, go directly to payment
+      setState(() {
+        _showPayment = true;
+      });
+    } else {
+      // No customer details yet, go to customer details first
+      setState(() {
+      });
+    }
+  }
+
+// Update the _buildRightPanelContent method
+  Widget _buildRightPanelContent() {
+    // If showing customer details
     // If showing payment
     if (_showPayment) {
-      return PaymentWidget( // Assuming PaymentWidget is your new widget for payment
+      return PaymentWidget(
         subtotal: _calculateTotalPrice(),
         customerDetails: _customerDetails!,
+        paymentType: _selectedPaymentType,
         onPaymentConfirmed: (PaymentDetails paymentDetails) {
           _handleOrderCompletion(
             customerDetails: _customerDetails!,
@@ -1048,24 +1138,101 @@ class _Page4State extends State<Page4> {
           );
         },
         onBack: () {
+          // This allows service switching again
           setState(() {
             _showPayment = false;
-            // Go back to appropriate screen based on service type
-            if (_actualOrderType.toLowerCase() != 'delivery') {
-              _showCustomerDetails = true;
-            }
+            _hasProcessedFirstStep = false;
+            // Keep _customerDetails for future use
           });
         },
       );
     }
 
-    // Default: show cart summary
+    // If showing payment
+    if (_showPayment) {
+      return PaymentWidget(
+        subtotal: _calculateTotalPrice(),
+        customerDetails: _customerDetails!,
+        paymentType: _selectedPaymentType,
+        onPaymentConfirmed: (PaymentDetails paymentDetails) {
+          _handleOrderCompletion(
+            customerDetails: _customerDetails!,
+            paymentDetails: paymentDetails,
+          );
+        },
+        onBack: () {
+          // FIXED: Don't reset everything, just go back to cart view
+          // Keep customer details and processed state
+          setState(() {
+            _showPayment = false;
+            // Don't reset _hasProcessedFirstStep or _customerDetails
+          });
+        },
+      );
+    }
+
+    // Only show Customer Details Widget for empty cart when:
+    // 1. Cart is empty AND
+    // 2. Order type is delivery/takeaway (NOT dine-in) AND
+    // 3. Customer details haven't been entered yet AND
+    // 4. We haven't processed the first step (meaning we're in initial state)
+    if (_cartItems.isEmpty &&
+        (_actualOrderType.toLowerCase() == 'delivery' ||
+            _actualOrderType.toLowerCase() == 'takeaway' ||
+            _actualOrderType.toLowerCase() == 'collection') &&
+        _customerDetails == null &&
+        !_hasProcessedFirstStep) {
+      return Column(
+        children: [
+          // Keep the service selection at the top
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildServiceHighlight('takeaway', 'TakeAway.png'),
+              _buildServiceHighlight('dinein', 'DineIn.png'),
+              _buildServiceHighlight('delivery', 'Delivery.png'),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Horizontal divider
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 60.0),
+            child: Divider(
+              height: 0,
+              thickness: 2.5,
+              color: Colors.grey,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Customer Details Widget
+          Expanded(
+            child: CustomerDetailsWidget(
+              subtotal: 0.0,
+              orderType: _actualOrderType,
+              onCustomerDetailsSubmitted: (CustomerDetails details) {
+                setState(() {
+                  _customerDetails = details;
+                  _hasProcessedFirstStep = true; // Set flag here too
+                });
+              },
+              onBack: () {
+                // For empty cart, there's nowhere to go back to, so maybe do nothing
+                // or you could implement some other logic here
+              },
+            ),
+          ),
+        ],
+      );
+    }
     return _buildCartSummary();
   }
 
-
   Widget _buildServiceHighlight(String type, String imageName) {
-    bool isSelected = _actualOrderType.toLowerCase() == type.toLowerCase();
+    bool isSelected = _actualOrderType.toLowerCase() == type.toLowerCase() ||
+        (type.toLowerCase() == 'takeaway' && _actualOrderType.toLowerCase() == 'collection');
 
     String displayImage = isSelected && !imageName.contains('white.png')
         ? imageName.replaceAll('.png', 'white.png')
@@ -1073,32 +1240,140 @@ class _Page4State extends State<Page4> {
 
     String baseImageNameForSizing = imageName.replaceAll('white.png', '.png');
 
-    return InkWell(
-      onTap: () {
-        setState(() { // Use setState to trigger a rebuild with the new selection
-          _actualOrderType = type; // Update the selected order type
-          _selectedBottomNavItem = _getBottomNavItemIndexForOrderType(type); // Update the highlighted nav item
-        });
-      },
-      child: Container(
-        width: 80,
-        height: 80,
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.black : Colors.transparent,
-          borderRadius: BorderRadius.circular(50),
-        ),
-        child: Center(
-          child: Image.asset(
-            'assets/images/$displayImage',
-            width: baseImageNameForSizing == 'Delivery.png' ? 80 : 50,
-            height: baseImageNameForSizing == 'Delivery.png' ? 80 : 50,
-            fit: BoxFit.contain,
-            color: isSelected ? Colors.white : const Color(0xFF616161),
+    return Column(
+      children: [
+        InkWell(
+          onTap: _hasProcessedFirstStep
+              ? null
+              : () {
+            // Check if switching from dine-in to delivery/takeaway
+            bool switchingFromDineInToOthers = (_actualOrderType.toLowerCase() == 'dinein' &&
+                (type.toLowerCase() == 'delivery' || type.toLowerCase() == 'takeaway'));
+
+            // Check if switching from delivery/takeaway to dine-in
+            bool switchingToDineIn = ((_actualOrderType.toLowerCase() == 'delivery' ||
+                _actualOrderType.toLowerCase() == 'takeaway' ||
+                _actualOrderType.toLowerCase() == 'collection') &&
+                type.toLowerCase() == 'dinein');
+
+            setState(() {
+              if (type.toLowerCase() == 'takeaway') {
+                _actualOrderType = 'takeaway'; // Default to takeaway when clicking the takeaway icon
+                _takeawaySubType = 'takeaway';
+              } else {
+                _actualOrderType = type;
+                _takeawaySubType = type.toLowerCase() == 'collection' ? 'collection' : 'takeaway';
+              }
+              _selectedBottomNavItem = _getBottomNavItemIndexForOrderType(type);
+
+              // Reset cart and customer details when switching between different service types
+              if (switchingFromDineInToOthers || switchingToDineIn) {
+                _cartItems.clear(); // Clear the cart
+                _customerDetails = null; // Reset customer details
+                _hasProcessedFirstStep = false; // Reset the processed flag
+                _showPayment = false; // Hide payment if showing
+              }
+            });
+          },
+          child: Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: isSelected ? Colors.black : Colors.transparent,
+              borderRadius: BorderRadius.circular(50),
+              // Add visual indication that switching is disabled
+              border: _hasProcessedFirstStep && !isSelected
+                  ? Border.all(color: Colors.grey.withOpacity(0.5), width: 1)
+                  : null,
+            ),
+            child: Center(
+              child: Image.asset(
+                'assets/images/$displayImage',
+                width: baseImageNameForSizing == 'Delivery.png' ? 80 : 50,
+                height: baseImageNameForSizing == 'Delivery.png' ? 80 : 50,
+                fit: BoxFit.contain,
+                color: _hasProcessedFirstStep && !isSelected
+                    ? Colors.grey.withOpacity(0.5) // Grey out disabled options
+                    : (isSelected ? Colors.white : const Color(0xFF616161)),
+              ),
+            ),
           ),
+        ),
+
+        // Show radio buttons when takeaway or collection is selected
+        if (type.toLowerCase() == 'takeaway' &&
+            (isSelected || _actualOrderType.toLowerCase() == 'collection') &&
+            !_hasProcessedFirstStep)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Column(
+              children: [
+                _buildRadioOption('takeaway', 'Takeaway'),
+                const SizedBox(height: 4),
+                _buildRadioOption('collection', 'Collection'),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRadioOption(String value, String label) {
+    bool isSelected = _takeawaySubType == value;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _takeawaySubType = value;
+            // Update the actual order type to reflect the selection
+            _actualOrderType = value;
+          });
+        },
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? const Color(0xFFCB6CE6) : Colors.grey,
+                  width: 2,
+                ),
+                color: Colors.white,
+              ),
+              child: isSelected
+                  ? Center(
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFFCB6CE6),
+                  ),
+                ),
+              )
+                  : null,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontFamily: 'Poppins',
+                color: isSelected ? const Color(0xFFCB6CE6) : Colors.grey[600],
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+
 
 
   Widget _buildSearchBar() {
@@ -1148,7 +1423,7 @@ class _Page4State extends State<Page4> {
                 onTap: () {
                   Navigator.pop(context);
                 },
-                child: Container(
+                child: SizedBox(
                   width: 45,
                   height: 45,
                   child: Image.asset(
@@ -1408,6 +1683,22 @@ class _Page4State extends State<Page4> {
         return GestureDetector(
           onTap: () {
             if (!_isEditMode) {
+              // Check if customer details are required but not provided
+              bool requiresCustomerDetails = (_actualOrderType.toLowerCase() == 'delivery' ||
+                  _actualOrderType.toLowerCase() == 'takeaway' ||
+                  _actualOrderType.toLowerCase() == 'collection');
+
+              if (requiresCustomerDetails && _customerDetails == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Please enter customer details first before selecting items.'),
+                    backgroundColor: Colors.red,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+                return; // Exit without opening modal
+              }
+
               setState(() {
                 _isModalOpen = true;
                 _modalFoodItem = item;
@@ -1528,101 +1819,101 @@ class _Page4State extends State<Page4> {
         color: Colors.white,
         border: Border(
           top: BorderSide(
-            color: const Color(0xFFB2B2B2),
+            color: Color(0xFFB2B2B2),
             width: 3,
           ),
         ),
       ),
-    child: Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 45.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _navItem(
-            'TakeAway.png',
-            0,
-            notification: _getNotificationCount(0, activeOrdersCount), // Use provider data
-            color: const Color(0xFFFFE26B), // Yellow notification for take away
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) =>
-                  const DynamicOrderListScreen(
-                    orderType: 'takeaway',
-                    initialBottomNavItemIndex: 0,
-                  ),
-                ),
-              );
-            },
-          ),
-
-          _navItem(
-            'DineIn.png',
-            1,
-            notification: _getNotificationCount(1, activeOrdersCount), // Use provider data
-            color: const Color(0xFFFFE26B), // Yellow notification for dine in
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) =>
-                  const DynamicOrderListScreen(
-                    orderType: 'dinein',
-                    initialBottomNavItemIndex: 1,
-                  ),
-                ),
-              );
-            },
-          ),
-
-          _navItem(
-            'Delivery.png',
-            2,
-            notification: _getNotificationCount(2, activeOrdersCount), // Use provider data
-            color: const Color(0xFFFFE26B), // Yellow notification for delivery
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) =>
-                  const DynamicOrderListScreen(
-                    orderType: 'delivery',
-                    initialBottomNavItemIndex: 2,
-                  ),
-                ),
-              );
-            },
-          ),
-
-          _navItem(
-            'web.png',
-            3,
-            notification: _getNotificationCount(3, activeOrdersCount), // Use provider data
-            color: const Color(0xFFFFE26B), // Yellow notification for website
-            onTap: () {
-              Navigator.push(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 45.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _navItem(
+              'TakeAway.png',
+              0,
+              notification: _getNotificationCount(0, activeOrdersCount), // Use provider data
+              color: const Color(0xFFFFE26B), // Yellow notification for take away
+              onTap: () {
+                Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const WebsiteOrdersScreen(initialBottomNavItemIndex: 3)));
-            },
-          ),
-          _navItem('home.png', 4, onTap: () {
-            Navigator.pop(context);
-          }),
+                  MaterialPageRoute(
+                    builder: (context) =>
+                    const DynamicOrderListScreen(
+                      orderType: 'takeaway',
+                      initialBottomNavItemIndex: 0,
+                    ),
+                  ),
+                );
+              },
+            ),
 
-          _navItem('More.png', 5, onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const SettingsScreen(
-                  initialBottomNavItemIndex: 5,
+            _navItem(
+              'DineIn.png',
+              1,
+              notification: _getNotificationCount(1, activeOrdersCount), // Use provider data
+              color: const Color(0xFFFFE26B), // Yellow notification for dine in
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                    const DynamicOrderListScreen(
+                      orderType: 'dinein',
+                      initialBottomNavItemIndex: 1,
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            _navItem(
+              'Delivery.png',
+              2,
+              notification: _getNotificationCount(2, activeOrdersCount), // Use provider data
+              color: const Color(0xFFFFE26B), // Yellow notification for delivery
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                    const DynamicOrderListScreen(
+                      orderType: 'delivery',
+                      initialBottomNavItemIndex: 2,
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            _navItem(
+              'web.png',
+              3,
+              notification: _getNotificationCount(3, activeOrdersCount), // Use provider data
+              color: const Color(0xFFFFE26B), // Yellow notification for website
+              onTap: () {
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const WebsiteOrdersScreen(initialBottomNavItemIndex: 3)));
+              },
+            ),
+            _navItem('home.png', 4, onTap: () {
+              Navigator.pop(context);
+            }),
+
+            _navItem('More.png', 5, onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(
+                    initialBottomNavItemIndex: 5,
+                  ),
                 ),
-              ),
-            );
-          }),
-        ],
+              );
+            }),
+          ],
+        ),
       ),
-    ),
     );
   }
 
@@ -1687,7 +1978,7 @@ class _Page4State extends State<Page4> {
                 height: index == 2 ? 92 : 60,
                 color: isSelected ? Colors.white : const Color(0xFF616161),
               ),
-              if (notification != null && notification!.isNotEmpty)
+              if (notification != null && notification.isNotEmpty)
                 Positioned(
                   top: 0,
                   right: 0,
@@ -1702,7 +1993,7 @@ class _Page4State extends State<Page4> {
                       minHeight: 20,
                     ),
                     child: Text(
-                      notification!,
+                      notification,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,

@@ -8,6 +8,7 @@ import 'package:epos/services/thermal_printer_service.dart';
 class PaymentWidget extends StatefulWidget {
   final double subtotal;
   final CustomerDetails customerDetails;
+  final String paymentType; // Add payment type parameter
   final Function(PaymentDetails) onPaymentConfirmed;
   final VoidCallback? onBack;
 
@@ -15,6 +16,7 @@ class PaymentWidget extends StatefulWidget {
     super.key,
     required this.subtotal,
     required this.customerDetails,
+    required this.paymentType, // Add payment type parameter
     required this.onPaymentConfirmed,
     this.onBack,
   });
@@ -24,30 +26,93 @@ class PaymentWidget extends StatefulWidget {
 }
 
 class _PaymentWidgetState extends State<PaymentWidget> {
-  String _selectedPaymentType = 'Cash';
-  final TextEditingController _amountReceivedController = TextEditingController();
   final TextEditingController _discountPercentageController = TextEditingController();
+  final TextEditingController _amountPaidController = TextEditingController();
+  final FocusNode _amountPaidFocusNode = FocusNode();
   bool _isPrinterConnected = false;
   bool _isCheckingPrinter = false;
-  double _discountedTotal = 0.0; // This is actually your final total charge
-  double _change = 0.0;
+  bool _isCustomAmountMode = false;
+  double _discountedTotal = 0.0;
+  double _selectedAmount = 0.0;
+  double _changeDue = 0.0;
+  List<double> _presetAmounts = [];
 
   @override
   void initState() {
     super.initState();
-    _discountedTotal = widget.subtotal; // Initial value before discount
-    _amountReceivedController.addListener(_calculateChange);
+    _discountedTotal = widget.subtotal;
+    _selectedAmount = widget.subtotal;
     _discountPercentageController.addListener(_calculateDiscountedTotal);
+    _amountPaidController.addListener(_onAmountPaidChanged);
+    _calculatePresetAmounts();
     _checkPrinterStatus();
   }
 
   @override
   void dispose() {
-    _amountReceivedController.removeListener(_calculateChange);
     _discountPercentageController.removeListener(_calculateDiscountedTotal);
-    _amountReceivedController.dispose();
+    _amountPaidController.removeListener(_onAmountPaidChanged);
     _discountPercentageController.dispose();
+    _amountPaidController.dispose();
+    _amountPaidFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onAmountPaidChanged() {
+    if (_isCustomAmountMode) {
+      String text = _amountPaidController.text;
+      double amount = double.tryParse(text) ?? 0.0;
+      if (amount == 0.0 && text.isNotEmpty) {
+        amount = _discountedTotal;
+      }
+      setState(() {
+        _selectedAmount = amount;
+      });
+      _calculateChange();
+    }
+  }
+
+  void _calculatePresetAmounts() {
+    double exactAmount = _discountedTotal;
+
+    // Find the next round number (5, 10, 15, 20, etc.)
+    double nextRoundFive = (exactAmount / 5).ceil() * 5.0;
+    double nextRoundTen = (exactAmount / 10).ceil() * 10.0;
+
+    // Ensure we have three different amounts
+    List<double> amounts = [exactAmount];
+
+    // Add next round five if it's different from exact amount
+    if (nextRoundFive > exactAmount && !amounts.contains(nextRoundFive)) {
+      amounts.add(nextRoundFive);
+    }
+
+    // Add next round ten if it's different and we need more options
+    if (nextRoundTen > exactAmount && !amounts.contains(nextRoundTen) && amounts.length < 3) {
+      amounts.add(nextRoundTen);
+    }
+
+    // If we still need more options, add incremental amounts
+    while (amounts.length < 3) {
+      double lastAmount = amounts.last;
+      double nextAmount;
+
+      if (lastAmount < 10) {
+        nextAmount = lastAmount + 1.0; // Add £1 for amounts under £10
+      } else if (lastAmount < 20) {
+        nextAmount = lastAmount + 2.0; // Add £2 for amounts £10-£20
+      } else {
+        nextAmount = lastAmount + 5.0; // Add £5 for amounts over £20
+      }
+
+      if (!amounts.contains(nextAmount)) {
+        amounts.add(nextAmount);
+      } else {
+        break;
+      }
+    }
+
+    _presetAmounts = amounts.take(3).toList();
   }
 
   Future<void> _checkPrinterStatus() async {
@@ -84,21 +149,43 @@ class _PaymentWidgetState extends State<PaymentWidget> {
       if (discount < 0) discount = 0.0;
       if (discount > 100) discount = 100.0;
 
-      // Calculate the total after discount
       _discountedTotal = widget.subtotal * (1 - (discount / 100));
-      // Re-calculate change as _discountedTotal (which is now totalCharge) has changed
+      _calculatePresetAmounts();
+
+      // Reset selected amount to exact amount after discount change
+      _selectedAmount = _discountedTotal;
+      _isCustomAmountMode = false;
+      _amountPaidController.clear();
       _calculateChange();
     });
   }
 
   void _calculateChange() {
     setState(() {
-      if (_selectedPaymentType == 'Cash') {
-        double received = double.tryParse(_amountReceivedController.text) ?? 0.0;
-        // Calculate change based on received amount and the discounted total (which is the final charge)
-        _change = (received - _discountedTotal).clamp(0.0, double.infinity);
-      } else {
-        _change = 0.0; // No change for card payments
+      _changeDue = (_selectedAmount - _discountedTotal).clamp(0.0, double.infinity);
+    });
+  }
+
+  void _selectAmount(double amount) {
+    setState(() {
+      _selectedAmount = amount;
+      _isCustomAmountMode = false;
+      _amountPaidController.clear();
+      _calculateChange();
+    });
+  }
+
+  void _enableCustomAmountMode() {
+    setState(() {
+      _isCustomAmountMode = true;
+      _amountPaidController.text = _discountedTotal.toStringAsFixed(2);
+      _selectedAmount = _discountedTotal;
+      _calculateChange();
+    });
+    // Focus on the amount paid field after a short delay
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        _amountPaidFocusNode.requestFocus();
       }
     });
   }
@@ -107,6 +194,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        // Header
         Padding(
           padding: const EdgeInsets.only(top: 20.0, bottom: 16.0),
           child: Row(
@@ -148,10 +236,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
 
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 42.0),
-          child: Divider(
-            thickness: 2,
-            color: Colors.grey,
-          ),
+          child: Divider(thickness: 2, color: Colors.grey),
         ),
 
         const SizedBox(height: 16),
@@ -164,157 +249,6 @@ class _PaymentWidgetState extends State<PaymentWidget> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Payment Type Selection
-                  const Text(
-                    'Payment Type:',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Poppins',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: SizedBox( // Changed from Container to SizedBox for better ElevatedButton fit
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              setState(() {
-                                _selectedPaymentType = 'Cash';
-                                _calculateChange(); // Recalculate change for cash
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _selectedPaymentType == 'Cash'
-                                  ? Colors.black
-                                  : Colors.grey[200],
-                              foregroundColor: _selectedPaymentType == 'Cash'
-                                  ? Colors.white
-                                  : Colors.black87,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(
-                                  color: _selectedPaymentType == 'Cash'
-                                      ? Colors.black
-                                      : Colors.grey,
-                                  width: 2,
-                                ),
-                              ),
-                              elevation: _selectedPaymentType == 'Cash' ? 6 : 2,
-                            ),
-                            child: const Text(
-                              'Cash',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: SizedBox( // Changed from Container to SizedBox
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              setState(() {
-                                _selectedPaymentType = 'Card';
-                                _amountReceivedController.clear(); // Clear amount for card
-                                _change = 0.0; // Reset change for card
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _selectedPaymentType == 'Card'
-                                  ? Colors.black
-                                  : Colors.grey[200],
-                              foregroundColor: _selectedPaymentType == 'Card'
-                                  ? Colors.white
-                                  : Colors.black87,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(
-                                  color: _selectedPaymentType == 'Card'
-                                      ? Colors.black
-                                      : Colors.grey,
-                                  width: 2,
-                                ),
-                              ),
-                              elevation: _selectedPaymentType == 'Card' ? 6 : 2,
-                            ),
-                            child: const Text(
-                              'Card',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Amount Received (for Cash only)
-                  if (_selectedPaymentType == 'Cash') ...[
-                    TextFormField(
-                      controller: _amountReceivedController,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontFamily: 'Poppins',
-                      ),
-                      decoration: InputDecoration(
-                        labelText: 'Amount Received (£)',
-                        labelStyle: const TextStyle(
-                          fontSize: 14,
-                          fontFamily: 'Poppins',
-                          color: Colors.grey,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Colors.grey, width: 1),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFCB6CE6), width: 2.0),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      ),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}$'))],
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: _change < 0 ? Colors.red[50] : Colors.green[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _change < 0 ? Colors.red : Colors.green,
-                          width: 2,
-                        ),
-                      ),
-                      child: Text(
-                        'Change: £${_change.toStringAsFixed(2)}',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Poppins',
-                          color: _change < 0 ? Colors.red : Colors.green,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-
                   // Discount Field
                   TextFormField(
                     controller: _discountPercentageController,
@@ -346,7 +280,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
 
                   const SizedBox(height: 16),
 
-                  // Discounted Total (which is your final total charge)
+                  // Final Total
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -368,13 +302,84 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                   ),
 
                   const SizedBox(height: 24),
+
+                  // Preset Amount Buttons
+                  Column(
+                    children: [
+                      for (int i = 0; i < _presetAmounts.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12.0),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: () => _selectAmount(_presetAmounts[i]),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _selectedAmount == _presetAmounts[i] && !_isCustomAmountMode
+                                    ? Colors.black
+                                    : Colors.black,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                elevation: 2,
+                              ),
+                              child: Text(
+                                '£${_presetAmounts[i].toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      // Other button with keyboard icon
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _enableCustomAmountMode,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _isCustomAmountMode ? Colors.grey[800] : Colors.black,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            elevation: 2,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                'Other',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Icon(
+                                Icons.dialpad,
+                                size: 20,
+                                color: Colors.white,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
           ),
         ),
 
-        // Bottom section with divider, subtotal and confirm button
+        // Bottom section
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 42.0),
           child: Divider(thickness: 2, color: Colors.grey),
@@ -384,29 +389,106 @@ class _PaymentWidgetState extends State<PaymentWidget> {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Subtotal',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'Poppins',
+              // Payment summary - Show Amount Paid section when in custom mode or when there's change
+              if (_isCustomAmountMode || _selectedAmount >= _discountedTotal) ...[
+                // Amount Paid Row - Editable when in custom mode
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Amount Paid',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Poppins',
+                      ),
                     ),
-                  ),
-                  Text(
-                    '£${widget.subtotal.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontFamily: 'Poppins',
-                    ),
+                    if (_isCustomAmountMode)
+                      SizedBox(
+                        width: 120,
+                        child: TextFormField(
+                          controller: _amountPaidController,
+                          focusNode: _amountPaidFocusNode,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Poppins',
+                          ),
+                          decoration: const InputDecoration(
+                            prefixText: '£',
+                            border: UnderlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(vertical: 0),
+                            isDense: true,
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}$'))],
+                        ),
+                      )
+                    else
+                      Text(
+                        '£${_selectedAmount.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                  ],
+                ),
+                if (_selectedAmount > _discountedTotal) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Change Due',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Poppins',
+                          color: Colors.green,
+                        ),
+                      ),
+                      Text(
+                        '£${_changeDue.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Poppins',
+                          color: Colors.green,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
-              ),
-              const SizedBox(height: 8),
+              ] else ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Subtotal',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    Text(
+                      '£${widget.subtotal.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
 
-              // Confirm Payment Button
+              const SizedBox(height: 16),
+
+              // Charge Button
               Row(
                 children: [
                   Expanded(
@@ -414,12 +496,11 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                       cursor: SystemMouseCursors.click,
                       child: GestureDetector(
                         onTap: () async {
-                          // Basic validation for cash payment
-                          if (_selectedPaymentType == 'Cash' &&
-                              ((double.tryParse(_amountReceivedController.text) ?? 0.0) < _discountedTotal)) {
+                          // Validation
+                          if (_selectedAmount < _discountedTotal) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Amount received must be greater than or equal to the final total.'),
+                                content: Text('Amount must be greater than or equal to the final total.'),
                                 backgroundColor: Colors.red,
                               ),
                             );
@@ -428,15 +509,11 @@ class _PaymentWidgetState extends State<PaymentWidget> {
 
                           await _checkPrinterStatus();
 
-                          // Create PaymentDetails with the calculated totalCharge and changeDue
                           final paymentDetails = PaymentDetails(
-                            paymentType: _selectedPaymentType,
-                            amountReceived: _selectedPaymentType == 'Cash'
-                                ? (double.tryParse(_amountReceivedController.text) ?? 0.0)
-                                : null,
+                            paymentType: widget.paymentType, // Use the passed payment type
+                            amountReceived: _selectedAmount,
                             discountPercentage: double.tryParse(_discountPercentageController.text) ?? 0.0,
-                            totalCharge: _discountedTotal, // Pass the calculated final total
-                            // changeDue is now calculated internally by PaymentDetails constructor
+                            totalCharge: _discountedTotal,
                           );
                           widget.onPaymentConfirmed(paymentDetails);
                         },
@@ -451,7 +528,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
-                                  'Confirm Payment £${_discountedTotal.toStringAsFixed(2)}',
+                                  'Charge    £${_discountedTotal.toStringAsFixed(2)}',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
@@ -472,7 +549,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                                 else
                                   Icon(
                                     Icons.print,
-                                    color: _isPrinterConnected ? Colors.green : Colors.red, // Always green if connected, red if not.
+                                    color: _isPrinterConnected ? Colors.green : Colors.red,
                                     size: 24,
                                   ),
                               ],
@@ -483,18 +560,14 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // This second button seems to be a duplicate functionality-wise for "Confirm Payment"
-                  // You might want to review if it's intended to be a different action or just a visual element.
-                  // For now, I'm keeping its original onTap logic identical.
                   MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: GestureDetector(
                       onTap: () async {
-                        if (_selectedPaymentType == 'Cash' &&
-                            ((double.tryParse(_amountReceivedController.text) ?? 0.0) < _discountedTotal)) {
+                        if (_selectedAmount < _discountedTotal) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Amount received must be greater than or equal to the final total.'),
+                              content: Text('Amount must be greater than or equal to the final total.'),
                               backgroundColor: Colors.red,
                             ),
                           );
@@ -504,13 +577,10 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                         await _checkPrinterStatus();
 
                         final paymentDetails = PaymentDetails(
-                          paymentType: _selectedPaymentType,
-                          amountReceived: _selectedPaymentType == 'Cash'
-                              ? (double.tryParse(_amountReceivedController.text) ?? 0.0)
-                              : null,
+                          paymentType: widget.paymentType, // Use the passed payment type
+                          amountReceived: _selectedAmount,
                           discountPercentage: double.tryParse(_discountPercentageController.text) ?? 0.0,
-                          totalCharge: _discountedTotal, // Pass the calculated final total
-                          // changeDue is now calculated internally by PaymentDetails constructor
+                          totalCharge: _discountedTotal,
                         );
                         widget.onPaymentConfirmed(paymentDetails);
                       },

@@ -272,8 +272,6 @@ class Order {
       case 'completed':
       case 'delivered': // If backend sends 'delivered' but you want to show 'Completed'
         return 'Completed';
-      case 'red':
-        return 'Delivered';
       default:
         return 'Unknown';
     }

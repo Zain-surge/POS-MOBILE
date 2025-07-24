@@ -15,6 +15,13 @@ extension HexColor on Color {
   }
 }
 
+extension StringCasingExtension on String {
+  String capitalize() {
+    if (isEmpty) return '';
+    return '${this[0].toUpperCase()}${substring(1).toLowerCase()}';
+  }
+}
+
 class FoodItemDetailsModal extends StatefulWidget {
   final FoodItem foodItem;
   final Function(CartItem) onAddToCart;
@@ -44,6 +51,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
 
   bool _makeItAMeal = false;
   String? _selectedDrink;
+  String? _selectedDrinkFlavor; // NEW: For drink flavors
 
   bool _noSalad = false;
   bool _noSauce = false;
@@ -63,8 +71,15 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   final List<String> _allCrusts = ["Normal", "Stuffed"];
   final List<String> _allSauces = ["Mayo", "Ketchup", "Chilli sauce", "Sweet chilli", "Garlic Sauce"];
   final List<String> _allDrinks = [
-    "Coca Cola", "7Up", "Diet Coca Cola", "Fanta", "Pepsi", "Sprite",
+    "Coca Cola", "7Up", "Diet Coca Cola", "Fanta", "Pepsi", "Sprite", "J20 GLASS BOTTLE",
   ];
+
+  // NEW: Define flavors for specific drinks (key is the drink name)
+  final Map<String, List<String>> _drinkFlavors = {
+    "J20 GLASS BOTTLE": ["Apple & Raspberry", "Apple & Mango", "Orange & Passion Fruit"],
+    // Add other drinks with flavors here if you want them to have the "size-like" flavor selection
+    // e.g., "Fancy Soda": ["Lime", "Cherry", "Cola"],
+  };
 
   bool _isRemoveButtonPressed = false;
   bool _isAddButtonPressed = false;
@@ -78,7 +93,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       _selectedSize = null;
     }
 
-    if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads') {
+    if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'GarlicBread') { // Corrected category name
       _selectedBase = "Tomato";
       _selectedCrust = "Normal";
 
@@ -92,6 +107,15 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         _selectedToppings.addAll(widget.foodItem.defaultCheese!);
       }
     }
+
+    // Initialize _selectedDrink for drinks that have flavors displayed like sizes
+    // This is crucial for the _drinkFlavors.containsKey check in _addToCart
+    if (_drinkFlavors.containsKey(widget.foodItem.name)) {
+      _selectedDrink = widget.foodItem.name; // Pre-select the drink itself
+      _selectedDrinkFlavor = null; // Ensure no flavor is selected by default
+    }
+
+
     _calculatedPricePerUnit = _calculatePricePerUnit();
   }
 
@@ -102,6 +126,11 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   }
 
   double _calculatePricePerUnit() {
+    debugPrint("--- Calculating Price for ${widget.foodItem.name} ---");
+    debugPrint("Food Item Price Map: ${widget.foodItem.price}");
+    debugPrint("Selected Size: $_selectedSize");
+    debugPrint("Price keys length: ${widget.foodItem.price.keys.length}");
+
     double price = 0.0;
 
     if (_selectedSize != null && widget.foodItem.price.containsKey(_selectedSize)) {
@@ -112,7 +141,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       return 0.0;
     }
 
-    if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads') {
+    if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'GarlicBread') { // Corrected category name
       for (var topping in _selectedToppings) {
         if (!((widget.foodItem.defaultToppings ?? []).contains(topping) || (widget.foodItem.defaultCheese ?? []).contains(topping))) {
           if (_selectedSize == "10 inch") {
@@ -152,7 +181,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           price += 0.5;
         }
       }
-    } else if (widget.foodItem.category == 'Shawarmas' || widget.foodItem.category == 'Wraps' || widget.foodItem.category == 'Burgers') {
+    } else if (['Shawarma', 'Wraps', 'Burgers'].contains(widget.foodItem.category)) {
       if (_makeItAMeal) {
         price += 1.9;
       }
@@ -172,9 +201,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   }
 
   void _addToCart() {
-
+    // Check for size selection
     if (widget.foodItem.price.keys.length > 1 && _selectedSize == null) {
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select a size before adding to cart.'),
@@ -182,8 +210,24 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           backgroundColor: Colors.grey,
         ),
       );
+      return;
+    }
+
+    // NEW/UPDATED: Check for drink flavor selection if a flavor-enabled drink is chosen
+    // This now applies directly if the foodItem itself has flavors defined in _drinkFlavors,
+    // or if it's part of a "make it a meal" selection.
+    if ((_drinkFlavors.containsKey(widget.foodItem.name) && _selectedDrinkFlavor == null) ||
+        (_makeItAMeal && _selectedDrink != null && _drinkFlavors.containsKey(_selectedDrink!) && _selectedDrinkFlavor == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a flavor for your drink.'),
+          duration: Duration(seconds: 2),
+          backgroundColor: Colors.grey,
+        ),
+      );
       return; // Stop the function execution
     }
+
 
     final List<String> selectedOptions = [];
 
@@ -195,28 +239,44 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       selectedOptions.add('Toppings: ${_selectedToppings.join(', ')}');
     }
 
-    if (_selectedBase != null && (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads')) {
+    if (_selectedBase != null && (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'GarlicBread')) {
       selectedOptions.add('Base: $_selectedBase');
     }
 
-    if (_selectedCrust != null && (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads')) {
+    if (_selectedCrust != null && (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'GarlicBread')) {
       selectedOptions.add('Crust: $_selectedCrust');
     }
 
-    if (_selectedSauces.isNotEmpty && (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads')) {
+    if (_selectedSauces.isNotEmpty && (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'GarlicBread')) {
       selectedOptions.add('Sauce Dips: ${_selectedSauces.join(', ')}');
     }
 
+    // Handle "Make it a Meal" drinks
     if (_makeItAMeal) {
       selectedOptions.add('Make it a meal');
       if (_selectedDrink != null) {
-        selectedOptions.add('Drink: $_selectedDrink');
+        String drinkOption = 'Drink: $_selectedDrink';
+        if (_selectedDrinkFlavor != null) {
+          drinkOption += ' ($_selectedDrinkFlavor)';
+        }
+        selectedOptions.add(drinkOption);
       }
     }
+    // Handle standalone drinks with flavors (like J20 Glass Bottle)
+    else if (_drinkFlavors.containsKey(widget.foodItem.name) && _selectedDrinkFlavor != null) {
+      // For standalone drinks, the foodItem.name is the drink itself.
+      // We just need to add the flavor to the options.
+      selectedOptions.add('Flavor: $_selectedDrinkFlavor');
+    }
 
-    if (widget.foodItem.category == 'Burgers') {
+
+    if (['Shawarma', 'Wraps', 'Burgers'].contains(widget.foodItem.category)) {
       if (_noSalad) selectedOptions.add('No Salad');
       if (_noSauce) selectedOptions.add('No Sauce');
+    }
+
+    if (widget.foodItem.category == 'Milkshake') {
+      if (_noCream) selectedOptions.add('No Cream');
     }
 
     final String userComment = _reviewNotesController.text.trim();
@@ -255,12 +315,21 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     if (widget.foodItem.price.keys.length > 1 && _selectedSize == null) {
       canAddToCart = false;
     }
+    // NEW/UPDATED: Add condition for drink flavor selection
+    if ((_drinkFlavors.containsKey(widget.foodItem.name) && _selectedDrinkFlavor == null) || // For standalone drinks
+        (_makeItAMeal && _selectedDrink != null && _drinkFlavors.containsKey(_selectedDrink!) && _selectedDrinkFlavor == null)) { // For meal deal drinks
+      canAddToCart = false;
+    }
 
-    return GestureDetector( // <--- HERE! Wrap the entire modal content
+
+    debugPrint("Item Category: ${widget.foodItem.category}");
+    debugPrint("Price keys length for rendering: ${widget.foodItem.price.keys.length}");
+    debugPrint("Should render size selection? ${(['Pizza', 'GarlicBread', 'Shawarma', 'Wraps', 'Burgers'].contains(widget.foodItem.category) && widget.foodItem.price.keys.length > 1)}");
+
+    return GestureDetector(
       onTap: () {
-        // This will unfocus the TextField and close the keyboard
         FocusScope.of(context).unfocus();
-        print('Modal background tapped, keyboard dismissed (if open).'); // For debugging
+        print('Modal background tapped, keyboard dismissed (if open).');
       },
       child: Container(
         width: modalWidth,
@@ -328,114 +397,34 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // --- Quantity Control ---
+                    // If it's a size-based item, show size + quantity. Else, just quantity.
                     ...(
-                        (['Pizza', 'Garlic Breads', 'Shawarmas', 'Wraps', 'Burgers'].contains(widget.foodItem.category) &&
+                        (['Pizza', 'GarlicBread', 'Shawarma', 'Wraps', 'Burgers'].contains(widget.foodItem.category) &&
                             widget.foodItem.price.keys.length > 1)
-                            ? [_buildSizeWithQuantitySection()] // If true, return a list with this widget
-                            : [_buildQuantityControlOnly()]      // If false, return a list with this widget
+                            ? [_buildSizeWithQuantitySection()]
+                            : [_buildQuantityControlOnly()]
                     ),
 
+                    // --- Flavor Selection for Specific Drinks (e.g., J20 Glass Bottle) ---
+                    // This is the new section for specific drink flavors
+                    if (_drinkFlavors.containsKey(widget.foodItem.name)) ...[
+                      _buildFlavorSelectionSection(widget.foodItem.name),
+                    ],
 
-                    if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'Garlic Breads') ...[
+                    // --- Pizza/Garlic Bread Options ---
+                    if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'GarlicBread') ...[
                       _buildOptionCategoryButtons(),
                       _buildSelectedOptionDisplay(),
-                    ] else if (widget.foodItem.category == 'Shawarmas' || widget.foodItem.category == 'Wraps' || widget.foodItem.category == 'Burgers') ...[
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Checkbox(
-                                value: _makeItAMeal,
-                                onChanged: (bool? value) {
-                                  setState(() {
-                                    _makeItAMeal = value!;
-                                    _selectedDrink = null;
-                                    _updatePriceDisplay();
-                                  });
-                                },
-                                activeColor: const Color(0xFFCB6CE6),
-                              ),
-                              const Text('Make it a meal ', style: TextStyle(fontSize: 16, color: Colors.white)),
-                            ],
-                          ),
-                          if (_makeItAMeal) ...[
-                            const SizedBox(height: 8),
-                            const Text('Select Drink', style: TextStyle(fontWeight: FontWeight.normal, fontSize: 16, color: Colors.white)),
-                            DropdownButtonFormField<String>(
-                              value: _selectedDrink,
-                              hint: const Text('Select a drink', style: TextStyle(color: Colors.white)),
-                              items: _allDrinks.map((drink) {
-                                return DropdownMenuItem(
-                                  value: drink,
-                                  child: Text(drink),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                  _selectedDrink = value;
-                                });
-                              },
-                              decoration: InputDecoration(
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Colors.grey[100]!),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Colors.grey[100]!),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(color: Color(0xFFCB6CE6)),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 20),
-                        ],
-                      ),
                     ],
 
-                    if (widget.foodItem.category == 'Burgers') ...[
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Checkbox(
-                                value: _noSalad,
-                                onChanged: (bool? value) {
-                                  setState(() {
-                                    _noSalad = value!;
-                                  });
-                                },
-                                activeColor: const Color(0xFFCB6CE6),
-                              ),
-                              const Text('No Salad', style: TextStyle(fontSize: 16, color: Colors.white)),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              Checkbox(
-                                value: _noSauce,
-                                onChanged: (bool? value) {
-                                  setState(() {
-                                    _noSauce = value!;
-                                  });
-                                },
-                                activeColor: const Color(0xFFCB6CE6),
-                              ),
-                              const Text('No Sauce', style: TextStyle(fontSize: 16, color: Colors.white)),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-                      ),
+                    // --- Make it a Meal / No Salad / No Sauce for Shawarma, Wraps, Burgers ---
+                    // Note: This section will still handle drink selection if 'Make it a Meal' is chosen for these items.
+                    if (['Shawarma', 'Wraps', 'Burgers'].contains(widget.foodItem.category)) ...[
+                      _buildMealAndExclusionOptions(),
                     ],
 
+                    // --- Milkshake Options ---
                     if (widget.foodItem.category == 'Milkshake') ...[
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -449,7 +438,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                                     _noCream = value!;
                                   });
                                 },
-                                activeColor: const Color(0xFFCB6CE6),
+                                activeColor: Colors.grey[100],
                               ),
                               const Text('No Cream', style: TextStyle(fontSize: 16, color: Colors.white)),
                             ],
@@ -459,6 +448,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       ),
                     ],
 
+                    // --- Review Notes ---
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -678,6 +668,13 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   }
 
   Widget _buildSizeWithQuantitySection() {
+    final Map<String, Map<String, String>> categorySizeDisplayMap = {
+      'Shawarma': { // Corrected category name
+        'naan': 'Large',
+        'pitta': 'Small',
+      },
+    };
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -709,13 +706,27 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                   return Wrap(
                     spacing: 10,
                     runSpacing: 10,
-                    children: widget.foodItem.price.keys.map((size) {
-                      final bool isActive = _selectedSize == size;
-                      final String displaySize = size.split(' ')[0];
+                    children: widget.foodItem.price.keys.map((sizeKeyFromData) {
+                      final bool isActive = _selectedSize == sizeKeyFromData;
+
+                      String displayedText;
+                      // Get the specific map for the current food item's category
+                      final Map<String, String>? currentCategoryMap =
+                      categorySizeDisplayMap[widget.foodItem.category];
+
+                      if (currentCategoryMap != null && currentCategoryMap.containsKey(sizeKeyFromData)) {
+                        displayedText = currentCategoryMap[sizeKeyFromData]!;
+                      } else if (sizeKeyFromData.toLowerCase().contains('inch')) {
+                        displayedText = '${sizeKeyFromData.split(' ')[0]}"';
+                      } else {
+                        displayedText = sizeKeyFromData.capitalize();
+                      }
+
+
                       return InkWell(
                         onTap: () {
                           setState(() {
-                            _selectedSize = size;
+                            _selectedSize = sizeKeyFromData;
                             _updatePriceDisplay();
                           });
                         },
@@ -730,7 +741,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                             ),
                           ),
                           child: Text(
-                            '$displaySize"',
+                            displayedText,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 18,
@@ -851,6 +862,201 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     );
   }
 
+  // NEW WIDGET: _buildFlavorSelectionSection for specific drinks like J20 Glass Bottle
+  Widget _buildFlavorSelectionSection(String drinkName) {
+    final List<String> flavors = _drinkFlavors[drinkName] ?? [];
+
+    if (flavors.isEmpty) {
+      return const SizedBox.shrink(); // Don't show if no flavors are defined
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Select Flavor',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: flavors.map((flavor) {
+            final bool isActive = _selectedDrinkFlavor == flavor;
+            return InkWell(
+              onTap: () {
+                setState(() {
+                  _selectedDrinkFlavor = flavor;
+                  // No price update needed here unless flavors change the price.
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                decoration: BoxDecoration(
+                  color: isActive ? Colors.grey : Colors.black,
+                  borderRadius: BorderRadius.circular(40),
+                  border: Border.all(
+                    color: isActive ? Colors.white : Colors.grey,
+                    width: 2,
+                  ),
+                ),
+                child: Text(
+                  flavor,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+
+  // UPDATED WIDGET: _buildMealAndExclusionOptions (Only for 'Make it a meal' for non-drink items)
+  Widget _buildMealAndExclusionOptions() {
+    final bool isShawarmaOrWrap = ['Shawarma', 'Wraps'].contains(widget.foodItem.category); // Corrected category name
+    final bool isBurger = widget.foodItem.category == 'Burgers';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 10),
+        // "Make it a meal" checkbox - only show for Shawarma, Wraps, Burgers
+        Row(
+          children: [
+            Checkbox(
+              value: _makeItAMeal,
+              onChanged: (bool? value) {
+                setState(() {
+                  _makeItAMeal = value!;
+                  _selectedDrink = null; // Reset drink and flavor when 'Make it a Meal' changes
+                  _selectedDrinkFlavor = null;
+                  _updatePriceDisplay();
+                });
+              },
+              activeColor: Colors.grey[100],
+            ),
+            const Text('Make it a meal ', style: TextStyle(fontSize: 20, color: Colors.white)),
+          ],
+        ),
+
+        // Drink selection dropdown for "Make it a meal"
+        if (_makeItAMeal) ...[
+          const SizedBox(height: 8),
+          const Text('Select Drink', style: TextStyle(fontWeight: FontWeight.normal, fontSize: 18, color: Colors.white)),
+          DropdownButtonFormField<String>(
+            value: _selectedDrink,
+            hint: const Text('Select a drink', style: TextStyle(color: Colors.white)),
+            items: _allDrinks.map((drink) {
+              return DropdownMenuItem(
+                value: drink,
+                child: Text(drink),
+              );
+            }).toList(),
+            onChanged: (value) {
+              setState(() {
+                _selectedDrink = value;
+                _selectedDrinkFlavor = null; // Reset flavor when drink changes
+              });
+            },
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey[100]!),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey[100]!),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey[100]!),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            ),
+          ),
+          // Conditional display for drink flavors if the selected meal drink has flavors
+          if (_selectedDrink != null && _drinkFlavors.containsKey(_selectedDrink!)) ...[
+            const SizedBox(height: 8),
+            const Text('Select Flavor', style: TextStyle(fontWeight: FontWeight.normal, fontSize: 16, color: Colors.white)),
+            DropdownButtonFormField<String>(
+              value: _selectedDrinkFlavor,
+              hint: const Text('Select a flavor', style: TextStyle(color: Colors.white)),
+              items: _drinkFlavors[_selectedDrink!]!.map((flavor) {
+                return DropdownMenuItem(
+                  value: flavor,
+                  child: Text(flavor),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedDrinkFlavor = value;
+                });
+              },
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey[100]!),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey[100]!),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey[100]!),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              ),
+            ),
+          ],
+        ],
+        // No Salad / No Sauce checkboxes - only show for Shawarma, Wraps, and Burgers
+        if (isShawarmaOrWrap || isBurger) ...[
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Checkbox(
+                value: _noSalad,
+                onChanged: (bool? value) {
+                  setState(() {
+                    _noSalad = value!;
+                  });
+                },
+                  activeColor: Colors.grey[100],
+              ),
+              const Text('No Salad', style: TextStyle(fontSize: 20, color: Colors.white)),
+            ],
+          ),
+          Row(
+            children: [
+              Checkbox(
+                value: _noSauce,
+                onChanged: (bool? value) {
+                  setState(() {
+                    _noSauce = value!;
+                  });
+                },
+                activeColor: Colors.grey[100],
+              ),
+              const Text('No Sauce', style: TextStyle(fontSize: 20, color: Colors.white)),
+            ],
+          ),
+        ],
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+  //helper
   Widget _buildOptionCategoryButtons() {
     final List<String> categories = ['Toppings', 'Base', 'Crust', 'Sauce Dips'];
 
