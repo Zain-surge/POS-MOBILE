@@ -340,6 +340,7 @@ class _Page4State extends State<Page4> {
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
     // Consume the OrderCountsProvider here
@@ -569,7 +570,6 @@ class _Page4State extends State<Page4> {
               ? Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-
               if (_customerDetails != null && (_actualOrderType.toLowerCase() == 'delivery' || _actualOrderType.toLowerCase() == 'takeaway'))
                 const SizedBox(height: 16),
               const Text(
@@ -587,22 +587,41 @@ class _Page4State extends State<Page4> {
             itemBuilder: (context, index) {
               final item = _cartItems[index];
 
+              // UPDATED: Extract all options using the same logic
               String? selectedSize;
               String? selectedCrust;
+              String? selectedBase;
+              List<String> toppings = [];
+              List<String> sauceDips = [];
+              bool hasOptions = false;
 
-              // Null-safe access to selectedOptions
+              // Enhanced option extraction from selectedOptions
               if (item.selectedOptions?.isNotEmpty ?? false) {
+                hasOptions = true;
                 for (var option in item.selectedOptions!) {
-                  if (option.toLowerCase().contains('size')) {
+                  String lowerOption = option.toLowerCase();
+
+                  if (lowerOption.contains('size:')) {
                     selectedSize = option.split(':').last.trim();
-                  } else if (option.toLowerCase().contains('crust')) {
+                  } else if (lowerOption.contains('crust:')) {
                     selectedCrust = option.split(':').last.trim();
+                  } else if (lowerOption.contains('base:')) {
+                    selectedBase = option.split(':').last.trim();
+                  } else if (lowerOption.contains('toppings:') || lowerOption.contains('extra toppings:')) {
+                    String toppingsValue = option.split(':').last.trim();
+                    if (toppingsValue.isNotEmpty) {
+                      List<String> toppingsList = toppingsValue.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+                      toppings.addAll(toppingsList);
+                    }
+                  } else if (lowerOption.contains('sauce dips:')) {
+                    String dipsValue = option.split(':').last.trim();
+                    if (dipsValue.isNotEmpty) {
+                      List<String> dipsList = dipsValue.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+                      sauceDips.addAll(dipsList);
+                    }
                   }
                 }
               }
-
-              String sizeDisplay = selectedSize != null ? 'Size: $selectedSize' : 'Size: Default';
-              String? crustDisplay = selectedCrust != null ? 'Crust: $selectedCrust' : null;
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12.0),
@@ -614,11 +633,11 @@ class _Page4State extends State<Page4> {
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Expanded(
-                            flex: 5,
+                            flex: 6,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Quantity and Size/Crust section (original layout)
+                                // Quantity and Options section
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -626,33 +645,91 @@ class _Page4State extends State<Page4> {
                                       '${item.quantity}',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 30,
+                                        fontSize: 28,
                                         fontFamily: 'Poppins',
                                       ),
                                     ),
-                                    Padding(
-                                      padding: const EdgeInsets.only(left: 30),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            sizeDisplay,
-                                            style: const TextStyle(
-                                              fontSize: 20,
-                                              fontFamily: 'Poppins',
-                                              color: Colors.black,
-                                            ),
-                                          ),
-                                          if (crustDisplay != null)
-                                            Text(
-                                              crustDisplay,
-                                              style: const TextStyle(
-                                                fontSize: 20,
-                                                fontFamily: 'Poppins',
-                                                color: Colors.black,
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(left: 30, right: 10),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            // If no options, show simple text or item name
+                                            if (!hasOptions)
+                                              Text(
+                                                item.foodItem.name,
+                                                style: const TextStyle(
+                                                  fontSize: 18,
+                                                  fontFamily: 'Poppins',
+                                                  color: Colors.grey,
+                                                  fontStyle: FontStyle.italic,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
                                               ),
-                                            ),
-                                        ],
+
+                                            // If options exist, display them individually
+                                            if (hasOptions) ...[
+                                              // Display Size
+                                              if (selectedSize != null)
+                                                Text(
+                                                  'Size: $selectedSize',
+                                                  style: const TextStyle(
+                                                    fontSize: 15,
+                                                    fontFamily: 'Poppins',
+                                                    color: Colors.black,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              // Display Crust
+                                              if (selectedCrust != null)
+                                                Text(
+                                                  'Crust: $selectedCrust',
+                                                  style: const TextStyle(
+                                                    fontSize: 15,
+                                                    fontFamily: 'Poppins',
+                                                    color: Colors.black,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              // Display Base
+                                              if (selectedBase != null)
+                                                Text(
+                                                  'Base: $selectedBase',
+                                                  style: const TextStyle(
+                                                    fontSize: 15,
+                                                    fontFamily: 'Poppins',
+                                                    color: Colors.black,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              // Display Toppings
+                                              if (toppings.isNotEmpty)
+                                                Text(
+                                                  'Toppings: ${toppings.join(', ')}',
+                                                  style: const TextStyle(
+                                                    fontSize: 15,
+                                                    fontFamily: 'Poppins',
+                                                    color: Colors.black,
+                                                  ),
+                                                  maxLines: 3,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              // Display Sauce Dips
+                                              if (sauceDips.isNotEmpty)
+                                                Text(
+                                                  'Sauce Dips: ${sauceDips.join(', ')}',
+                                                  style: const TextStyle(
+                                                    fontSize: 15,
+                                                    fontFamily: 'Poppins',
+                                                    color: Colors.black,
+                                                  ),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                            ],
+                                          ],
+                                        ),
                                       ),
                                     )
                                   ],
@@ -660,7 +737,7 @@ class _Page4State extends State<Page4> {
 
                                 const SizedBox(height: 40),
 
-                                // Quantity controls row (below size/crust) with MouseRegion
+                                // Quantity controls row (below options) with MouseRegion
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.start,
                                   children: [
@@ -741,16 +818,15 @@ class _Page4State extends State<Page4> {
                               ],
                             ),
                           ),
-
                           Container(
                             width: 1.2,
                             height: 130,
-                            color: Colors.black,
-                            margin: const EdgeInsets.symmetric(horizontal: 10),
+                            color: const Color(0xFFB2B2B2),
+                            margin: const EdgeInsets.symmetric(horizontal: 0),
                           ),
 
                           Expanded(
-                            flex: 4,
+                            flex: 3,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
@@ -958,7 +1034,7 @@ class _Page4State extends State<Page4> {
       "discount_percentage": finalDiscountPercentage,
       "order_type": _actualOrderType.toLowerCase() == 'collection' ? 'takeaway' : _actualOrderType,
       "total_price": finalTotalCharge, // Use totalCharge from paymentDetails
-      "extra_notes": _cartItems.map((item) => item.comment ?? '').join(', ').trim(),
+      "order_extra_notes": _cartItems.map((item) => item.comment ?? '').join(', ').trim(),
       "status": "yellow",
       "change_due": finalChangeDue, // Use changeDue from paymentDetails
       //'driver_id': null, // ADDED: driver_id with null value
@@ -968,6 +1044,8 @@ class _Page4State extends State<Page4> {
         if (cartItem.selectedOptions != null && cartItem.selectedOptions!.isNotEmpty) {
           description += ' (${cartItem.selectedOptions!.join(', ')})';
         }
+
+
         double itemTotalPrice = double.parse((cartItem.pricePerUnit * cartItem.quantity).toStringAsFixed(2));
         return {
           "item_id": cartItem.foodItem.id,

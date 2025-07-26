@@ -97,7 +97,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
 
     // Logic for Website Orders
     if (source == 'website') {
-      shouldDisplay = (status == 'accepted');
+      shouldDisplay = (status == 'accepted' || status == 'green');
       if (!shouldDisplay) {
         print('ActiveOrdersList: Skipping website order ${order.orderId} (Source: $source, Status: $status) - not accepted.');
       }
@@ -174,7 +174,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
         bool shouldDisplay = false;
 
         if (source == 'website') {
-          shouldDisplay = (status == 'accepted');
+          shouldDisplay = (status == 'accepted' || status == 'green');
         } else if (source == 'epos') {
           shouldDisplay = !['completed', 'delivered', 'declined', 'blue'].contains(status);
         }
@@ -294,6 +294,177 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
     }
   }
 
+  // Updated method - Shows ALL options including "default" and "normal"
+  Map<String, dynamic> _extractAllOptionsFromDescription(String description) {
+    Map<String, dynamic> options = {
+      'size': null,
+      'crust': null,
+      'base': null,
+      'toppings': <String>[],
+      'sauceDips': <String>[],
+      'baseItemName': description,
+      'hasOptions': false,
+    };
+
+    List<String> optionsList = [];
+    String baseItemName = description;
+    bool foundOptions = false;
+
+    // Check if it's parentheses format (EPOS): "Item Name (Size: Large, Crust: Thin)"
+    final optionMatch = RegExp(r'\((.*?)\)').firstMatch(description);
+    if (optionMatch != null && optionMatch.group(1) != null) {
+      // EPOS format with parentheses
+      String optionsString = optionMatch.group(1)!;
+      baseItemName = description.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
+      foundOptions = true;
+      optionsList = _smartSplitOptions(optionsString);
+
+    } else if (description.contains('\n') || description.contains(':')) {
+      // Website format with newlines: "Size: 7 inch\nBase: Tomato\nCrust: Normal"
+      List<String> lines = description.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+
+      // Check if any line contains options (has colons)
+      List<String> optionLines = lines.where((line) => line.contains(':')).toList();
+
+      if (optionLines.isNotEmpty) {
+        foundOptions = true;
+        optionsList = optionLines;
+
+        // Find the first line that doesn't contain a colon (likely the item name)
+        String foundItemName = '';
+        for (var line in lines) {
+          if (!line.contains(':')) {
+            foundItemName = line;
+            break;
+          }
+        }
+
+        if (foundItemName.isNotEmpty) {
+          baseItemName = foundItemName;
+        } else {
+          baseItemName = description;
+        }
+      }
+    }
+
+    // If no options found, it's a simple description like "Chocolate Milkshake"
+    if (!foundOptions) {
+      options['baseItemName'] = description;
+      options['hasOptions'] = false;
+      return options;
+    }
+
+    // Process the options - REMOVED all "default" and "normal" checks
+    options['hasOptions'] = true;
+    for (var option in optionsList) {
+      String lowerOption = option.toLowerCase();
+
+      if (lowerOption.startsWith('size:')) {
+        String sizeValue = option.substring('size:'.length).trim();
+        // REMOVED: if (sizeValue.toLowerCase() != 'default' && sizeValue.toLowerCase() != 'normal')
+        if (sizeValue.isNotEmpty) { // Only check if not empty
+          options['size'] = sizeValue;
+        }
+      } else if (lowerOption.startsWith('crust:')) {
+        String crustValue = option.substring('crust:'.length).trim();
+        // REMOVED: if (crustValue.toLowerCase() != 'default' && crustValue.toLowerCase() != 'normal')
+        if (crustValue.isNotEmpty) { // Only check if not empty
+          options['crust'] = crustValue;
+        }
+      } else if (lowerOption.startsWith('base:')) {
+        String baseValue = option.substring('base:'.length).trim();
+        // REMOVED: if (baseValue.toLowerCase() != 'default' && baseValue.toLowerCase() != 'normal')
+        if (baseValue.isNotEmpty) { // Only check if not empty
+          // Handle multiple bases separated by comma: "Tomato,Garlic"
+          if (baseValue.contains(',')) {
+            List<String> baseList = baseValue.split(',').map((b) => b.trim()).toList();
+            options['base'] = baseList.join(', '); // Join with proper spacing
+          } else {
+            options['base'] = baseValue;
+          }
+        }
+      } else if (lowerOption.startsWith('toppings:') || lowerOption.startsWith('extra toppings:')) {
+        // Handle both "Toppings:" and "Extra Toppings:"
+        String prefix = lowerOption.startsWith('extra toppings:') ? 'extra toppings:' : 'toppings:';
+        String toppingsValue = option.substring(prefix.length).trim();
+
+        // REMOVED: if (toppingsValue.toLowerCase() != 'default')
+        if (toppingsValue.isNotEmpty) { // Only check if not empty
+          // Split toppings by comma and clean them
+          List<String> toppingsList = toppingsValue.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+          options['toppings'] = toppingsList;
+        }
+      } else if (lowerOption.startsWith('sauce dips:')) {
+        String sauceDipsValue = option.substring('sauce dips:'.length).trim();
+        // REMOVED: if (sauceDipsValue.toLowerCase() != 'default')
+        if (sauceDipsValue.isNotEmpty) { // Only check if not empty
+          // Split sauce dips by comma and clean them
+          List<String> sauceDipsList = sauceDipsValue.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+          options['sauceDips'] = sauceDipsList;
+        }
+      }
+    }
+
+    options['baseItemName'] = baseItemName;
+    return options;
+  }
+
+// Helper method for EPOS format (parentheses) smart splitting
+  List<String> _smartSplitOptions(String optionsString) {
+    List<String> result = [];
+    String current = '';
+    bool inToppings = false;
+    bool inSauceDips = false;
+
+    List<String> parts = optionsString.split(', ');
+
+    for (int i = 0; i < parts.length; i++) {
+      String part = parts[i];
+      String lowerPart = part.toLowerCase();
+
+      if (lowerPart.startsWith('toppings:') || lowerPart.startsWith('extra toppings:')) {
+        if (current.isNotEmpty) {
+          result.add(current.trim());
+          current = '';
+        }
+        current = part;
+        inToppings = true;
+        inSauceDips = false;
+      } else if (lowerPart.startsWith('sauce dips:')) {
+        if (current.isNotEmpty) {
+          result.add(current.trim());
+          current = '';
+        }
+        current = part;
+        inToppings = false;
+        inSauceDips = true;
+      } else if (lowerPart.startsWith('size:') || lowerPart.startsWith('base:') || lowerPart.startsWith('crust:')) {
+        if (current.isNotEmpty) {
+          result.add(current.trim());
+          current = '';
+        }
+        current = part;
+        inToppings = false;
+        inSauceDips = false;
+      } else {
+        if (inToppings || inSauceDips) {
+          current += ', ' + part;
+        } else {
+          if (current.isNotEmpty) {
+            result.add(current.trim());
+          }
+          current = part;
+        }
+      }
+    }
+
+    if (current.isNotEmpty) {
+      result.add(current.trim());
+    }
+
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     // ... (rest of the build method, remains unchanged)
@@ -337,39 +508,62 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                 },
               ),
             ),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Order no. ${_selectedOrder!.orderId}',
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
 
-            Text(
-              _selectedOrder!.customerName,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            // Order Number and Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical:5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _selectedOrder!.orderType.toLowerCase()=="delivery" && _selectedOrder!.postalCode != null && _selectedOrder!.postalCode!.isNotEmpty
+                            ? '${_selectedOrder!.postalCode} '
+                            : '',
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
+                      ),
+                      // Display Order Number
+                      Text(
+                        'Order no. ${_selectedOrder!.orderId}',
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    _selectedOrder!.customerName,
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
+                  ),
+                  if (_selectedOrder!.orderType.toLowerCase()=="delivery" && _selectedOrder!.streetAddress != null && _selectedOrder!.streetAddress!.isNotEmpty)
+                    Text(
+                      _selectedOrder!.streetAddress!,
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                  if (_selectedOrder!.orderType.toLowerCase()=="delivery" && _selectedOrder!.city != null && _selectedOrder!.city!.isNotEmpty)
+                    Text(
+                      '${_selectedOrder!.city}, ${_selectedOrder!.postalCode ?? ''}',
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                  if (_selectedOrder!.phoneNumber != null && _selectedOrder!.phoneNumber!.isNotEmpty)
+                    Text(
+                      _selectedOrder!.phoneNumber!,
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                ],
+              ),
             ),
-            if (_selectedOrder!.phoneNumber != null && _selectedOrder!.phoneNumber!.isNotEmpty)
-              Text(
-                _selectedOrder!.phoneNumber!,
-                style: const TextStyle(fontSize: 16),
-              ),
-            if (_selectedOrder!.streetAddress != null && _selectedOrder!.streetAddress!.isNotEmpty)
-              Text(
-                _selectedOrder!.streetAddress!,
-                style: const TextStyle(fontSize: 16),
-              ),
-            if (_selectedOrder!.city != null && _selectedOrder!.city!.isNotEmpty)
-              Text(
-                '${_selectedOrder!.city}, ${_selectedOrder!.postalCode ?? ''}',
-                style: const TextStyle(fontSize: 16),
-              ),
+
             const SizedBox(height: 20),
-            const Divider(),
+            // --- ADD THE HORIZONTAL DIVIDER  ---
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 55.0),
+              child: Divider(
+                height: 0,
+                thickness: 3,
+                color: const Color(0xFFB2B2B2),
+              ),
+            ),
             const SizedBox(height: 10),
 
             Expanded(
@@ -378,27 +572,16 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                 itemBuilder: (context, itemIndex) {
                   final item = _selectedOrder!.items[itemIndex];
 
-                  String? selectedSize;
-                  String? selectedCrust;
+                  // Enhanced option extraction using the same method as desktop
+                  Map<String, dynamic> itemOptions = _extractAllOptionsFromDescription(item.description);
+
+                  String? selectedSize = itemOptions['size'];
+                  String? selectedCrust = itemOptions['crust'];
+                  String? selectedBase = itemOptions['base'];
+                  List<String> toppings = itemOptions['toppings'] ?? [];
+                  List<String> sauceDips = itemOptions['sauceDips'] ?? [];
                   String baseItemName = item.itemName;
-
-                  final optionMatch = RegExp(r'\((.*?)\)').firstMatch(item.description);
-                  if (optionMatch != null && optionMatch.group(1) != null) {
-                    String optionsString = optionMatch.group(1)!;
-                    List<String> optionsList = optionsString.split(', ').map((s) => s.trim()).toList();
-
-                    for (var option in optionsList) {
-                      if (option.toLowerCase().startsWith('size:')) {
-                        selectedSize = option.substring('size:'.length).trim();
-                      } else if (option.toLowerCase().startsWith('crust:')) {
-                        selectedCrust = option.substring('crust:'.length).trim();
-                      }
-                    }
-                    baseItemName = item.description.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
-                  }
-
-                  String sizeDisplay = selectedSize != null ? 'Size: $selectedSize' : 'Size: Default';
-                  String? crustDisplay = selectedCrust != null ? 'Crust: $selectedCrust' : null;
+                  bool hasOptions = itemOptions['hasOptions'] ?? false;
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12.0),
@@ -410,7 +593,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Expanded(
-                                flex: 5,
+                                flex: 6,
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -418,33 +601,91 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                                       '${item.quantity}',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 30,
+                                        fontSize: 28,
                                         fontFamily: 'Poppins',
                                       ),
                                     ),
-                                    Padding(
-                                      padding: const EdgeInsets.only(left: 30),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            sizeDisplay,
-                                            style: const TextStyle(
-                                              fontSize: 20,
-                                              fontFamily: 'Poppins',
-                                              color: Colors.black,
-                                            ),
-                                          ),
-                                          if (crustDisplay != null)
-                                            Text(
-                                              crustDisplay,
-                                              style: const TextStyle(
-                                                fontSize: 20,
-                                                fontFamily: 'Poppins',
-                                                color: Colors.black,
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(left: 30, right: 10),
+                                        // In your Column for displaying options:
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            // If no options found, display the description as a simple text
+                                            if (!hasOptions)
+                                              Text(
+                                                item.description, // Show "Chocolate Milkshake"
+                                                style: const TextStyle(
+                                                  fontSize: 15,
+                                                  fontFamily: 'Poppins',
+                                                  color: Colors.black,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
                                               ),
-                                            ),
-                                        ],
+
+                                            // If options exist, display them individually
+                                            if (hasOptions) ...[
+                                              // Display Size (only if not default)
+                                              if (selectedSize != null)
+                                                Text(
+                                                  'Size: $selectedSize',
+                                                  style: const TextStyle(
+                                                    fontSize: 15,
+                                                    fontFamily: 'Poppins',
+                                                    color: Colors.black,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              // Display Crust (only if not default)
+                                              if (selectedCrust != null)
+                                                Text(
+                                                  'Crust: $selectedCrust',
+                                                  style: const TextStyle(
+                                                    fontSize: 15,
+                                                    fontFamily: 'Poppins',
+                                                    color: Colors.black,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              // Display Base (only if not default)
+                                              if (selectedBase != null)
+                                                Text(
+                                                  'Base: $selectedBase',
+                                                  style: const TextStyle(
+                                                    fontSize: 15,
+                                                    fontFamily: 'Poppins',
+                                                    color: Colors.black,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              // Display Toppings (only if not empty)
+                                              if (toppings.isNotEmpty)
+                                                Text(
+                                                  'Toppings: ${toppings.join(', ')}',
+                                                  style: const TextStyle(
+                                                    fontSize: 15,
+                                                    fontFamily: 'Poppins',
+                                                    color: Colors.black,
+                                                  ),
+                                                  maxLines: 3,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              // Display Sauce Dips (only if not empty)
+                                              if (sauceDips.isNotEmpty)
+                                                Text(
+                                                  'Sauce Dips: ${sauceDips.join(', ')}',
+                                                  style: const TextStyle(
+                                                    fontSize: 15,
+                                                    fontFamily: 'Poppins',
+                                                    color: Colors.black,
+                                                  ),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                            ],
+                                          ],
+                                        ),
                                       ),
                                     )
                                   ],
@@ -453,26 +694,26 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
 
                               Container(
                                 width: 1.2,
-                                height: 180,
-                                color: Colors.black,
+                                height: 110,
+                                color: const Color(0xFFB2B2B2),
                                 margin: const EdgeInsets.symmetric(horizontal: 0),
                               ),
 
                               Expanded(
-                                flex: 4,
+                                flex: 3,
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
                                     Container(
-                                      width: 110,
-                                      height: 110,
+                                      width: 90,
+                                      height: 64,
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       clipBehavior: Clip.hardEdge,
                                       child: Image.asset(
                                         _getCategoryIcon(item.itemType),
-                                        fit: BoxFit.cover,
+                                        fit: BoxFit.contain,
                                       ),
                                     ),
                                     const SizedBox(height: 8),
@@ -480,7 +721,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                                       baseItemName,
                                       textAlign: TextAlign.center,
                                       style: const TextStyle(
-                                        fontSize: 20,
+                                        fontSize: 16,
                                         fontWeight: FontWeight.normal,
                                         fontFamily: 'Poppins',
                                       ),

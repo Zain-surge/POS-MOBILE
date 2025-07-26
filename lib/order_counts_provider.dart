@@ -41,7 +41,7 @@ class OrderCountsProvider extends ChangeNotifier {
       if (_activeOrdersCount[lowerCaseOrderType] != count) {
         _activeOrdersCount[lowerCaseOrderType] = count;
         notifyListeners();
-        print('Set $lowerCaseOrderType count to: ${count}');
+        print('Set $lowerCaseOrderType count to: $count');
       } else {
         print('OrderCountsProvider: $lowerCaseOrderType count already $count, no change needed.');
       }
@@ -73,6 +73,7 @@ class OrderCountsProvider extends ChangeNotifier {
       print('Warning: Attempted to decrement count for unknown or zero-count order type: $orderType');
     }
   }
+
   // You can also add methods to reset counts, etc., if needed
   void resetCounts() {
     _activeOrdersCount = {

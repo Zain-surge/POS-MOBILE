@@ -30,7 +30,7 @@ class PaymentDetails {
     this.amountReceived,
     required this.discountPercentage,
     required this.totalCharge,
-  }) : changeDue = (paymentType == 'Cash' && amountReceived != null)
+  }) : changeDue = (paymentType == 'cash' && amountReceived != null)
       ? (amountReceived - totalCharge).clamp(0.0, double.infinity)
       : 0.0;
 }

@@ -57,7 +57,7 @@ class OrderItem {
         description: json['description'] ?? json['item_description'] ?? '',
         totalPrice: _parseDouble(json['total_price'] ?? json['item_total_price'], 'total_price'),
         imageUrl: json['item_image_url'] ?? json['image_url'],
-        comment: json['comment'] as String?
+        comment: json['comment'] ?? json['order_extra_notes'] as String?
     );
   }
 

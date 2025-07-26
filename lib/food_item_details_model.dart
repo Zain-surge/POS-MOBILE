@@ -212,10 +212,18 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       );
       return;
     }
+    // NEW: Check if "Make it a meal" is selected but no drink is chosen
+    if (_makeItAMeal && _selectedDrink == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a drink for your meal.'),
+          duration: Duration(seconds: 2),
+          backgroundColor: Colors.grey,
+        ),
+      );
+      return;
+    }
 
-    // NEW/UPDATED: Check for drink flavor selection if a flavor-enabled drink is chosen
-    // This now applies directly if the foodItem itself has flavors defined in _drinkFlavors,
-    // or if it's part of a "make it a meal" selection.
     if ((_drinkFlavors.containsKey(widget.foodItem.name) && _selectedDrinkFlavor == null) ||
         (_makeItAMeal && _selectedDrink != null && _drinkFlavors.containsKey(_selectedDrink!) && _selectedDrinkFlavor == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -264,8 +272,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     }
     // Handle standalone drinks with flavors (like J20 Glass Bottle)
     else if (_drinkFlavors.containsKey(widget.foodItem.name) && _selectedDrinkFlavor != null) {
-      // For standalone drinks, the foodItem.name is the drink itself.
-      // We just need to add the flavor to the options.
       selectedOptions.add('Flavor: $_selectedDrinkFlavor');
     }
 
@@ -312,7 +318,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     );
 
     bool canAddToCart = true;
-    if (widget.foodItem.price.keys.length > 1 && _selectedSize == null) {
+    if ((widget.foodItem.price.keys.length > 1 && _selectedSize == null) ||(_makeItAMeal && _selectedDrink == null) ) {
       canAddToCart = false;
     }
     // NEW/UPDATED: Add condition for drink flavor selection

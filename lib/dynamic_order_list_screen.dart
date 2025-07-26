@@ -3,12 +3,15 @@
 import 'package:flutter/material.dart';
 import 'package:epos/models/order.dart';
 import 'package:epos/services/order_api_service.dart';
-import 'package:epos/website_orders_screen.dart'; // Keep if WebsiteOrdersScreen is a distinct file you navigate to
-import 'package:epos/page4.dart'; // Example placeholder
+import 'package:epos/website_orders_screen.dart';
+import 'package:epos/page4.dart';
 import 'package:epos/settings_screen.dart';
 import 'dart:async';
 import 'package:provider/provider.dart';
-import 'package:epos/order_counts_provider.dart'; // Ensure this file exists and is correctly structured
+import 'package:epos/order_counts_provider.dart';
+import 'package:epos/services/thermal_printer_service.dart';
+import 'package:epos/models/cart_item.dart';
+import 'package:epos/models/food_item.dart';
 
 extension HexColor on Color {
   static Color fromHex(String hexString) {
@@ -20,7 +23,7 @@ extension HexColor on Color {
 }
 
 class DynamicOrderListScreen extends StatefulWidget {
-  final String orderType; // e.g., 'takeaway', 'dinein', 'delivery', 'website'
+  final String orderType;
   final int initialBottomNavItemIndex;
 
   const DynamicOrderListScreen({
@@ -38,8 +41,9 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
   List<Order> completedOrders = [];
   Order? _selectedOrder;
   late int _selectedBottomNavItem;
-  // pickcollect controls sub-filtering for 'Take Aways' screen ('takeaway' or 'collection')
   String? pickcollect;
+  bool _isPrinterConnected = false;
+  bool _isCheckingPrinter = false;
 
   late StreamSubscription<Map<String, dynamic>> _orderStatusSubscription;
 
@@ -47,14 +51,12 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
   void initState() {
     super.initState();
     _selectedBottomNavItem = widget.initialBottomNavItemIndex;
-    debugPrint("DynamicOrderListScreen: initState called for type: ${widget.orderType}");
-    // Initialize pickcollect based on orderType if it's 'takeaway'
     if (widget.orderType.toLowerCase() == 'takeaway') {
-      // Default to 'TakeAway' orders when screen loads, representing backend 'takeaway'/'pickup' types
       pickcollect = 'takeaway';
     }
     _loadOrders();
     _initializeSocketListener();
+    _checkPrinterStatus();
   }
 
   void _initializeSocketListener() {
@@ -125,7 +127,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
         completedOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt)); // Sort by newest first
       } else {
         activeOrders.add(updatedOrder);
-        activeOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt)); // Sort by newest first
+        _sortActiveOrdersByPriority();
       }
 
       // If the selected order was the one that changed, update _selectedOrder
@@ -143,12 +145,40 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
     });
   }
 
+  //printer function
+  Future<void> _checkPrinterStatus() async {
+    if (_isCheckingPrinter) return;
+
+    setState(() {
+      _isCheckingPrinter = true;
+    });
+
+    try {
+      Map<String, bool> connectionStatus = await ThermalPrinterService().testAllConnections();
+      bool isConnected = connectionStatus['usb'] == true || connectionStatus['bluetooth'] == true;
+
+      if (mounted) {
+        setState(() {
+          _isPrinterConnected = isConnected;
+          _isCheckingPrinter = false;
+        });
+      }
+    } catch (e) {
+      print('Error checking printer status: $e');
+      if (mounted) {
+        setState(() {
+          _isPrinterConnected = false;
+          _isCheckingPrinter = false;
+        });
+      }
+    }
+  }
+
   @override
   void didUpdateWidget(covariant DynamicOrderListScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.orderType != oldWidget.orderType) {
       debugPrint("DynamicOrderListScreen: orderType changed from ${oldWidget.orderType} to ${widget.orderType}. Reloading orders.");
-      // Reset pickcollect only if changing to the 'takeaway' screen
       if (widget.orderType.toLowerCase() == 'takeaway') {
         pickcollect = 'takeaway'; // Default to 'Takeaway' on screen entry
       } else {
@@ -169,19 +199,46 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
     super.dispose();
   }
 
+// Helper method to define status priority for sorting
+  int _getStatusPriority(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+      case 'yellow':
+        return 1; // Highest priority (shows first)
+      case 'ready':
+      case 'green':
+        return 2; // Second priority
+      default:
+        return 3; // Lowest priority for other statuses
+    }
+  }
+
+// Updated socket handling sort method
+  void _sortActiveOrdersByPriority() {
+    activeOrders.sort((a, b) {
+      // First priority: status-based sorting
+      int statusPriorityA = _getStatusPriority(a.status);
+      int statusPriorityB = _getStatusPriority(b.status);
+
+      if (statusPriorityA != statusPriorityB) {
+        return statusPriorityA.compareTo(statusPriorityB);
+      }
+
+      // If same status priority, sort by creation time (oldest first)
+      return a.createdAt.compareTo(b.createdAt);
+    });
+  }
+
   void _loadOrders() async {
     debugPrint("DynamicOrderListScreen: _loadOrders called for ${widget.orderType}. Attempting to fetch orders...");
     try {
       List<Order> fetchedOrders = await OrderApiService.fetchTodayOrders();
       debugPrint("DynamicOrderListScreen: Successfully fetched ${fetchedOrders.length} orders from API.");
 
-      // Filter orders based on the main screen type and the 'pickcollect' sub-filter for Take Aways
       List<Order> filteredOrders;
       if (widget.orderType.toLowerCase() == 'takeaway') {
-        // If on the 'Take Aways' screen, use the 'pickcollect' state for filtering
         filteredOrders = _filterOrdersForEpos(fetchedOrders, pickcollect ?? 'all_takeaway_types');
       } else {
-        // For all other main order types (Dine In, Delivery, Website), filter by widget.orderType
         filteredOrders = _filterOrdersForEpos(fetchedOrders, widget.orderType);
       }
 
@@ -189,17 +246,29 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
       List<Order> tempCompleted = [];
 
       for (var order in filteredOrders) {
-        // Decision logic for active vs completed lists
         if (order.status.toLowerCase() == 'blue' ||
             order.status.toLowerCase() == 'completed' ||
-            order.status.toLowerCase() == 'delivered') { // 'delivered' might be a final state for some
+            order.status.toLowerCase() == 'delivered') {
           tempCompleted.add(order.copyWith());
         } else {
           tempActive.add(order.copyWith());
         }
       }
 
-      tempActive.sort((a, b) => a.createdAt.compareTo(b.createdAt)); // Sort active by oldest first
+      // Sort active orders: Pending first, then others, then by creation time within each group
+      tempActive.sort((a, b) {
+        // First priority: status-based sorting
+        int statusPriorityA = _getStatusPriority(a.status);
+        int statusPriorityB = _getStatusPriority(b.status);
+
+        if (statusPriorityA != statusPriorityB) {
+          return statusPriorityA.compareTo(statusPriorityB); // Lower number = higher priority
+        }
+
+        // If same status priority, sort by creation time (oldest first)
+        return a.createdAt.compareTo(b.createdAt);
+      });
+
       tempCompleted.sort((a, b) => b.createdAt.compareTo(a.createdAt)); // Sort completed by newest first
 
       debugPrint("DynamicOrderListScreen: Filtered and separated into ${tempActive.length} active and ${tempCompleted.length} completed orders.");
@@ -229,6 +298,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
     }
     debugPrint("DynamicOrderListScreen: _loadOrders finished.");
   }
+
 
   /// Filters a list of orders based on the current screen's order type and source.
   ///
@@ -412,14 +482,14 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
           completedOrders.removeAt(originalIndexInCompleted);
           activeOrders.add(updatedOrder);
           orderCountsProvider.incrementOrderCount(orderToUpdate.orderType); // Increment when moving from completed
-          activeOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          _sortActiveOrdersByPriority();
         } else if (originalIndexInActive != -1) {
           activeOrders[originalIndexInActive] = updatedOrder;
-          activeOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          _sortActiveOrdersByPriority();
         } else {
           activeOrders.add(updatedOrder);
           orderCountsProvider.incrementOrderCount(orderToUpdate.orderType); // Increment if newly added to active
-          activeOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          _sortActiveOrdersByPriority();
         }
       }
 
@@ -470,14 +540,10 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
       case 2: // Delivery (EPOS source)
         count = currentActiveOrdersCount['delivery'] ?? 0;
         break;
-      case 3: // Website (Website source, types 'delivery'/'pickup')
-      // IMPORTANT: For accurate Website order counts, OrderCountsProvider
-      // needs to differentiate by orderSource as well (e.g., 'website_delivery', 'website_pickup').
-      // Currently, it aggregates by orderType only ('delivery', 'pickup').
-      // This means the count here will include ALL delivery/pickup orders, not just website ones.
-      // For a precise count, OrderCountsProvider would need to be updated.
-      // For now, returning null to signify "no specific count available with current provider structure".
-        return null;
+      case 3: // Website (Website source, all types except completed)
+      // FIXED: Use the provider's website count instead of returning null
+        count = currentActiveOrdersCount['website'] ?? 0;
+        break;
       default:
         return null; // No notification for home/more
     }
@@ -485,10 +551,274 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
   }
 
 
+// Updated method - Shows ALL options including "default" and "normal"
+  Map<String, dynamic> _extractAllOptionsFromDescription(String description) {
+    Map<String, dynamic> options = {
+      'size': null,
+      'crust': null,
+      'base': null,
+      'toppings': <String>[],
+      'sauceDips': <String>[],
+      'baseItemName': description,
+      'hasOptions': false,
+    };
+
+    List<String> optionsList = [];
+    String baseItemName = description;
+    bool foundOptions = false;
+
+    // Check if it's parentheses format (EPOS): "Item Name (Size: Large, Crust: Thin)"
+    final optionMatch = RegExp(r'\((.*?)\)').firstMatch(description);
+    if (optionMatch != null && optionMatch.group(1) != null) {
+      // EPOS format with parentheses
+      String optionsString = optionMatch.group(1)!;
+      baseItemName = description.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
+      foundOptions = true;
+      optionsList = _smartSplitOptions(optionsString);
+
+    } else if (description.contains('\n') || description.contains(':')) {
+      // Website format with newlines: "Size: 7 inch\nBase: Tomato\nCrust: Normal"
+      List<String> lines = description.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+
+      // Check if any line contains options (has colons)
+      List<String> optionLines = lines.where((line) => line.contains(':')).toList();
+
+      if (optionLines.isNotEmpty) {
+        foundOptions = true;
+        optionsList = optionLines;
+
+        // Find the first line that doesn't contain a colon (likely the item name)
+        String foundItemName = '';
+        for (var line in lines) {
+          if (!line.contains(':')) {
+            foundItemName = line;
+            break;
+          }
+        }
+
+        if (foundItemName.isNotEmpty) {
+          baseItemName = foundItemName;
+        } else {
+          baseItemName = description;
+        }
+      }
+    }
+
+    // If no options found, it's a simple description like "Chocolate Milkshake"
+    if (!foundOptions) {
+      options['baseItemName'] = description;
+      options['hasOptions'] = false;
+      return options;
+    }
+
+    // Process the options - REMOVED all "default" and "normal" checks
+    options['hasOptions'] = true;
+    for (var option in optionsList) {
+      String lowerOption = option.toLowerCase();
+
+      if (lowerOption.startsWith('size:')) {
+        String sizeValue = option.substring('size:'.length).trim();
+        // REMOVED: if (sizeValue.toLowerCase() != 'default' && sizeValue.toLowerCase() != 'normal')
+        if (sizeValue.isNotEmpty) { // Only check if not empty
+          options['size'] = sizeValue;
+        }
+      } else if (lowerOption.startsWith('crust:')) {
+        String crustValue = option.substring('crust:'.length).trim();
+        // REMOVED: if (crustValue.toLowerCase() != 'default' && crustValue.toLowerCase() != 'normal')
+        if (crustValue.isNotEmpty) { // Only check if not empty
+          options['crust'] = crustValue;
+        }
+      } else if (lowerOption.startsWith('base:')) {
+        String baseValue = option.substring('base:'.length).trim();
+        // REMOVED: if (baseValue.toLowerCase() != 'default' && baseValue.toLowerCase() != 'normal')
+        if (baseValue.isNotEmpty) { // Only check if not empty
+          // Handle multiple bases separated by comma: "Tomato,Garlic"
+          if (baseValue.contains(',')) {
+            List<String> baseList = baseValue.split(',').map((b) => b.trim()).toList();
+            options['base'] = baseList.join(', '); // Join with proper spacing
+          } else {
+            options['base'] = baseValue;
+          }
+        }
+      } else if (lowerOption.startsWith('toppings:') || lowerOption.startsWith('extra toppings:')) {
+        // Handle both "Toppings:" and "Extra Toppings:"
+        String prefix = lowerOption.startsWith('extra toppings:') ? 'extra toppings:' : 'toppings:';
+        String toppingsValue = option.substring(prefix.length).trim();
+
+        // REMOVED: if (toppingsValue.toLowerCase() != 'default')
+        if (toppingsValue.isNotEmpty) { // Only check if not empty
+          // Split toppings by comma and clean them
+          List<String> toppingsList = toppingsValue.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+          options['toppings'] = toppingsList;
+        }
+      } else if (lowerOption.startsWith('sauce dips:')) {
+        String sauceDipsValue = option.substring('sauce dips:'.length).trim();
+        // REMOVED: if (sauceDipsValue.toLowerCase() != 'default')
+        if (sauceDipsValue.isNotEmpty) { // Only check if not empty
+          // Split sauce dips by comma and clean them
+          List<String> sauceDipsList = sauceDipsValue.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+          options['sauceDips'] = sauceDipsList;
+        }
+      }
+    }
+
+    options['baseItemName'] = baseItemName;
+    return options;
+  }
+
+// Helper method for EPOS format (parentheses) smart splitting
+  List<String> _smartSplitOptions(String optionsString) {
+    List<String> result = [];
+    String current = '';
+    bool inToppings = false;
+    bool inSauceDips = false;
+
+    List<String> parts = optionsString.split(', ');
+
+    for (int i = 0; i < parts.length; i++) {
+      String part = parts[i];
+      String lowerPart = part.toLowerCase();
+
+      if (lowerPart.startsWith('toppings:') || lowerPart.startsWith('extra toppings:')) {
+        if (current.isNotEmpty) {
+          result.add(current.trim());
+          current = '';
+        }
+        current = part;
+        inToppings = true;
+        inSauceDips = false;
+      } else if (lowerPart.startsWith('sauce dips:')) {
+        if (current.isNotEmpty) {
+          result.add(current.trim());
+          current = '';
+        }
+        current = part;
+        inToppings = false;
+        inSauceDips = true;
+      } else if (lowerPart.startsWith('size:') || lowerPart.startsWith('base:') || lowerPart.startsWith('crust:')) {
+        if (current.isNotEmpty) {
+          result.add(current.trim());
+          current = '';
+        }
+        current = part;
+        inToppings = false;
+        inSauceDips = false;
+      } else {
+        if (inToppings || inSauceDips) {
+          current += ', ' + part;
+        } else {
+          if (current.isNotEmpty) {
+            result.add(current.trim());
+          }
+          current = part;
+        }
+      }
+    }
+
+    if (current.isNotEmpty) {
+      result.add(current.trim());
+    }
+
+    return result;
+  }
+
+
+//
+// // New method that handles printing existing order receipt
+//   Future<void> _handlePrintingOrderReceipt() async {
+//     if (!mounted || _selectedOrder == null) return;
+//
+//     setState(() {
+//       _isCheckingPrinter = true;
+//     });
+//
+//     try {
+//       // Check printer connection first
+//       Map<String, bool> connectionStatus = await ThermalPrinterService().testAllConnections();
+//       bool isConnected = connectionStatus['usb'] == true || connectionStatus['bluetooth'] == true;
+//
+//       if (!isConnected) {
+//         if (mounted) {
+//           ScaffoldMessenger.of(context).showSnackBar(
+//             const SnackBar(
+//               content: Text("No printer connected. Please check printer connection."),
+//               backgroundColor: Colors.red,
+//               duration: Duration(seconds: 3),
+//             ),
+//           );
+//         }
+//         return;
+//       }
+//
+//       // Convert OrderItems to CartItems for printing
+//       List<CartItem> cartItems = _selectedOrder!.items.map((item) {
+//         // Create a FoodItem from OrderItem data
+//         FoodItem foodItem = FoodItem(
+//           id: item.itemId ?? 0,
+//           name: item.itemName,
+//           description: item.description,
+//           price: item.totalPrice / item.quantity, // Calculate base price per unit
+//           type: item.itemType,
+//           imageUrl: item.imageUrl,
+//         );
+//
+//         return CartItem(
+//           foodItem: foodItem,
+//           quantity: item.quantity,
+//           pricePerUnit: item.totalPrice / item.quantity,
+//           comment: item.comment,
+//           // selectedOptions can be extracted from description if needed
+//           selectedOptions: _extractOptionsFromDescription(item.description),
+//         );
+//       }).toList();
+//
+//       // Print the receipt for the selected order
+//       await ThermalPrinterService().printReceiptWithUserInteraction(
+//         transactionId: _selectedOrder!.transactionId.isNotEmpty
+//             ? _selectedOrder!.transactionId
+//             : _selectedOrder!.orderId.toString(),
+//         orderType: _selectedOrder!.orderType,
+//         cartItems: cartItems,
+//         subtotal: _selectedOrder!.orderTotalPrice - (_selectedOrder!.changeDue ?? 0),
+//         totalCharge: _selectedOrder!.orderTotalPrice,
+//         extraNotes: _selectedOrder!.orderExtraNotes, // Use order extra notes if available
+//         changeDue: _selectedOrder!.changeDue ?? 0.0,
+//       );
+//
+//       if (mounted) {
+//         ScaffoldMessenger.of(context).showSnackBar(
+//           const SnackBar(
+//             content: Text("Receipt printed successfully!"),
+//             backgroundColor: Colors.green,
+//             duration: Duration(seconds: 2),
+//           ),
+//         );
+//       }
+//
+//     } catch (e) {
+//       print('Printing failed: $e');
+//       if (mounted) {
+//         ScaffoldMessenger.of(context).showSnackBar(
+//           SnackBar(
+//             content: Text("Printing failed: $e"),
+//             backgroundColor: Colors.red,
+//             duration: Duration(seconds: 3),
+//           ),
+//         );
+//       }
+//     } finally {
+//       if (mounted) {
+//         setState(() {
+//           _isCheckingPrinter = false;
+//         });
+//       }
+//     }
+//   }
+
+
   @override
   Widget build(BuildContext context) {
     debugPrint("DynamicOrderListScreen: build method called. Active orders: ${activeOrders.length}, Completed orders: ${completedOrders.length}");
-
 
     // Consume the OrderCountsProvider here to get the latest counts
     final orderCountsProvider = Provider.of<OrderCountsProvider>(context);
@@ -794,7 +1124,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
               ),
             ),
 
-
             //RIGHT PANEL
             Expanded(
               flex: 1,
@@ -821,7 +1150,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                _selectedOrder!.postalCode != null && _selectedOrder!.postalCode!.isNotEmpty
+                                _selectedOrder!.orderType.toLowerCase()=="delivery" && _selectedOrder!.postalCode != null && _selectedOrder!.postalCode!.isNotEmpty
                                     ? '${_selectedOrder!.postalCode} '
                                     : '',
                                 style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
@@ -837,12 +1166,12 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                             _selectedOrder!.customerName,
                             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
                           ),
-                          if (_selectedOrder!.streetAddress != null && _selectedOrder!.streetAddress!.isNotEmpty)
+                          if (_selectedOrder!.orderType.toLowerCase()=="delivery" && _selectedOrder!.streetAddress != null && _selectedOrder!.streetAddress!.isNotEmpty)
                             Text(
                               _selectedOrder!.streetAddress!,
                               style: const TextStyle(fontSize: 18),
                             ),
-                          if (_selectedOrder!.city != null && _selectedOrder!.city!.isNotEmpty)
+                          if (_selectedOrder!.orderType.toLowerCase()=="delivery" && _selectedOrder!.city != null && _selectedOrder!.city!.isNotEmpty)
                             Text(
                               '${_selectedOrder!.city}, ${_selectedOrder!.postalCode ?? ''}',
                               style: const TextStyle(fontSize: 18),
@@ -857,6 +1186,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                     ),
 
                     const SizedBox(height: 20),
+
                     // --- ADD THE HORIZONTAL DIVIDER  ---
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 55.0),
@@ -874,27 +1204,28 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                         itemBuilder: (context, itemIndex) {
                           final item = _selectedOrder!.items[itemIndex];
 
-                          String? selectedSize;
-                          String? selectedCrust;
+                          // Enhanced option extraction
+                          Map<String, dynamic> itemOptions = _extractAllOptionsFromDescription(item.description);
+
+                          String? selectedSize = itemOptions['size'];
+                          String? selectedCrust = itemOptions['crust'];
+                          String? selectedBase = itemOptions['base'];
+                          List<String> toppings = itemOptions['toppings'] ?? [];
+                          List<String> sauceDips = itemOptions['sauceDips'] ?? [];
                           String baseItemName = item.itemName;
+                          bool hasOptions = itemOptions['hasOptions'] ?? false;
 
-                          final optionMatch = RegExp(r'\((.*?)\)').firstMatch(item.description);
-                          if (optionMatch != null && optionMatch.group(1) != null) {
-                            String optionsString = optionMatch.group(1)!;
-                            List<String> optionsList = optionsString.split(', ').map((s) => s.trim()).toList();
-
-                            for (var option in optionsList) {
-                              if (option.toLowerCase().startsWith('size:')) {
-                                selectedSize = option.substring('size:'.length).trim();
-                              } else if (option.toLowerCase().startsWith('crust:')) {
-                                selectedCrust = option.substring('crust:'.length).trim();
-                              }
-                            }
-                            baseItemName = item.description.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
-                          }
-
-                          String sizeDisplay = selectedSize != null ? 'Size: $selectedSize' : 'Size: Default';
-                          String? crustDisplay = selectedCrust != null ? 'Crust: $selectedCrust' : null;
+                          // print('=== Debug Item from WEBSITE ${itemIndex} ===');
+                          // print('Original description: ${item.description}');
+                          // print('Extracted options: $itemOptions');
+                          // print('Size: $selectedSize');
+                          // print('Crust: $selectedCrust');
+                          // print('Base: $selectedBase');
+                          // print('Toppings: $toppings');
+                          // print('Base item name: $baseItemName');
+                          // print('========================');
+                          // print('Item type: ${item.itemType}');
+                          // print('Category icon: ${_getCategoryIcon(item.itemType)}');
 
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 12.0),
@@ -906,7 +1237,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
                                       Expanded(
-                                        flex: 5,
+                                        flex: 6,
                                         child: Row(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
@@ -914,48 +1245,107 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                                               '${item.quantity}',
                                               style: const TextStyle(
                                                 fontWeight: FontWeight.bold,
-                                                fontSize: 30,
+                                                fontSize: 28,
                                                 fontFamily: 'Poppins',
                                               ),
                                             ),
-                                            Padding(
-                                              padding: const EdgeInsets.only(left: 30),
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    sizeDisplay,
-                                                    style: const TextStyle(
-                                                      fontSize: 20,
-                                                      fontFamily: 'Poppins',
-                                                      color: Colors.black,
-                                                    ),
-                                                  ),
-                                                  if (crustDisplay != null)
-                                                    Text(
-                                                      crustDisplay,
-                                                      style: const TextStyle(
-                                                        fontSize: 20,
-                                                        fontFamily: 'Poppins',
-                                                        color: Colors.black,
+                                            Expanded(
+                                              child: Padding(
+                                                padding: const EdgeInsets.only(left: 30, right: 10),
+                                                // In your Column for displaying options:
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    // If no options found, display the description as a simple text
+                                                    if (!hasOptions)
+                                                      Text(
+                                                        item.description, // Show "Chocolate Milkshake"
+                                                        style: const TextStyle(
+                                                          fontSize: 15,
+                                                          fontFamily: 'Poppins',
+                                                          color: Colors.black,
+                                                        ),
+                                                        overflow: TextOverflow.ellipsis,
                                                       ),
-                                                    ),
-                                                ],
+
+                                                    // If options exist, display them individually
+                                                    if (hasOptions) ...[
+                                                      // Display Size (only if not default)
+                                                      if (selectedSize != null)
+                                                        Text(
+                                                          'Size: $selectedSize',
+                                                          style: const TextStyle(
+                                                            fontSize: 15,
+                                                            fontFamily: 'Poppins',
+                                                            color: Colors.black,
+                                                          ),
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      // Display Crust (only if not default)
+                                                      if (selectedCrust != null)
+                                                        Text(
+                                                          'Crust: $selectedCrust',
+                                                          style: const TextStyle(
+                                                            fontSize: 15,
+                                                            fontFamily: 'Poppins',
+                                                            color: Colors.black,
+                                                          ),
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      // Display Base (only if not default)
+                                                      if (selectedBase != null)
+                                                        Text(
+                                                          'Base: $selectedBase',
+                                                          style: const TextStyle(
+                                                            fontSize: 15,
+                                                            fontFamily: 'Poppins',
+                                                            color: Colors.black,
+                                                          ),
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      // Display Toppings (only if not empty)
+                                                      if (toppings.isNotEmpty)
+                                                        Text(
+                                                          'Toppings: ${toppings.join(', ')}',
+                                                          style: const TextStyle(
+                                                            fontSize: 15,
+                                                            fontFamily: 'Poppins',
+                                                            color: Colors.black,
+                                                          ),
+                                                          maxLines: 3,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      // Display Sauce Dips (only if not empty)
+                                                      if (sauceDips.isNotEmpty)
+                                                        Text(
+                                                          'Sauce Dips: ${sauceDips.join(', ')}',
+                                                          style: const TextStyle(
+                                                            fontSize: 15,
+                                                            fontFamily: 'Poppins',
+                                                            color: Colors.black,
+                                                          ),
+                                                          maxLines: 2,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                    ],
+                                                  ],
+                                                ),
                                               ),
                                             )
                                           ],
                                         ),
                                       ),
 
+
                                       Container(
                                         width: 1.2,
-                                        height: 100,
+                                        height: 110,
                                         color: const Color(0xFFB2B2B2),
                                         margin: const EdgeInsets.symmetric(horizontal: 0),
                                       ),
 
                                       Expanded(
-                                        flex: 4,
+                                        flex: 3,
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.center,
                                           children: [
@@ -966,7 +1356,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                                                 borderRadius: BorderRadius.circular(12),
                                               ),
                                               clipBehavior: Clip.hardEdge,
-
                                               child: Image.asset(
                                                 _getCategoryIcon(item.itemType),
                                                 fit: BoxFit.contain,
@@ -984,7 +1373,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                                               maxLines: 2,
                                               overflow: TextOverflow.ellipsis,
                                             ),
-
                                           ],
                                         ),
                                       ),
@@ -1021,6 +1409,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                         },
                       ),
                     ),
+
                     // --- ADD THE HORIZONTAL DIVIDER  ---
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 55.0),
@@ -1061,23 +1450,21 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                                   ),
                                 ],
                               ),
-                              if (_selectedOrder!.changeDue != null && _selectedOrder!.changeDue! > 0) ...[
-                                const SizedBox(height: 10),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Text(
-                                      'Change Due',
-                                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold,  color: Colors.white, ),
-                                    ),
-                                    const SizedBox(width: 40),
-                                    Text(
-                                      '${_selectedOrder!.changeDue!.toStringAsFixed(2)}',
-                                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white, ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                              const SizedBox(height: 10),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Change Due',
+                                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold,  color: Colors.white, ),
+                                  ),
+                                  const SizedBox(width: 40),
+                                  Text(
+                                    '${_selectedOrder!.changeDue!.toStringAsFixed(2)}',
+                                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white, ),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -1085,9 +1472,8 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                         MouseRegion(
                           cursor: SystemMouseCursors.click,
                           child: GestureDetector(
-                            onTap: () {
-                              // no implementation yet
-                              print("No implementation yet");
+                            onTap:  () async {
+                            //  await _handlePrintingOrderReceipt();
                             },
                             child: Container(
                               padding: const EdgeInsets.all(8),
@@ -1098,10 +1484,16 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Image.asset(
-                                    'assets/images/printer.png',
-                                    width: 58,
-                                    height: 58,
+                                  ColorFiltered(
+                                    colorFilter: ColorFilter.mode(
+                                      _isPrinterConnected ? Colors.green : Colors.red,
+                                      BlendMode.srcIn,
+                                    ),
+                                    child: Image.asset(
+                                      'assets/images/printer.png',
+                                      width: 58,
+                                      height: 58,
+                                    ),
                                   ),
                                   const SizedBox(height: 4),
                                   const Text(
@@ -1130,6 +1522,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
       bottomNavigationBar: _buildBottomNavBar(activeOrdersCount),
     );
   }
+
 
   // --- MODIFIED _buildBottomNavBar to use _navItem directly and accept activeOrdersCount ---
   Widget _buildBottomNavBar(Map<String, int> activeOrdersCount) {
