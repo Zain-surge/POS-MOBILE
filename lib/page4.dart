@@ -489,7 +489,7 @@ class _Page4State extends State<Page4> {
                                   width: double.infinity,
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFF2D9F9),
-                                    borderRadius: BorderRadius.circular(2),
+                                    borderRadius: BorderRadius.circular(30),
                                   ),
                                 ),
                                 Expanded(child: _buildItemGrid()),
@@ -708,7 +708,7 @@ class _Page4State extends State<Page4> {
                                       '${item.quantity}',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 33,
+                                        fontSize: 32,
                                         fontFamily: 'Poppins',
                                       ),
                                     ),
@@ -722,7 +722,7 @@ class _Page4State extends State<Page4> {
                                               Text(
                                                 item.foodItem.name,
                                                 style: const TextStyle(
-                                                  fontSize: 19,
+                                                  fontSize: 15,
                                                   fontFamily: 'Poppins',
                                                   color: Colors.grey,
                                                   fontStyle: FontStyle.italic,
@@ -735,7 +735,7 @@ class _Page4State extends State<Page4> {
                                                 Text(
                                                   'Size: $selectedSize',
                                                   style: const TextStyle(
-                                                    fontSize: 18,
+                                                    fontSize: 15,
                                                     fontFamily: 'Poppins',
                                                     color: Colors.black,
                                                   ),
@@ -745,7 +745,7 @@ class _Page4State extends State<Page4> {
                                                 Text(
                                                   'Crust: $selectedCrust',
                                                   style: const TextStyle(
-                                                    fontSize: 18,
+                                                    fontSize: 15,
                                                     fontFamily: 'Poppins',
                                                     color: Colors.black,
                                                   ),
@@ -755,7 +755,7 @@ class _Page4State extends State<Page4> {
                                                 Text(
                                                   'Base: $selectedBase',
                                                   style: const TextStyle(
-                                                    fontSize: 18,
+                                                    fontSize: 15,
                                                     fontFamily: 'Poppins',
                                                     color: Colors.black,
                                                   ),
@@ -765,7 +765,7 @@ class _Page4State extends State<Page4> {
                                                 Text(
                                                   'Toppings: ${toppings.join(', ')}',
                                                   style: const TextStyle(
-                                                    fontSize: 18,
+                                                    fontSize: 15,
                                                     fontFamily: 'Poppins',
                                                     color: Colors.black,
                                                   ),
@@ -776,7 +776,7 @@ class _Page4State extends State<Page4> {
                                                 Text(
                                                   'Sauce Dips: ${sauceDips.join(', ')}',
                                                   style: const TextStyle(
-                                                    fontSize: 18,
+                                                    fontSize: 15,
                                                     fontFamily: 'Poppins',
                                                     color: Colors.black,
                                                   ),
@@ -791,7 +791,7 @@ class _Page4State extends State<Page4> {
                                   ],
                                 ),
 
-                                const SizedBox(height: 40),
+                                const SizedBox(height: 20),
 
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.start,
@@ -814,8 +814,8 @@ class _Page4State extends State<Page4> {
                                           );
                                         },
                                         child: SizedBox(
-                                          width: 60,
-                                          height: 60,
+                                          width: 46,
+                                          height: 46,
                                           child: Image.asset(
                                             'assets/images/Bin.png',
                                             fit: BoxFit.contain,
@@ -837,12 +837,12 @@ class _Page4State extends State<Page4> {
                                           });
                                         },
                                         child: SizedBox(
-                                          width: 60,
-                                          height: 60,
+                                          width: 46,
+                                          height: 46,
                                           child: const Icon(
                                             Icons.remove,
                                             color: Colors.black,
-                                            size: 60,
+                                            size: 46,
                                           ),
                                         ),
                                       ),
@@ -858,17 +858,17 @@ class _Page4State extends State<Page4> {
                                           });
                                         },
                                         child: SizedBox(
-                                          width: 60,
-                                          height: 60,
+                                          width: 46,
+                                          height: 46,
                                           child: const Icon(
                                             Icons.add,
                                             color: Colors.black,
-                                            size: 60,
+                                            size: 46,
                                           ),
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 25),
+                                    const SizedBox(width: 35),
 
                                     // NEW: Edit button
                                     MouseRegion(
@@ -878,8 +878,8 @@ class _Page4State extends State<Page4> {
                                           _editCartItem(item, index);
                                         },
                                         child: SizedBox(
-                                          width: 40,
-                                          height: 40,
+                                          width: 37,
+                                          height: 37,
                                           child: Image.asset(
                                             'assets/images/EDIT.png',
                                             fit: BoxFit.contain,

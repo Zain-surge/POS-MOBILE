@@ -38,20 +38,20 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
   late StreamSubscription _newOrderSocketSubscription;
   late StreamSubscription _acceptedOrderStreamSubscription;
   Order? _selectedOrder;
-  Timer? _overdueCheckTimer; // Declare a Timer variable
+  // Timer? _overdueCheckTimer; // Declare a Timer variable
 
   @override
   void initState() {
     super.initState();
 
-    // Start a timer to periodically check for overdue orders
-    _overdueCheckTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      // Only update if the widget is still mounted
-      if (mounted) {
-        debugPrint('DEBUG: Overdue check timer triggered. Recalculating order counts and colors.');
-        _updateOrderCounts();
-      }
-    });
+    // // Start a timer to periodically check for overdue orders
+    // _overdueCheckTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+    //   // Only update if the widget is still mounted
+    //   if (mounted) {
+    //     debugPrint('DEBUG: Overdue check timer triggered. Recalculating order counts and colors.');
+    //     _updateOrderCounts();
+    //   }
+    // });
 
     _fetchActiveOrders();
     _listenForNewOrdersFromSocket();
@@ -62,7 +62,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
   void dispose() {
     _newOrderSocketSubscription.cancel();
     _acceptedOrderStreamSubscription.cancel();
-    _overdueCheckTimer?.cancel();
+    // _overdueCheckTimer?.cancel();
     super.dispose();
   }
 

@@ -1025,7 +1025,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                               });
                             },
                             child: Container(
-                              margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 60),
+                              margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 60),
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 color: Colors.transparent, // Always transparent, no highlight on selection
@@ -1053,14 +1053,14 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                                         });
                                       },
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
+                                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
                                         decoration: BoxDecoration(
                                           color: order.statusColor, // Uses the updated statusColor getter from Order model
                                           borderRadius: BorderRadius.circular(50),
                                         ),
                                         child: Text(
                                           order.displaySummary,
-                                          style: const TextStyle(fontSize: 28,
+                                          style: const TextStyle(fontSize: 29,
                                               color: Colors.black),
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -1104,7 +1104,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                                       height: 80,
                                       alignment: Alignment.center,
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 14, vertical: 14),
+                                          horizontal: 14, vertical: 10),
                                       decoration: BoxDecoration(
                                         color: order.statusColor, // Uses the updated statusColor getter from Order model
                                         borderRadius: BorderRadius.circular(50),
@@ -1227,18 +1227,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
                           List<String> sauceDips = itemOptions['sauceDips'] ?? [];
                           String baseItemName = item.itemName;
                           bool hasOptions = itemOptions['hasOptions'] ?? false;
-
-                          // print('=== Debug Item from WEBSITE ${itemIndex} ===');
-                          // print('Original description: ${item.description}');
-                          // print('Extracted options: $itemOptions');
-                          // print('Size: $selectedSize');
-                          // print('Crust: $selectedCrust');
-                          // print('Base: $selectedBase');
-                          // print('Toppings: $toppings');
-                          // print('Base item name: $baseItemName');
-                          // print('========================');
-                          // print('Item type: ${item.itemType}');
-                          // print('Category icon: ${_getCategoryIcon(item.itemType)}');
 
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 12.0),

@@ -701,46 +701,87 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                           String finalDisplayLabel;
                           Color finalDisplayColor;
 
-                          if (order.orderType.toLowerCase() == 'delivery') {
-                            if (order.status.toLowerCase() == 'green' && order.driverId != null) {
-                              finalDisplayLabel = 'On Its Way';
-                              finalDisplayColor = HexColor.fromHex('DEF5D4');
-                            } else if (order.status.toLowerCase() == 'blue' && order.driverId != null) {
-                              finalDisplayLabel = 'Completed';
-                              finalDisplayColor = HexColor.fromHex('D6D6D6');
-                            } else if (order.status.toLowerCase() == 'green' && order.driverId == null) {
-                              finalDisplayLabel = 'Ready';
-                              finalDisplayColor = HexColor.fromHex('DEF5D4');
-                            }
-                            else if (order.status.toLowerCase() == 'green' || order.status.toLowerCase() == 'ready') {
-                              finalDisplayLabel = 'Ready';
-                              finalDisplayColor = HexColor.fromHex('DEF5D4');
-                            } else if (order.status.toLowerCase() == 'yellow' || order.status.toLowerCase() == 'pending' || order.status.toLowerCase() == 'accepted') {
-                              finalDisplayLabel = 'Pending';
-                              finalDisplayColor = HexColor.fromHex('FFF6D4');
-                            } else if (order.status.toLowerCase() == 'red' || order.status.toLowerCase() == 'cancelled') {
-                              finalDisplayLabel = 'Completed';
-                              finalDisplayColor = Colors.red[100]!;
+                          // Check if order is older than 45 minutes
+                          DateTime now = DateTime.now();
+                          Duration orderAge = now.difference(_selectedOrder!.createdAt);
+                          bool isOver45Minutes = orderAge.inMinutes > 45;
+
+// If order is over 45 minutes old, use the special color
+                          if (isOver45Minutes) {
+                            finalDisplayColor = HexColor.fromHex('ffcaca');
+
+                            // Keep the same label logic but with the special color
+                            if (order.orderType.toLowerCase() == 'delivery') {
+                              if (order.status.toLowerCase() == 'green' && order.driverId != null) {
+                                finalDisplayLabel = 'On Its Way';
+                              } else if (order.status.toLowerCase() == 'blue' && order.driverId != null) {
+                                finalDisplayLabel = 'Completed';
+                              } else if (order.status.toLowerCase() == 'green' && order.driverId == null) {
+                                finalDisplayLabel = 'Ready';
+                              } else if (order.status.toLowerCase() == 'green' || order.status.toLowerCase() == 'ready') {
+                                finalDisplayLabel = 'Ready';
+                              } else if (order.status.toLowerCase() == 'yellow' || order.status.toLowerCase() == 'pending' || order.status.toLowerCase() == 'accepted') {
+                                finalDisplayLabel = 'Pending';
+                              } else if (order.status.toLowerCase() == 'red' || order.status.toLowerCase() == 'cancelled') {
+                                finalDisplayLabel = 'Completed';
+                              } else {
+                                finalDisplayLabel = order.statusLabel;
+                              }
                             } else {
-                              finalDisplayLabel = order.statusLabel;
-                              finalDisplayColor = order.statusColor;
+                              if (order.status.toLowerCase() == 'yellow' || order.status.toLowerCase() == 'pending' || order.status.toLowerCase() == 'accepted') {
+                                finalDisplayLabel = 'Pending';
+                              } else if (order.status.toLowerCase() == 'green' || order.status.toLowerCase() == 'ready' || order.status.toLowerCase() == 'preparing') {
+                                finalDisplayLabel = 'Ready';
+                              } else if (order.status.toLowerCase() == 'blue' || order.status.toLowerCase() == 'completed' || order.status.toLowerCase() == 'delivered') {
+                                finalDisplayLabel = 'Completed';
+                              } else if (order.status.toLowerCase() == 'red' || order.status.toLowerCase() == 'cancelled') {
+                                finalDisplayLabel = 'Completed';
+                              } else {
+                                finalDisplayLabel = order.statusLabel;
+                              }
                             }
                           } else {
-                            if (order.status.toLowerCase() == 'yellow' || order.status.toLowerCase() == 'pending' || order.status.toLowerCase() == 'accepted') {
-                              finalDisplayLabel = 'Pending';
-                              finalDisplayColor = HexColor.fromHex('FFF6D4');
-                            } else if (order.status.toLowerCase() == 'green' || order.status.toLowerCase() == 'ready' || order.status.toLowerCase() == 'preparing') {
-                              finalDisplayLabel = 'Ready';
-                              finalDisplayColor = HexColor.fromHex('DEF5D4');
-                            } else if (order.status.toLowerCase() == 'blue' || order.status.toLowerCase() == 'completed' || order.status.toLowerCase() == 'delivered') {
-                              finalDisplayLabel = 'Completed';
-                              finalDisplayColor = HexColor.fromHex('D6D6D6');
-                            } else if (order.status.toLowerCase() == 'red' || order.status.toLowerCase() == 'cancelled') {
-                              finalDisplayLabel = 'Completed';
-                              finalDisplayColor = Colors.red[100]!;
+                            // Original color logic for orders under 45 minutes
+                            if (order.orderType.toLowerCase() == 'delivery') {
+                              if (order.status.toLowerCase() == 'green' && order.driverId != null) {
+                                finalDisplayLabel = 'On Its Way';
+                                finalDisplayColor = HexColor.fromHex('DEF5D4');
+                              } else if (order.status.toLowerCase() == 'blue' && order.driverId != null) {
+                                finalDisplayLabel = 'Completed';
+                                finalDisplayColor = HexColor.fromHex('D6D6D6');
+                              } else if (order.status.toLowerCase() == 'green' && order.driverId == null) {
+                                finalDisplayLabel = 'Ready';
+                                finalDisplayColor = HexColor.fromHex('DEF5D4');
+                              } else if (order.status.toLowerCase() == 'green' || order.status.toLowerCase() == 'ready') {
+                                finalDisplayLabel = 'Ready';
+                                finalDisplayColor = HexColor.fromHex('DEF5D4');
+                              } else if (order.status.toLowerCase() == 'yellow' || order.status.toLowerCase() == 'pending' || order.status.toLowerCase() == 'accepted') {
+                                finalDisplayLabel = 'Pending';
+                                finalDisplayColor = HexColor.fromHex('FFF6D4');
+                              } else if (order.status.toLowerCase() == 'red' || order.status.toLowerCase() == 'cancelled') {
+                                finalDisplayLabel = 'Completed';
+                                finalDisplayColor = Colors.red[100]!;
+                              } else {
+                                finalDisplayLabel = order.statusLabel;
+                                finalDisplayColor = order.statusColor;
+                              }
                             } else {
-                              finalDisplayLabel = order.statusLabel;
-                              finalDisplayColor = order.statusColor;
+                              if (order.status.toLowerCase() == 'yellow' || order.status.toLowerCase() == 'pending' || order.status.toLowerCase() == 'accepted') {
+                                finalDisplayLabel = 'Pending';
+                                finalDisplayColor = HexColor.fromHex('FFF6D4');
+                              } else if (order.status.toLowerCase() == 'green' || order.status.toLowerCase() == 'ready' || order.status.toLowerCase() == 'preparing') {
+                                finalDisplayLabel = 'Ready';
+                                finalDisplayColor = HexColor.fromHex('DEF5D4');
+                              } else if (order.status.toLowerCase() == 'blue' || order.status.toLowerCase() == 'completed' || order.status.toLowerCase() == 'delivered') {
+                                finalDisplayLabel = 'Completed';
+                                finalDisplayColor = HexColor.fromHex('D6D6D6');
+                              } else if (order.status.toLowerCase() == 'red' || order.status.toLowerCase() == 'cancelled') {
+                                finalDisplayLabel = 'Completed';
+                                finalDisplayColor = Colors.red[100]!;
+                              } else {
+                                finalDisplayLabel = order.statusLabel;
+                                finalDisplayColor = order.statusColor;
+                              }
                             }
                           }
 
@@ -752,7 +793,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                               });
                             },
                             child: Container(
-                              margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 60),
+                              margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 60),
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 color: Colors.transparent,
@@ -781,22 +822,22 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                         });
                                       },
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
+                                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
                                         decoration: BoxDecoration(
                                           color: finalDisplayColor,
                                           borderRadius: BorderRadius.circular(50),
                                         ),
                                         child: Text(
                                           order.displayAddressSummary,
-                                          style: const TextStyle(fontSize: 32,
+                                          style: const TextStyle(fontSize: 29,
                                               color: Colors.black),
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 10), // This was the line 574 mentioned in error. The comma is correct if another child follows.
-                                  GestureDetector( // This is the start of the next child, so the comma above it is fine.
+                                  const SizedBox(width: 10),
+                                  GestureDetector(
                                     onTap: () async {
                                       // First, check if the order is already in a final state (completed, delivered, cancelled)
                                       final bool isFinalState = order.status.toLowerCase() == 'completed' ||
@@ -838,29 +879,10 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                       final orderProvider = Provider.of<OrderProvider>(context, listen: false);
                                       final orderCountsProvider = Provider.of<OrderCountsProvider>(context, listen: false);
 
-                                      // ScaffoldMessenger.of(context).showSnackBar(
-                                      //   SnackBar(
-                                      //     content: Text('Updating order ${order.orderId} to ${nextIntendedStatus.toUpperCase()}...'),
-                                      //     duration: const Duration(seconds: 1),
-                                      //   ),
-                                      // );
 
-                                      // Attempt to update the status via the provider
                                       bool success = await orderProvider.updateAndRefreshOrder(order.orderId, nextIntendedStatus);
 
                                       if (success) {
-                                        // The _onOrderProviderChange handler already calls _updateWebsiteOrderCountsInProvider(),
-                                        // so explicit decrement/increment here might be redundant or could lead to double-counting.
-                                        // It's safer to let the centralized _updateWebsiteOrderCountsInProvider handle counts
-                                        // after the orderProvider.updateAndRefreshOrder() fetches the latest data.
-                                        // Removed explicit increment/decrement here:
-                                        // if (wasActive && !willBeActive) {
-                                        //   orderCountsProvider.decrementOrderCount('website');
-                                        //   print("WebsiteOrdersScreen: Decremented 'website' count for order ${order.orderId}");
-                                        // } else if (!wasActive && willBeActive) {
-                                        //   orderCountsProvider.incrementOrderCount('website');
-                                        //   print("WebsiteOrdersScreen: Incremented 'website' count for order ${order.orderId}");
-                                        // }
 
                                         if (mounted) {
                                           ScaffoldMessenger.of(context).showSnackBar(
@@ -879,7 +901,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                       width: 200,
                                       height: 80,
                                       alignment: Alignment.center,
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                       decoration: BoxDecoration(
                                         color: finalDisplayColor, // Use the determined color
                                         borderRadius: BorderRadius.circular(50),
