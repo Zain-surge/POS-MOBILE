@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart'; // For ChangeNotifier
 import 'package:flutter/material.dart'; // For Color
 
 class OrderCountsProvider extends ChangeNotifier {
-  // This map will hold the numerical counts for each order type (UNCHANGED)
+  // This map will hold the numerical counts for each order type
   Map<String, int> _activeOrdersCount = {
     'takeaway': 0,
     'dinein': 0,
@@ -12,85 +12,76 @@ class OrderCountsProvider extends ChangeNotifier {
     'website': 0,
   };
 
-  // This map will hold the DOMINANT COLOR for each order type (NEW)
-  // Default to a neutral color (e.g., Colors.grey or Colors.green)
+  // This map will hold the DOMINANT COLOR for each order type
+  // Default to the yellow color (0xFFFFE26B) which is used as the default notification color
+  // in your CustomBottomNavBar, or Colors.transparent if you don't want any color if no orders.
   Map<String, Color> _dominantOrderColors = {
-    'takeaway': Colors.grey, // Or Colors.green if no orders means green
-    'dinein': Colors.grey,
-    'delivery': Colors.grey,
-    'website': Colors.grey,
+    'takeaway': const Color(0xFFFFE26B),
+    'dinein': const Color(0xFFFFE26B),
+    'delivery': const Color(0xFFFFE26B),
+    'website': const Color(0xFFFFE26B),
   };
 
-  // Getter for numerical order type counts (UNCHANGED)
+  // Getter for numerical order type counts
   Map<String, int> get activeOrdersCount => _activeOrdersCount;
 
-  // NEW: Getter for dominant order colors
+  // Getter for dominant order type colors
   Map<String, Color> get dominantOrderColors => _dominantOrderColors;
 
-
-  // Method to update the numerical counts (UNCHANGED logic for updating counts)
-  void updateActiveOrdersCount(Map<String, int> newCounts) {
-    bool changed = false;
+  // NEW: Combined method to update both counts and colors
+  void updateAllCountsAndColors(Map<String, int> newCounts, Map<String, Color> newColors) {
+    bool countsChanged = false;
     newCounts.forEach((key, value) {
       if (_activeOrdersCount[key] != value) {
-        changed = true;
+        countsChanged = true;
       }
     });
 
-    if (changed) {
-      _activeOrdersCount = newCounts;
-      notifyListeners();
-      print('OrderCountsProvider: Type counts updated and listeners notified: $_activeOrdersCount');
-    } else {
-      print('OrderCountsProvider: Type counts are the same, no notification sent.');
-    }
-  }
-
-  // NEW: Method to update the dominant colors
-  void updateDominantOrderColors(Map<String, Color> newColors) {
-    bool changed = false;
+    bool colorsChanged = false;
     newColors.forEach((key, value) {
       if (_dominantOrderColors[key] != value) {
-        changed = true;
+        colorsChanged = true;
       }
     });
 
-    if (changed) {
+    if (countsChanged || colorsChanged) {
+      _activeOrdersCount = newCounts;
       _dominantOrderColors = newColors;
-      notifyListeners();
-      print('OrderCountsProvider: Dominant colors updated and listeners notified: $_dominantOrderColors');
+      notifyListeners(); // Notify listeners only if actual changes occurred
+      // debugPrint('OrderCountsProvider: Counts or colors updated and listeners notified.');
     } else {
-      print('OrderCountsProvider: Dominant colors are the same, no notification sent.');
+      // debugPrint('OrderCountsProvider: No changes in counts or colors, no notification sent.');
     }
   }
 
   // You can keep your individual set/increment/decrement methods if you still use them for specific types
   // They don't affect the dominant color logic, which is based on the *entire* activeOrders list.
+  // Note: If you use these individual methods, they will still trigger a rebuild.
+  // For comprehensive updates, `updateAllCountsAndColors` is preferred.
 
-  // Method to increment the count for a specific order type (UNCHANGED)
+  // Method to increment the count for a specific order type
   void incrementOrderCount(String orderType) {
     String lowerCaseOrderType = orderType.toLowerCase();
     if (_activeOrdersCount.containsKey(lowerCaseOrderType)) {
       _activeOrdersCount[lowerCaseOrderType] = (_activeOrdersCount[lowerCaseOrderType] ?? 0) + 1;
-      notifyListeners(); // Notify listeners that the data has changed
-      print('Incremented $lowerCaseOrderType count to: ${_activeOrdersCount[lowerCaseOrderType]}');
+      notifyListeners();
+      // debugPrint('Incremented $lowerCaseOrderType count to: ${_activeOrdersCount[lowerCaseOrderType]}');
     } else {
-      print('Warning: Attempted to increment count for unknown order type: $orderType');
+      debugPrint('Warning: Attempted to increment count for unknown order type: $orderType');
     }
   }
 
-  // Method to decrement the count for a specific order type (UNCHANGED)
+  // Method to decrement the count for a specific order type
   void decrementOrderCount(String orderType) {
     String lowerCaseOrderType = orderType.toLowerCase();
     if (_activeOrdersCount.containsKey(lowerCaseOrderType) && (_activeOrdersCount[lowerCaseOrderType] ?? 0) > 0) {
       _activeOrdersCount[lowerCaseOrderType] = (_activeOrdersCount[lowerCaseOrderType] ?? 0) - 1;
       notifyListeners();
-      print('Decremented $lowerCaseOrderType count to: ${_activeOrdersCount[lowerCaseOrderType]}');
+      // debugPrint('Decremented $lowerCaseOrderType count to: ${_activeOrdersCount[lowerCaseOrderType]}');
     } else {
-      print('Warning: Attempted to decrement count for unknown or zero-count order type: $orderType');
+      debugPrint('Warning: Attempted to decrement count for unknown or zero-count order type: $orderType');
     }
   }
-
 
   // Reset all counts and colors
   void resetCounts() {
@@ -101,27 +92,28 @@ class OrderCountsProvider extends ChangeNotifier {
       'website': 0,
     };
     _dominantOrderColors = { // Reset colors too
-      'takeaway': Colors.grey,
-      'dinein': Colors.grey,
-      'delivery': Colors.grey,
-      'website': Colors.grey,
+      'takeaway': const Color(0xFFFFE26B), // Reset to default yellow
+      'dinein': const Color(0xFFFFE26B),
+      'delivery': const Color(0xFFFFE26B),
+      'website': const Color(0xFFFFE26B),
     };
     notifyListeners();
-    print('OrderCountsProvider: All counts and dominant colors reset.');
+    // debugPrint('OrderCountsProvider: All counts and dominant colors reset.');
   }
 
+  // Method to set the count for a specific order type
   void setOrderCount(String orderType, int count) {
     String lowerCaseOrderType = orderType.toLowerCase();
     if (_activeOrdersCount.containsKey(lowerCaseOrderType)) {
       if (_activeOrdersCount[lowerCaseOrderType] != count) {
         _activeOrdersCount[lowerCaseOrderType] = count;
         notifyListeners();
-        print('Set $lowerCaseOrderType count to: $count');
+        // debugPrint('Set $lowerCaseOrderType count to: $count');
       } else {
-        print('OrderCountsProvider: $lowerCaseOrderType count already $count, no change needed.');
+        // debugPrint('OrderCountsProvider: $lowerCaseOrderType count already $count, no change needed.');
       }
     } else {
-      print('Warning: Attempted to set count for unknown order type: $orderType');
+      debugPrint('Warning: Attempted to set count for unknown order type: $orderType');
     }
   }
 }

@@ -17,40 +17,36 @@ class CustomBottomNavBar extends StatelessWidget {
     this.showDivider = false,
   }) : super(key: key);
 
-  String _getNotificationCount(int index, Map<String, int> activeOrdersCount) {
-    switch (index) {
-      case 0: // Takeaway
-        int count = activeOrdersCount['takeaway'] ?? 0;
-        return count > 0 ? count.toString() : '';
-      case 1: // Dine In
-        int count = activeOrdersCount['dinein'] ?? 0;
-        return count > 0 ? count.toString() : '';
-      case 2: // Delivery
-        int count = activeOrdersCount['delivery'] ?? 0;
-        return count > 0 ? count.toString() : '';
-      case 3: // Website
-        int count = activeOrdersCount['website'] ?? 0;
-        return count > 0 ? count.toString() : '';
-      default:
-        return '';
-    }
-  }
+  // Removed _getNotificationCount method.
+  // The notification count will be directly accessed within _navItem using the provider's map.
 
   Widget _navItem(
       BuildContext context,
       String image,
       int index, {
-        String? notification,
-        Color? color,
+        required String typeKey, // New parameter to identify the order type (e.g., 'takeaway', 'dinein')
+        required Map<String, int> activeCounts, // Pass the counts map from provider
+        required Map<String, Color> dominantColors, // Pass the colors map from provider
         required VoidCallback onTap,
       }) {
     bool isSelected = selectedIndex == index;
     String displayImage = _getDisplayImage(image, isSelected);
 
+    // Get the notification count and dominant color for this specific item from the maps
+    final int count = activeCounts[typeKey] ?? 0;
+    // Default to a yellow color if no dominant color is found for the type
+    final Color bubbleColor = dominantColors[typeKey] ?? const Color(0xFFFFE26B);
+
+    // Only show notification text if count is greater than 0
+    final String notificationText = count > 0 ? count.toString() : '';
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () {
+          // It seems you're calling onItemSelected and then onTap,
+          // if onTap handles the navigation, onItemSelected might be redundant here.
+          // Keeping your existing structure.
           onItemSelected?.call(index);
           onTap();
         },
@@ -71,14 +67,16 @@ class CustomBottomNavBar extends StatelessWidget {
                 height: (displayImage == 'Delivery.png' || displayImage == 'Deliverywhite.png') ? 92 : 60,
                 color: isSelected ? Colors.white : const Color(0xFF616161),
               ),
-              if (notification != null && notification.isNotEmpty)
+              // Only display the notification bubble if notificationText is not empty
+              if (notificationText.isNotEmpty)
                 Positioned(
                   top: -2,
+                  // Adjust right position based on image
                   right: (displayImage == 'Delivery.png' || displayImage == 'Deliverywhite.png') ? 14 : 30,
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: color ??  const Color(0xFFFFE26B),
+                      color: bubbleColor, // <--- Use the dynamic color here
                       shape: BoxShape.circle,
                     ),
                     constraints: const BoxConstraints(
@@ -86,9 +84,9 @@ class CustomBottomNavBar extends StatelessWidget {
                       minHeight: 26,
                     ),
                     child: Text(
-                      notification,
+                      notificationText, // <--- Use the dynamic notification text here
                       style: const TextStyle(
-                        color: Colors.black,
+                        color: Colors.black, // Keep text color black for contrast
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
                       ),
@@ -105,39 +103,33 @@ class CustomBottomNavBar extends StatelessWidget {
 
   String _getDisplayImage(String image, bool isSelected) {
     if (isSelected) {
-      if (image == 'TakeAway.png') {
-        return 'TakeAwaywhite.png';
-      } else if (image == 'DineIn.png') {
-        return 'DineInwhite.png';
-      } else if (image == 'Delivery.png') {
-        return 'Deliverywhite.png';
-      } else if (image == 'web.png') {
-        return 'webwhite.png';
-      } else if (image == 'home.png') {
-        return 'home.png';
-      }else if (image == 'More.png') {
-        return 'More.png';
-      }else if (image.contains('.png')) {
+      if (image == 'TakeAway.png') return 'TakeAwaywhite.png';
+      if (image == 'DineIn.png') return 'DineInwhite.png';
+      if (image == 'Delivery.png') return 'Deliverywhite.png';
+      if (image == 'web.png') return 'webwhite.png';
+      // Home and More typically don't change color, so return their original assets
+      if (image == 'home.png') return 'home.png';
+      if (image == 'More.png') return 'More.png';
+      // Generic fallback for other images following the "name.png" -> "namewhite.png" pattern
+      if (image.contains('.png') && !image.contains('white.png')) {
         return image.replaceAll('.png', 'white.png');
       }
     } else {
-      if (image == 'TakeAwaywhite.png') {
-        return 'TakeAway.png';
-      } else if (image == 'DineInwhite.png') {
-        return 'DineIn.png';
-      } else if (image == 'Deliverywhite.png') {
-        return 'Delivery.png';
-      } else if (image == 'web.png') {
-        return 'web.png';
-      } else if (image == 'home.png') {
-        return 'home.png';
-      }else if (image == 'More.png') {
-        return 'More.png';
-      } else if (image.contains('white.png')) {
+      // If not selected, return the non-white version
+      if (image == 'TakeAwaywhite.png') return 'TakeAway.png';
+      if (image == 'DineInwhite.png') return 'DineIn.png';
+      if (image == 'Deliverywhite.png') return 'Delivery.png';
+      // Corrected: If the image is currently 'webwhite.png' (selected state),
+      // it should return 'web.png' when unselected.
+      if (image == 'webwhite.png') return 'web.png';
+      if (image == 'home.png') return 'home.png';
+      if (image == 'More.png') return 'More.png';
+      // Generic fallback for other images following the "namewhite.png" -> "name.png" pattern
+      if (image.contains('white.png')) {
         return image.replaceAll('white.png', '.png');
       }
     }
-    return image;
+    return image; // Return original if no specific rule applies
   }
 
   @override
@@ -145,6 +137,8 @@ class CustomBottomNavBar extends StatelessWidget {
     return Consumer<OrderCountsProvider>(
       builder: (context, orderCountsProvider, child) {
         final activeOrdersCount = orderCountsProvider.activeOrdersCount;
+        // Retrieve the dominant colors map from the provider
+        final dominantOrderColors = orderCountsProvider.dominantOrderColors;
 
         Widget navBar = Container(
           height: 80,
@@ -166,8 +160,9 @@ class CustomBottomNavBar extends StatelessWidget {
                   context,
                   'TakeAway.png',
                   0,
-                  notification: _getNotificationCount(0, activeOrdersCount),
-                  color: const Color(0xFFFFE26B),
+                  typeKey: 'takeaway', // Pass the type key
+                  activeCounts: activeOrdersCount, // Pass the counts map
+                  dominantColors: dominantOrderColors, // Pass the colors map
                   onTap: () {
                     debugPrint("Navigating to Takeaway orders.");
                     if (selectedIndex != 0) {
@@ -187,8 +182,9 @@ class CustomBottomNavBar extends StatelessWidget {
                   context,
                   'DineIn.png',
                   1,
-                  notification: _getNotificationCount(1, activeOrdersCount),
-                  color: const Color(0xFFFFE26B),
+                  typeKey: 'dinein', // Pass the type key
+                  activeCounts: activeOrdersCount, // Pass the counts map
+                  dominantColors: dominantOrderColors, // Pass the colors map
                   onTap: () {
                     debugPrint("Navigating to Dine-In orders.");
                     if (selectedIndex != 1) {
@@ -208,8 +204,9 @@ class CustomBottomNavBar extends StatelessWidget {
                   context,
                   'Delivery.png',
                   2,
-                  notification: _getNotificationCount(2, activeOrdersCount),
-                  color: const Color(0xFFFFE26B),
+                  typeKey: 'delivery', // Pass the type key
+                  activeCounts: activeOrdersCount, // Pass the counts map
+                  dominantColors: dominantOrderColors, // Pass the colors map
                   onTap: () {
                     debugPrint("Navigating to Delivery orders.");
                     if (selectedIndex != 2) {
@@ -229,8 +226,9 @@ class CustomBottomNavBar extends StatelessWidget {
                   context,
                   'web.png',
                   3,
-                  notification: _getNotificationCount(3, activeOrdersCount),
-                  color: const Color(0xFFFFE26B),
+                  typeKey: 'website', // Pass the type key
+                  activeCounts: activeOrdersCount, // Pass the counts map
+                  dominantColors: dominantOrderColors, // Pass the colors map
                   onTap: () {
                     debugPrint("Navigating to Website Orders.");
                     if (selectedIndex != 3) {
@@ -249,6 +247,9 @@ class CustomBottomNavBar extends StatelessWidget {
                   context,
                   'home.png',
                   4,
+                  typeKey: 'home', // No count/color expected for 'home', but pass maps anyway
+                  activeCounts: activeOrdersCount,
+                  dominantColors: dominantOrderColors,
                   onTap: () {
                     debugPrint("Navigating to Home Screen.");
                     Navigator.pushReplacementNamed(context, '/service-selection');
@@ -258,6 +259,9 @@ class CustomBottomNavBar extends StatelessWidget {
                   context,
                   'More.png',
                   5,
+                  typeKey: 'more', // No count/color expected for 'more', but pass maps anyway
+                  activeCounts: activeOrdersCount,
+                  dominantColors: dominantOrderColors,
                   onTap: () {
                     debugPrint("Navigating to Settings Screen.");
                     if (selectedIndex != 5) {

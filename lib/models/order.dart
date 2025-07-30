@@ -1,7 +1,7 @@
 // lib/models/order.dart (MODIFIED)
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // Import for DateFormat
+import 'package:intl/intl.dart';
 
 extension HexColor on Color {
   static Color fromHex(String hexString) {
@@ -88,7 +88,7 @@ class Order {
   final double orderTotalPrice;
   final String? orderExtraNotes;
   final List<OrderItem> items;
-  final int? driverId; // <--- NEW: Add driverId property
+  final int? driverId;
 
   Order({
     required this.orderId,
@@ -109,7 +109,7 @@ class Order {
     required this.orderTotalPrice,
     this.orderExtraNotes,
     required this.items,
-    this.driverId, // <--- NEW: Initialize driverId in constructor
+    this.driverId,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -176,7 +176,7 @@ class Order {
       items: (json['items'] as List?)
           ?.map((itemJson) => OrderItem.fromJson(itemJson))
           .toList() ?? [],
-      driverId: json['driver_id'] as int?, // <--- NEW: Parse driver_id from JSON
+      driverId: json['driver_id'] as int?,
     );
   }
 
@@ -189,7 +189,7 @@ class Order {
     'status': status,
     'order_source': orderSource,
     'items': items.map((item) => item.toJson()).toList(),
-    if (driverId != null) 'driver_id': driverId, // Include driverId in toJson if not null
+    if (driverId != null) 'driver_id': driverId,
   };
 
   Order copyWith({
@@ -211,7 +211,7 @@ class Order {
     double? orderTotalPrice,
     String? orderExtraNotes,
     List<OrderItem>? items,
-    int? driverId, // <--- NEW: Add driverId to copyWith
+    int? driverId,
   }) {
     return Order(
       orderId: orderId ?? this.orderId,
@@ -232,12 +232,31 @@ class Order {
       orderTotalPrice: orderTotalPrice ?? this.orderTotalPrice,
       orderExtraNotes: orderExtraNotes ?? this.orderExtraNotes,
       items: items ?? this.items,
-      driverId: driverId ?? this.driverId, // <--- NEW: Assign driverId in copyWith
+      driverId: driverId ?? this.driverId,
     );
   }
 
-  // --- MODIFIED: statusColor getter (GENERIC COLORS) ---
+  // --- MODIFIED: statusColor getter with 45-minute check ---
   Color get statusColor {
+    // First check if order is completed - completed orders should never turn red
+    switch (status.toLowerCase()) {
+      case 'blue':
+      case 'completed':
+      case 'delivered':
+        return HexColor.fromHex('D6D6D6'); // Always return grey for completed orders
+    }
+
+    // For non-completed orders, check if 45 minutes have passed since order creation
+    final now = DateTime.now();
+    final timeDifference = now.difference(createdAt);
+    final hasExceeded45Minutes = timeDifference.inMinutes >= 45;
+
+    // If 45 minutes have passed for non-completed orders, return red color
+    if (hasExceeded45Minutes) {
+      return HexColor.fromHex('ffcaca'); //red
+    }
+
+    // Otherwise, return normal status colors for active orders
     switch (status.toLowerCase()) {
       case 'yellow':
       case 'pending':
@@ -247,12 +266,6 @@ class Order {
       case 'ready':
       case 'preparing':
         return HexColor.fromHex('DEF5D4'); // Light green
-      case 'blue':
-      case 'completed':
-      case 'delivered':
-        return HexColor.fromHex('D6D6D6');
-      case 'red':
-        return Colors.red[100]!; // Light red
       default:
         return Colors.grey[200]!; // Fallback
     }

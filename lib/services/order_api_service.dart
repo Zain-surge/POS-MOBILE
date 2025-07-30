@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:async';
-
 import '../models/order.dart';
 import '../models/customer_search_model.dart';
 

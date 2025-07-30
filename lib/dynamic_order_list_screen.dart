@@ -3,15 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:epos/models/order.dart';
 import 'package:epos/services/order_api_service.dart';
-import 'package:epos/website_orders_screen.dart';
-import 'package:epos/page4.dart';
-import 'package:epos/settings_screen.dart';
 import 'dart:async';
 import 'package:provider/provider.dart';
 import 'package:epos/order_counts_provider.dart';
 import 'package:epos/services/thermal_printer_service.dart';
-import 'package:epos/models/cart_item.dart';
-import 'package:epos/models/food_item.dart';
 import 'package:epos/custom_bottom_nav_bar.dart';
 
 extension HexColor on Color {
@@ -817,6 +812,15 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
 //   }
 
 
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedBottomNavItem = index;
+    });
+    // You could add additional logic here if this screen needs to react to a tap
+    // (e.g., refresh its own order list, if the orderType could change internally).
+  }
+
+
   @override
   Widget build(BuildContext context) {
     debugPrint("DynamicOrderListScreen: build method called. Active orders: ${activeOrders.length}, Completed orders: ${completedOrders.length}");
@@ -824,6 +828,14 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
     // Consume the OrderCountsProvider here to get the latest counts
     final orderCountsProvider = Provider.of<OrderCountsProvider>(context);
     final activeOrdersCount = orderCountsProvider.activeOrdersCount;
+    final dominantOrderColors = orderCountsProvider.dominantOrderColors; // <--- THIS IS WHERE WE GET THE COLORS
+
+    // Debug prints to see what colors are being received by the UI
+    print('UI Build: Dominant colors for nav items:');
+    print('  Takeaway Color: ${dominantOrderColors['takeaway']}');
+    print('  Dine In Color:  ${dominantOrderColors['dinein']}');
+    print('  Delivery Color: ${dominantOrderColors['delivery']}');
+    print('  Website Color:  ${dominantOrderColors['website']}');
 
     final allOrdersForDisplay = [...activeOrders];
     if (completedOrders.isNotEmpty) {

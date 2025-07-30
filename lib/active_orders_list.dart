@@ -6,8 +6,8 @@ import 'package:epos/services/order_api_service.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import 'package:flutter/gestures.dart';
-import 'package:provider/provider.dart'; // <--- NEW IMPORT
-import 'package:epos/order_counts_provider.dart'; // <--- NEW IMPORT
+import 'package:provider/provider.dart';
+import 'package:epos/order_counts_provider.dart';
 
 extension HexColor on Color {
   static Color fromHex(String hexString) {
@@ -38,10 +38,21 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
   late StreamSubscription _newOrderSocketSubscription;
   late StreamSubscription _acceptedOrderStreamSubscription;
   Order? _selectedOrder;
+  Timer? _overdueCheckTimer; // Declare a Timer variable
 
   @override
   void initState() {
     super.initState();
+
+    // Start a timer to periodically check for overdue orders
+    _overdueCheckTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      // Only update if the widget is still mounted
+      if (mounted) {
+        debugPrint('DEBUG: Overdue check timer triggered. Recalculating order counts and colors.');
+        _updateOrderCounts();
+      }
+    });
+
     _fetchActiveOrders();
     _listenForNewOrdersFromSocket();
     _listenForAcceptedOrders();
@@ -51,82 +62,130 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
   void dispose() {
     _newOrderSocketSubscription.cancel();
     _acceptedOrderStreamSubscription.cancel();
+    _overdueCheckTimer?.cancel();
     super.dispose();
   }
 
-  // Method to count orders by type AND determine dominant colors
+
+
+  // Helper function to get color based on order status
+  // Make sure your order.status values match these case-insensitively
+  Color _getColorForOrderStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'yellow':
+        return const Color(0xFFFFE26B); // Yellow/Amber for new or attention needed
+      case 'green':
+        return const Color(0xFF8cdd69);
+      default:
+        return const Color(0xFFff4848);
+    }
+  }
+
+  final Map<String, int> _statusPriority = {
+    'overdue_red': 3,
+    'yellow': 2,
+    'green': 1,
+    'blue': 0,
+
+  };
+
+
+  // Define your 45-minute threshold
+  final Duration _overdueThreshold = const Duration(minutes: 45); // Adjust if your "45 minutes" is different
+
   void _updateOrderCounts() {
     final orderCountsProvider = Provider.of<OrderCountsProvider>(context, listen: false);
 
-    // Numeric counts for order types (UNCHANGED from your existing logic)
     Map<String, int> currentTypeCounts = {
-      'takeaway': 0,
-      'dinein': 0,
-      'delivery': 0,
-      'website': 0,
+      'takeaway': 0, 'dinein': 0, 'delivery': 0, 'website': 0,
+    };
+    Map<String, int> currentDominantStatusPriority = {
+      'takeaway': 0, 'dinein': 0, 'delivery': 0, 'website': 0,
+    };
+    Map<String, Color> dominantColorsForTypes = {
+      'takeaway': const Color(0xFFFFE26B), // Default to yellow
+      'dinein': const Color(0xFFFFE26B),
+      'delivery': const Color(0xFFFFE26B),
+      'website': const Color(0xFFFFE26B),
     };
 
-    // NEW: Flags to track presence of critical colors for each type
-    Map<String, bool> hasRedOrder = {
-      'takeaway': false, 'dinein': false, 'delivery': false, 'website': false
-    };
-    Map<String, bool> hasYellowOrder = {
-      'takeaway': false, 'dinein': false, 'delivery': false, 'website': false
-    };
+    debugPrint('--- Starting _updateOrderCounts in ActiveOrdersList ---');
+    debugPrint('Current _activeOrders count: ${_activeOrders.length}');
 
-    // Loop through all active orders to update both counts and color flags
+    // Keep your existing detailed debug prints for each category here:
+    debugPrint('Active Delivery Orders: ${_activeOrders.where((o) => o.orderType.toLowerCase() == 'delivery').map((o) => '${o.orderId}:${o.status} (P:${_statusPriority[o.status.toLowerCase()] ?? 0})').join(', ')}');
+    // ... and for Takeaway, DineIn, Website
+
     for (var order in _activeOrders) {
-      String orderTypeKey; // This will hold 'takeaway', 'dinein', 'delivery', or 'website'
+      String orderTypeKey;
+      String orderSourceLower = order.orderSource.toLowerCase();
+      String orderTypeLower = order.orderType.toLowerCase();
+      String backendStatusLower = order.status.toLowerCase(); // This will be "yellow", "green", "blue"
 
-      // Determine the correct key for the order type/source
-      if (order.orderSource.toLowerCase() == 'website') {
+      // ... (Your existing orderTypeKey determination logic - unchanged) ...
+      if (orderSourceLower == 'website') {
         orderTypeKey = 'website';
-      } else { // Assuming 'epos' or other internal sources map to traditional types
-        orderTypeKey = order.orderType.toLowerCase();
-      }
-
-      // Update numerical counts (your existing logic)
-      if (currentTypeCounts.containsKey(orderTypeKey)) {
-        currentTypeCounts[orderTypeKey] = currentTypeCounts[orderTypeKey]! + 1;
-      }
-
-
-      // NEW: Update color flags based on order status
-      String orderStatus = order.status.toLowerCase();
-      if (orderStatus == 'red' || orderStatus == 'declined') {
-        hasRedOrder[orderTypeKey] = true;
-      } else if (orderStatus == 'yellow') {
-        hasYellowOrder[orderTypeKey] = true;
-      }
-      // If it's 'green' or 'accepted', no need to set a flag,
-      // as it's the lowest priority color.
-    }
-
-    // NEW: Determine the dominant color for each order type
-    Map<String, Color> dominantColorsForTypes = {};
-    for (String typeKey in currentTypeCounts.keys) {
-      if (hasRedOrder[typeKey] == true) {
-        dominantColorsForTypes[typeKey] = Colors.red;
-      } else if (hasYellowOrder[typeKey] == true) {
-        dominantColorsForTypes[typeKey] = Colors.yellow;
-      } else if (currentTypeCounts[typeKey]! > 0) {
-        // If there are active orders of this type, and none are red/yellow, they must all be green
-        dominantColorsForTypes[typeKey] = Colors.green;
+      } else if (orderSourceLower == 'epos') {
+        if (orderTypeLower == 'takeaway' || orderTypeLower == 'pickup' || orderTypeLower == 'collection') {
+          orderTypeKey = 'takeaway';
+        } else if (orderTypeLower == 'dinein') {
+          orderTypeKey = 'dinein';
+        } else if (orderTypeLower == 'delivery') {
+          orderTypeKey = 'delivery';
+        } else {
+          debugPrint('WARNING: Unrecognized EPOS orderType: "$orderTypeLower" for order ID ${order.orderId}. Skipping count.');
+          continue;
+        }
       } else {
-        // If there are no active orders for this type, default to grey or a neutral color
-        dominantColorsForTypes[typeKey] = Colors.grey; // Or Colors.transparent, or Colors.blue, based on your UI
+        debugPrint('WARNING: Unrecognized orderSource: "$orderSourceLower" for order ID ${order.orderId}. Skipping count.');
+        continue;
+      }
+
+      // --- Determine the effective status/color for THIS specific order ---
+      int effectivePriority = _statusPriority[backendStatusLower] ?? 0;
+      Color effectiveColor = _getColorForOrderStatus(backendStatusLower);
+
+      // Check for "overdue" (red) status based on time
+      final DateTime now = DateTime.now();
+      final Duration timeElapsed = now.difference(order.createdAt); // Use order.createdAt here
+
+      if (timeElapsed > _overdueThreshold) {
+        // This order IS overdue.
+        // We check if 'overdue_red' priority is higher than its current backend-status priority.
+        // It should almost always be, as 'overdue_red' is the highest (3).
+        if (effectivePriority < (_statusPriority['overdue_red'] ?? 0)) {
+          effectivePriority = _statusPriority['overdue_red']!; // Assign the overdue red priority
+          effectiveColor = Colors.red; // Set the color to red
+          debugPrint('  Order ID: ${order.orderId} (Type: $orderTypeKey) is OVERDUE! Setting effective priority to $effectivePriority and color to RED.');
+        }
+      }
+
+      // Increment count for the current type
+      currentTypeCounts[orderTypeKey] = (currentTypeCounts[orderTypeKey] ?? 0) + 1;
+
+      debugPrint('  Processing Order ID: ${order.orderId}, Type: "$orderTypeKey", Backend Status: "$backendStatusLower", Effective Priority: $effectivePriority, Effective Color: $effectiveColor');
+
+      // Update dominant color for this type based on effective priority
+      if (effectivePriority > (currentDominantStatusPriority[orderTypeKey] ?? 0)) {
+        currentDominantStatusPriority[orderTypeKey] = effectivePriority;
+        dominantColorsForTypes[orderTypeKey] = effectiveColor;
+        debugPrint('    -> UPDATED dominant color for "$orderTypeKey" to $effectiveColor (Effective Status Priority: $effectivePriority).');
+      } else {
+        debugPrint('    -> Kept dominant color for "$orderTypeKey" as ${dominantColorsForTypes[orderTypeKey]} (Existing Priority: ${currentDominantStatusPriority[orderTypeKey]}, Current Order Effective Priority: $effectivePriority).');
       }
     }
 
+    orderCountsProvider.updateAllCountsAndColors(currentTypeCounts, dominantColorsForTypes);
 
-    print('ActiveOrdersList: Calculated order type counts: $currentTypeCounts');
-    print('ActiveOrdersList: Calculated dominant colors: $dominantColorsForTypes');
-
-
-    // Update the provider with both the numerical counts and the dominant colors
-    orderCountsProvider.updateActiveOrdersCount(currentTypeCounts); // Update numerical counts
-    orderCountsProvider.updateDominantOrderColors(dominantColorsForTypes); // NEW: Update dominant colors
+    debugPrint('ActiveOrdersList: Final calculated order type counts: $currentTypeCounts');
+    debugPrint('ActiveOrdersList: Final calculated dominant colors: $dominantColorsForTypes');
+    debugPrint('--- Finished _updateOrderCounts in ActiveOrdersList ---');
   }
+
+
+
+
+
 
   // --- Unified Order Processing Logic ---
   void _processIncomingOrder(Order order) {
