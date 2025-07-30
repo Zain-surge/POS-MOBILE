@@ -11,6 +11,7 @@ import 'package:epos/website_orders_screen.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../services/api_service.dart';
 import 'package:epos/sales_report_screen.dart';
+import 'package:epos/custom_bottom_nav_bar.dart';
 
 class SettingsScreen extends StatefulWidget {
   final int initialBottomNavItemIndex;
@@ -1617,128 +1618,146 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNavBar(),
+
+
+     // bottomNavigationBar: _buildBottomNavBar(),
+
+      bottomNavigationBar: CustomBottomNavBar(
+        selectedIndex: _selectedBottomNavItem,
+        showDivider: true,
+        onItemSelected: (index) {
+          setState(() {
+            _selectedBottomNavItem = index;
+          });
+        },
+      ),
     );
   }
 
-  Widget _buildBottomNavBar() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Divider(
-          height: 3,
-          thickness: 1,
-          color: const Color(0xFFB2B2B2),
-        ),
-        Container(
-          height: 90,
-          color: Colors.white,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              // Nav Item 0: Takeaway Orders
-              BottomNavItem(
-                image: 'TakeAway.png',
-                index: 0,
-                selectedIndex: _selectedBottomNavItem,
-                onTap: () {
-                  setState(() {
-                    _selectedBottomNavItem = 0;
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (context) => const DynamicOrderListScreen(
-                          orderType: 'takeaway',
-                          initialBottomNavItemIndex: 0,
-                        ),
-                      ),
-                    );
-                  });
-                },
-              ),
-              // Nav Item 1: Dine-In Orders
-              BottomNavItem(
-                image: 'DineIn.png',
-                index: 1,
-                selectedIndex: _selectedBottomNavItem,
-                onTap: () {
-                  setState(() {
-                    _selectedBottomNavItem = 1;
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (context) => const DynamicOrderListScreen(
-                          orderType: 'dinein',
-                          initialBottomNavItemIndex: 1,
-                        ),
-                      ),
-                    );
-                  });
-                },
-              ),
-              // Nav Item 2: Delivery Orders
-              BottomNavItem(
-                image: 'Delivery.png',
-                index: 2,
-                selectedIndex: _selectedBottomNavItem,
-                onTap: () {
-                  setState(() {
-                    _selectedBottomNavItem = 2;
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (context) => const DynamicOrderListScreen(
-                          orderType: 'delivery',
-                          initialBottomNavItemIndex: 2,
-                        ),
-                      ),
-                    );
-                  });
-                },
-              ),
-              // Nav Item 3: Website Orders
-              BottomNavItem(
-                image: 'web.png',
-                index: 3,
-                selectedIndex: _selectedBottomNavItem,
-                onTap: () {
-                  setState(() {
-                    _selectedBottomNavItem = 3;
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (context) => WebsiteOrdersScreen(
-                          initialBottomNavItemIndex: 3,
-                        ),
-                      ),
-                    );
-                  });
-                },
-              ),
-              // Nav Item 4: Home
-              BottomNavItem(
-                image: 'home.png',
-                index: 4,
-                selectedIndex: _selectedBottomNavItem,
-                onTap: () {
-                  setState(() {
-                    _selectedBottomNavItem = 4;
-                    Navigator.pushReplacementNamed(context, '/service-selection');
-                  });
-                },
-              ),
-              // Nav Item 5: More (Current Screen)
-              BottomNavItem(
-                image: 'More.png',
-                index: 5,
-                selectedIndex: _selectedBottomNavItem,
-                onTap: () {
-                  setState(() {
-                    _selectedBottomNavItem = 5;
-                    // Already on Settings screen, no navigation needed
-                  });
-                },
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+
+
+
+
+
+  //
+  // Widget _buildBottomNavBar() {
+  //   return Column(
+  //     mainAxisSize: MainAxisSize.min,
+  //     children: [
+  //       const Divider(
+  //         height: 3,
+  //         thickness: 1,
+  //         color: const Color(0xFFB2B2B2),
+  //       ),
+  //       Container(
+  //         height: 90,
+  //         color: Colors.white,
+  //         child: Row(
+  //           mainAxisAlignment: MainAxisAlignment.spaceAround,
+  //           children: [
+  //             // Nav Item 0: Takeaway Orders
+  //             BottomNavItem(
+  //               image: 'TakeAway.png',
+  //               index: 0,
+  //               selectedIndex: _selectedBottomNavItem,
+  //               onTap: () {
+  //                 setState(() {
+  //                   _selectedBottomNavItem = 0;
+  //                   Navigator.of(context).pushReplacement(
+  //                     MaterialPageRoute(
+  //                       builder: (context) => const DynamicOrderListScreen(
+  //                         orderType: 'takeaway',
+  //                         initialBottomNavItemIndex: 0,
+  //                       ),
+  //                     ),
+  //                   );
+  //                 });
+  //               },
+  //             ),
+  //             // Nav Item 1: Dine-In Orders
+  //             BottomNavItem(
+  //               image: 'DineIn.png',
+  //               index: 1,
+  //               selectedIndex: _selectedBottomNavItem,
+  //               onTap: () {
+  //                 setState(() {
+  //                   _selectedBottomNavItem = 1;
+  //                   Navigator.of(context).pushReplacement(
+  //                     MaterialPageRoute(
+  //                       builder: (context) => const DynamicOrderListScreen(
+  //                         orderType: 'dinein',
+  //                         initialBottomNavItemIndex: 1,
+  //                       ),
+  //                     ),
+  //                   );
+  //                 });
+  //               },
+  //             ),
+  //             // Nav Item 2: Delivery Orders
+  //             BottomNavItem(
+  //               image: 'Delivery.png',
+  //               index: 2,
+  //               selectedIndex: _selectedBottomNavItem,
+  //               onTap: () {
+  //                 setState(() {
+  //                   _selectedBottomNavItem = 2;
+  //                   Navigator.of(context).pushReplacement(
+  //                     MaterialPageRoute(
+  //                       builder: (context) => const DynamicOrderListScreen(
+  //                         orderType: 'delivery',
+  //                         initialBottomNavItemIndex: 2,
+  //                       ),
+  //                     ),
+  //                   );
+  //                 });
+  //               },
+  //             ),
+  //             // Nav Item 3: Website Orders
+  //             BottomNavItem(
+  //               image: 'web.png',
+  //               index: 3,
+  //               selectedIndex: _selectedBottomNavItem,
+  //               onTap: () {
+  //                 setState(() {
+  //                   _selectedBottomNavItem = 3;
+  //                   Navigator.of(context).pushReplacement(
+  //                     MaterialPageRoute(
+  //                       builder: (context) => WebsiteOrdersScreen(
+  //                         initialBottomNavItemIndex: 3,
+  //                       ),
+  //                     ),
+  //                   );
+  //                 });
+  //               },
+  //             ),
+  //             // Nav Item 4: Home
+  //             BottomNavItem(
+  //               image: 'home.png',
+  //               index: 4,
+  //               selectedIndex: _selectedBottomNavItem,
+  //               onTap: () {
+  //                 setState(() {
+  //                   _selectedBottomNavItem = 4;
+  //                   Navigator.pushReplacementNamed(context, '/service-selection');
+  //                 });
+  //               },
+  //             ),
+  //             // Nav Item 5: More (Current Screen)
+  //             BottomNavItem(
+  //               image: 'More.png',
+  //               index: 5,
+  //               selectedIndex: _selectedBottomNavItem,
+  //               onTap: () {
+  //                 setState(() {
+  //                   _selectedBottomNavItem = 5;
+  //                   // Already on Settings screen, no navigation needed
+  //                 });
+  //               },
+  //             ),
+  //           ],
+  //         ),
+  //       ),
+  //     ],
+  //   );
+  // }
 }

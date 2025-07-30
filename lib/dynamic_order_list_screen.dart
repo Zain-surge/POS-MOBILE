@@ -12,6 +12,7 @@ import 'package:epos/order_counts_provider.dart';
 import 'package:epos/services/thermal_printer_service.dart';
 import 'package:epos/models/cart_item.dart';
 import 'package:epos/models/food_item.dart';
+import 'package:epos/custom_bottom_nav_bar.dart';
 
 extension HexColor on Color {
   static Color fromHex(String hexString) {
@@ -1518,228 +1519,249 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> {
           ],
         ),
       ),
+
       // Pass activeOrdersCount to _buildBottomNavBar
-      bottomNavigationBar: _buildBottomNavBar(activeOrdersCount),
-    );
-  }
+      //bottomNavigationBar: _buildBottomNavBar(activeOrdersCount),
 
 
-  // --- MODIFIED _buildBottomNavBar to use _navItem directly and accept activeOrdersCount ---
-  Widget _buildBottomNavBar(Map<String, int> activeOrdersCount) {
-    debugPrint("DynamicOrderListScreen: _buildBottomNavBar called with counts.");
-    return Container(
-      height: 80,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(
-            color: const Color(0xFFB2B2B2),
-            width: 3,
-          ),
-        ),
-      ),
-     child: Padding(
-       padding: const EdgeInsets.symmetric(horizontal: 45.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _navItem(
-            'TakeAway.png',
-            0,
-            notification: _getNotificationCount(0, activeOrdersCount),
-            color: Colors.amber, // Yellow notification for take away
-            onTap: () {
-              debugPrint("DynamicOrderListScreen: Navigating to EPOS Takeaway.");
-              if (_selectedBottomNavItem != 0) { // Only navigate if not already on this screen
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                    const DynamicOrderListScreen(
-                      orderType: 'takeaway',
-                      initialBottomNavItemIndex: 0,
-                    ),
-                  ),
-                );
-              }
-            },
-          ),
-          _navItem(
-            'DineIn.png',
-            1,
-            notification: _getNotificationCount(1, activeOrdersCount),
-            color: Colors.amber, // Yellow notification for dine in
-            onTap: () {
-              debugPrint("DynamicOrderListScreen: Navigating to EPOS Dine In.");
-              if (_selectedBottomNavItem != 1) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                    const DynamicOrderListScreen(
-                      orderType: 'dinein',
-                      initialBottomNavItemIndex: 1,
-                    ),
-                  ),
-                );
-              }
-            },
-          ),
-          _navItem(
-            'Delivery.png',
-            2,
-            notification: _getNotificationCount(2, activeOrdersCount),
-            color: Colors.amber, // Yellow notification for delivery
-            onTap: () {
-              debugPrint("DynamicOrderListScreen: Navigating to EPOS Delivery.");
-              if (_selectedBottomNavItem != 2) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                    const DynamicOrderListScreen(
-                      orderType: 'delivery',
-                      initialBottomNavItemIndex: 2,
-                    ),
-                  ),
-                );
-              }
-            },
-          ),
-          _navItem(
-            'web.png',
-            3,
-            notification: _getNotificationCount(3, activeOrdersCount),
-            color: Colors.amber, // Yellow notification for website
-            onTap: () {
-              debugPrint("DynamicOrderListScreen: Navigating to Website Orders.");
-              if (_selectedBottomNavItem != 3) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                    const WebsiteOrdersScreen(
-                      initialBottomNavItemIndex: 3,
-                    ),
-                  ),
-                );
-              }
-            },
-          ),
-          _navItem(
-            'home.png',
-            4,
-            onTap: () {
-              debugPrint("DynamicOrderListScreen: Navigating to Page4 (Home Screen).");
-              Navigator.pushReplacementNamed(context, '/service-selection');
-            },
-          ),
-          _navItem(
-            'More.png',
-            5,
-            onTap: () {
-              debugPrint("DynamicOrderListScreen: Navigating to Settings Screen.");
-              if (_selectedBottomNavItem != 5) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SettingsScreen(
-                      initialBottomNavItemIndex: 5,
-                    ),
-                  ),
-                );
-              }
-            },
-          ),
-        ],
-      ),
-    ),
-    );
-  }
-
-  // This _navItem is a duplicate from Page4 but is necessary here
-  // unless you make a common widget for it. For now, duplicating is simpler.
-  Widget _navItem(String image, int index,
-      {String? notification, Color? color, required VoidCallback onTap}) {
-
-    bool isSelected = _selectedBottomNavItem == index;
-
-    String displayImage = image;
-
-    if (isSelected) {
-      if (image == 'TakeAway.png') {
-        displayImage = 'TakeAwaywhite.png';
-      } else if (image == 'DineIn.png') {
-        displayImage = 'DineInwhite.png';
-      } else if (image == 'Delivery.png') {
-        displayImage = 'Deliverywhite.png';
-      } else if (image.contains('.png')) {
-        // For other icons that have a white version when selected
-        displayImage = image.replaceAll('.png', 'white.png');
-      }
-    } else {
-      // Logic to switch back to original color version if not selected
-      if (image == 'TakeAwaywhite.png') {
-        displayImage = 'TakeAway.png';
-      } else if (image == 'DineInwhite.png') {
-        displayImage = 'DineIn.png';
-      } else if (image == 'Deliverywhite.png') {
-        displayImage = 'Delivery.png';
-      } else if (image.contains('white.png')) {
-        displayImage = image.replaceAll('white.png', '.png');
-      }
-    }
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () {
-          // No setState here, as navigation handles the selection change
-          onTap(); // Execute the specific tap action
+      bottomNavigationBar: CustomBottomNavBar(
+        selectedIndex: _selectedBottomNavItem,
+        showDivider: true,
+        onItemSelected: (index) {
+          setState(() {
+            _selectedBottomNavItem = index;
+          });
         },
-        child: Container(
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.black : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Image.asset(
-                'assets/images/$displayImage',
-                width: index == 2 ? 92 : 60, // Special sizing for Delivery icon
-                height: index == 2 ? 92 : 60,
-              ),
-              if (notification != null && notification.isNotEmpty)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: color ?? Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 20,
-                      minHeight: 20,
-                    ),
-                    child: Text(
-                      notification,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
       ),
+
+
     );
   }
+
+
+
+
+
+
+
+
+  //
+  // // --- MODIFIED _buildBottomNavBar to use _navItem directly and accept activeOrdersCount ---
+  // Widget _buildBottomNavBar(Map<String, int> activeOrdersCount) {
+  //   debugPrint("DynamicOrderListScreen: _buildBottomNavBar called with counts.");
+  //   return Container(
+  //     height: 80,
+  //     decoration: const BoxDecoration(
+  //       color: Colors.white,
+  //       border: Border(
+  //         top: BorderSide(
+  //           color: const Color(0xFFB2B2B2),
+  //           width: 3,
+  //         ),
+  //       ),
+  //     ),
+  //    child: Padding(
+  //      padding: const EdgeInsets.symmetric(horizontal: 45.0),
+  //     child: Row(
+  //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //       children: [
+  //         _navItem(
+  //           'TakeAway.png',
+  //           0,
+  //           notification: _getNotificationCount(0, activeOrdersCount),
+  //           color: Colors.amber, // Yellow notification for take away
+  //           onTap: () {
+  //             debugPrint("DynamicOrderListScreen: Navigating to EPOS Takeaway.");
+  //             if (_selectedBottomNavItem != 0) { // Only navigate if not already on this screen
+  //               Navigator.pushReplacement(
+  //                 context,
+  //                 MaterialPageRoute(
+  //                   builder: (_) =>
+  //                   const DynamicOrderListScreen(
+  //                     orderType: 'takeaway',
+  //                     initialBottomNavItemIndex: 0,
+  //                   ),
+  //                 ),
+  //               );
+  //             }
+  //           },
+  //         ),
+  //         _navItem(
+  //           'DineIn.png',
+  //           1,
+  //           notification: _getNotificationCount(1, activeOrdersCount),
+  //           color: Colors.amber, // Yellow notification for dine in
+  //           onTap: () {
+  //             debugPrint("DynamicOrderListScreen: Navigating to EPOS Dine In.");
+  //             if (_selectedBottomNavItem != 1) {
+  //               Navigator.pushReplacement(
+  //                 context,
+  //                 MaterialPageRoute(
+  //                   builder: (_) =>
+  //                   const DynamicOrderListScreen(
+  //                     orderType: 'dinein',
+  //                     initialBottomNavItemIndex: 1,
+  //                   ),
+  //                 ),
+  //               );
+  //             }
+  //           },
+  //         ),
+  //         _navItem(
+  //           'Delivery.png',
+  //           2,
+  //           notification: _getNotificationCount(2, activeOrdersCount),
+  //           color: Colors.amber, // Yellow notification for delivery
+  //           onTap: () {
+  //             debugPrint("DynamicOrderListScreen: Navigating to EPOS Delivery.");
+  //             if (_selectedBottomNavItem != 2) {
+  //               Navigator.pushReplacement(
+  //                 context,
+  //                 MaterialPageRoute(
+  //                   builder: (_) =>
+  //                   const DynamicOrderListScreen(
+  //                     orderType: 'delivery',
+  //                     initialBottomNavItemIndex: 2,
+  //                   ),
+  //                 ),
+  //               );
+  //             }
+  //           },
+  //         ),
+  //         _navItem(
+  //           'web.png',
+  //           3,
+  //           notification: _getNotificationCount(3, activeOrdersCount),
+  //           color: Colors.amber, // Yellow notification for website
+  //           onTap: () {
+  //             debugPrint("DynamicOrderListScreen: Navigating to Website Orders.");
+  //             if (_selectedBottomNavItem != 3) {
+  //               Navigator.pushReplacement(
+  //                 context,
+  //                 MaterialPageRoute(
+  //                   builder: (_) =>
+  //                   const WebsiteOrdersScreen(
+  //                     initialBottomNavItemIndex: 3,
+  //                   ),
+  //                 ),
+  //               );
+  //             }
+  //           },
+  //         ),
+  //         _navItem(
+  //           'home.png',
+  //           4,
+  //           onTap: () {
+  //             debugPrint("DynamicOrderListScreen: Navigating to Page4 (Home Screen).");
+  //             Navigator.pushReplacementNamed(context, '/service-selection');
+  //           },
+  //         ),
+  //         _navItem(
+  //           'More.png',
+  //           5,
+  //           onTap: () {
+  //             debugPrint("DynamicOrderListScreen: Navigating to Settings Screen.");
+  //             if (_selectedBottomNavItem != 5) {
+  //               Navigator.push(
+  //                 context,
+  //                 MaterialPageRoute(
+  //                   builder: (context) => const SettingsScreen(
+  //                     initialBottomNavItemIndex: 5,
+  //                   ),
+  //                 ),
+  //               );
+  //             }
+  //           },
+  //         ),
+  //       ],
+  //     ),
+  //   ),
+  //   );
+  // }
+  //
+  // // This _navItem is a duplicate from Page4 but is necessary here
+  // // unless you make a common widget for it. For now, duplicating is simpler.
+  // Widget _navItem(String image, int index,
+  //     {String? notification, Color? color, required VoidCallback onTap}) {
+  //
+  //   bool isSelected = _selectedBottomNavItem == index;
+  //
+  //   String displayImage = image;
+  //
+  //   if (isSelected) {
+  //     if (image == 'TakeAway.png') {
+  //       displayImage = 'TakeAwaywhite.png';
+  //     } else if (image == 'DineIn.png') {
+  //       displayImage = 'DineInwhite.png';
+  //     } else if (image == 'Delivery.png') {
+  //       displayImage = 'Deliverywhite.png';
+  //     } else if (image.contains('.png')) {
+  //       // For other icons that have a white version when selected
+  //       displayImage = image.replaceAll('.png', 'white.png');
+  //     }
+  //   } else {
+  //     // Logic to switch back to original color version if not selected
+  //     if (image == 'TakeAwaywhite.png') {
+  //       displayImage = 'TakeAway.png';
+  //     } else if (image == 'DineInwhite.png') {
+  //       displayImage = 'DineIn.png';
+  //     } else if (image == 'Deliverywhite.png') {
+  //       displayImage = 'Delivery.png';
+  //     } else if (image.contains('white.png')) {
+  //       displayImage = image.replaceAll('white.png', '.png');
+  //     }
+  //   }
+  //
+  //   return MouseRegion(
+  //     cursor: SystemMouseCursors.click,
+  //     child: GestureDetector(
+  //       onTap: () {
+  //         // No setState here, as navigation handles the selection change
+  //         onTap(); // Execute the specific tap action
+  //       },
+  //       child: Container(
+  //         padding: const EdgeInsets.all(5),
+  //         decoration: BoxDecoration(
+  //           color: isSelected ? Colors.black : Colors.transparent,
+  //           borderRadius: BorderRadius.circular(12),
+  //         ),
+  //         child: Stack(
+  //           alignment: Alignment.center,
+  //           children: [
+  //             Image.asset(
+  //               'assets/images/$displayImage',
+  //               width: index == 2 ? 92 : 60, // Special sizing for Delivery icon
+  //               height: index == 2 ? 92 : 60,
+  //             ),
+  //             if (notification != null && notification.isNotEmpty)
+  //               Positioned(
+  //                 top: 0,
+  //                 right: 0,
+  //                 child: Container(
+  //                   padding: const EdgeInsets.all(4),
+  //                   decoration: BoxDecoration(
+  //                     color: color ?? Colors.red,
+  //                     shape: BoxShape.circle,
+  //                   ),
+  //                   constraints: const BoxConstraints(
+  //                     minWidth: 20,
+  //                     minHeight: 20,
+  //                   ),
+  //                   child: Text(
+  //                     notification,
+  //                     style: const TextStyle(
+  //                       color: Colors.white,
+  //                       fontSize: 12,
+  //                       fontWeight: FontWeight.bold,
+  //                     ),
+  //                     textAlign: TextAlign.center,
+  //                   ),
+  //                 ),
+  //               ),
+  //           ],
+  //         ),
+  //       ),
+  //     ),
+  //   );
+  // }
 }

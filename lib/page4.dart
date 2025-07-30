@@ -17,6 +17,7 @@ import 'package:epos/settings_screen.dart';
 import 'package:epos/models/order_models.dart';
 import 'package:provider/provider.dart';
 import 'package:epos/order_counts_provider.dart';
+import 'package:epos/custom_bottom_nav_bar.dart';
 
 class Page4 extends StatefulWidget {
   final String? initialSelectedServiceImage;
@@ -48,25 +49,25 @@ class _Page4State extends State<Page4> {
   String _selectedPaymentType = 'cash';
   late String selectedServiceImage;
   late String _actualOrderType;
-
-  int _selectedBottomNavItem = 4; // This will determine the highlighted nav item
+  int _selectedBottomNavItem = -1;
   bool _showPayment = false;
   CustomerDetails? _customerDetails;
-
-  final GlobalKey _leftPanelKey = GlobalKey(); // GlobalKey for the left panel
-  Rect _leftPanelRect = Rect.zero; // Rect to store dimensions
-
-  // --- NEW STATE VARIABLE FOR EDIT MODE ---
   bool _isEditMode = false;
   bool _canScrollLeft = false;
   bool _canScrollRight = true;
-
   final ScrollController _categoryScrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+
+  final GlobalKey _leftPanelKey = GlobalKey();
+  Rect _leftPanelRect = Rect.zero;
+
+
 
   // Function to scroll the category list left
   void _scrollCategoriesLeft() {
     _categoryScrollController.animateTo(
-      _categoryScrollController.offset - 200, // Scroll by 200 pixels (adjust as needed)
+      _categoryScrollController.offset - 200,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
     );
@@ -75,12 +76,42 @@ class _Page4State extends State<Page4> {
   // Function to scroll the category list right
   void _scrollCategoriesRight() {
     _categoryScrollController.animateTo(
-      _categoryScrollController.offset + 200, // Scroll by 200 pixels (adjust as needed)
+      _categoryScrollController.offset + 200,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
     );
   }
 
+  // Method to handle bottom nav item selection
+  // void _onBottomNavItemSelected(int index) {
+  //   setState(() {
+  //     _selectedBottomNavItem = index;
+  //   });
+  // }
+
+
+  // Method to handle bottom nav item selection
+  void _onBottomNavItemSelected(int index) {
+    setState(() {
+      _selectedBottomNavItem = index;
+    });
+
+    if (index == 0) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => DynamicOrderListScreen(initialBottomNavItemIndex: 0, orderType: 'takeaway',)));
+    } else if (index == 1) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => DynamicOrderListScreen(initialBottomNavItemIndex: 1, orderType: 'dinein',)));
+    } else if (index == 2) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => DynamicOrderListScreen(initialBottomNavItemIndex: 2, orderType: 'delivery',)));
+    } else if (index == 3) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => WebsiteOrdersScreen(initialBottomNavItemIndex: 3)));
+    } else if (index == 4) {
+      setState(() {
+        _selectedBottomNavItem = -1;
+      });
+    } else if (index == 5) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => SettingsScreen(initialBottomNavItemIndex: 5)));
+    }
+  }
 
 
   final List<Category> categories = [
@@ -116,36 +147,46 @@ class _Page4State extends State<Page4> {
         return 4; // Default to 'home' or a neutral state
     }
   }
+  //
+  // // Method to get order count for each nav item (NOW uses provider's activeOrdersCount)
+  // String? _getNotificationCount(int index, Map<String, int> currentActiveOrdersCount) {
+  //   int count = 0;
+  //   switch (index) {
+  //     case 0: // Takeaway
+  //       count = currentActiveOrdersCount['takeaway'] ?? 0;
+  //       break;
+  //     case 1: // Dine In
+  //       count = currentActiveOrdersCount['dinein'] ?? 0;
+  //       break;
+  //     case 2: // Delivery
+  //       count = currentActiveOrdersCount['delivery'] ?? 0;
+  //       break;
+  //     case 3: // Website
+  //       count = currentActiveOrdersCount['website'] ?? 0;
+  //       break;
+  //     default:
+  //       return null; // No notification for home/more
+  //   }
+  //   return count > 0 ? count.toString() : null;
+  // }
 
-  // Method to get order count for each nav item (NOW uses provider's activeOrdersCount)
-  String? _getNotificationCount(int index, Map<String, int> currentActiveOrdersCount) {
-    int count = 0;
-    switch (index) {
-      case 0: // Takeaway
-        count = currentActiveOrdersCount['takeaway'] ?? 0;
-        break;
-      case 1: // Dine In
-        count = currentActiveOrdersCount['dinein'] ?? 0;
-        break;
-      case 2: // Delivery
-        count = currentActiveOrdersCount['delivery'] ?? 0;
-        break;
-      case 3: // Website
-        count = currentActiveOrdersCount['website'] ?? 0;
-        break;
-      default:
-        return null; // No notification for home/more
+
+  String _toTitleCase(String text) {
+    if (text.isEmpty) {
+      return text;
     }
-    return count > 0 ? count.toString() : null;
+    return text.split(' ').map((word) {
+      if (word.isEmpty) {
+        return '';
+      }
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(' ');
   }
-
   @override
   void initState() {
     super.initState();
-
     selectedServiceImage = widget.initialSelectedServiceImage ?? 'TakeAway.png';
     _actualOrderType = widget.selectedOrderType;
-
     // Initialize takeaway sub-type based on the selected order type
     if (_actualOrderType.toLowerCase() == 'collection') {
       _takeawaySubType = 'collection';
@@ -153,7 +194,7 @@ class _Page4State extends State<Page4> {
       _takeawaySubType = 'takeaway';
     }
 
-    _selectedBottomNavItem = _getBottomNavItemIndexForOrderType(_actualOrderType);
+    _selectedBottomNavItem = -1;
 
     foodItems = widget.foodItems;
 
@@ -171,6 +212,9 @@ class _Page4State extends State<Page4> {
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _updateScrollButtonVisibility();
     });
+
+    _searchController.addListener(() => setState(() {}));
+    _searchFocusNode.addListener(() => setState(() {}));
   }
 
 
@@ -198,7 +242,7 @@ class _Page4State extends State<Page4> {
           renderBox.size.height,
         );
       });
-      debugPrint('Left Panel Rect for Modal Positioning: $_leftPanelRect'); // For debugging
+      debugPrint('Left Panel Rect for Modal Positioning: $_leftPanelRect');
     }
   }
 
@@ -210,7 +254,9 @@ class _Page4State extends State<Page4> {
   @override
   void dispose() {
     _categoryScrollController.removeListener(_updateScrollButtonVisibility);
-    _categoryScrollController.dispose(); // Don't forget to dispose controllers
+    _categoryScrollController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -415,7 +461,7 @@ class _Page4State extends State<Page4> {
 
                                 Container(
                                   margin: const EdgeInsets.symmetric(horizontal: 40),
-                                  height: 7,
+                                  height: 13,
                                   width: double.infinity,
                                   decoration: BoxDecoration(
                                     color: Color(0xFFF2D9F9),
@@ -439,7 +485,9 @@ class _Page4State extends State<Page4> {
                         ),
                       ),
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 20.0),
+                        padding: _isModalOpen
+                            ? EdgeInsets.zero
+                            : const EdgeInsets.symmetric(vertical: 20.0),
                         child: const VerticalDivider(
                           width: 2.5,
                           thickness: 2.5,
@@ -490,7 +538,15 @@ class _Page4State extends State<Page4> {
             ),
           ),
 
-          _buildBottomNavBar(activeOrdersCount),
+          //_buildBottomNavBar(activeOrdersCount),
+
+          // <--- CUSTOM BOTTOM NAVIGATION BAR
+          CustomBottomNavBar(
+            selectedIndex: -1,
+            onItemSelected: _onBottomNavItemSelected,
+            showDivider: true, // Set to true if you want the top divider
+          ),
+
         ],
       ),
     );
@@ -534,8 +590,6 @@ class _Page4State extends State<Page4> {
         return 'assets/images/default.png';
     }
   }
-
-
 
   // Updated _buildCartSummary method with MouseRegion for hand cursor
 
@@ -1137,6 +1191,7 @@ class _Page4State extends State<Page4> {
           _showPayment = false;
           _customerDetails = null;
           _hasProcessedFirstStep = false; // Reset the flag after successful order
+          _selectedBottomNavItem = -1;
         });
       }
     } catch (e) {
@@ -1453,118 +1508,130 @@ class _Page4State extends State<Page4> {
   }
 
 
-
   Widget _buildSearchBar() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Top Row with Edit Icon on the Right
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _isEditMode = !_isEditMode;
-                    });
-                  },
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: _isEditMode ? Colors.black : Colors.transparent,
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: Image.asset(
-                      'assets/images/EDIT.png',
-                      color: _isEditMode ? Colors.white : null,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Search Bar Row with Arrow Icon
-        Padding(
-          padding: const EdgeInsets.only(left: 50, right: 120),
-          child: Row(
-            children: [
-              // Rounded Back Arrow Icon
-              GestureDetector(
-                onTap: () {
-                  Navigator.pop(context);
-                },
-                child: SizedBox(
-                  width: 45,
-                  height: 45,
-                  child: Image.asset(
-                    'assets/images/bArrow.png',
-                    fit: BoxFit.contain,
-                  ),
-
-                ),
-              ),
-
-              const SizedBox(width: 40),
-
-              // Search TextField
-              Expanded(
-                child: TextField(
-                  textAlign: TextAlign.center,
-                  decoration: InputDecoration(
-                    hintText: "Search",
-                    hintStyle: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 25,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        vertical: 0, horizontal: 15),
-                    filled: true,
-                    fillColor: Color(0xFFc9c9c9),
-                    prefixIcon: const Padding(
-                      padding: EdgeInsets.only(left: 20.0, right: 8.0),
-                      child: Icon(
-                        Icons.search,
-                        color: Colors.white,
-                        size: 40,
+    return GestureDetector( // GestureDetector to dismiss keyboard
+      onTap: () {
+        FocusScope.of(context).unfocus(); // Close the keyboard
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top Row with Edit Icon on the Right
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isEditMode = !_isEditMode;
+                      });
+                    },
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: _isEditMode ? Colors.black : Colors.transparent,
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      child: Image.asset(
+                        'assets/images/EDIT.png',
+                        color: _isEditMode ? Colors.white : null,
                       ),
                     ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(50),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(50),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(50),
-                      borderSide: BorderSide.none,
-                    ),
                   ),
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontSize: 18,
-                  ),
-                  onChanged: (query) {
-                    setState(() {
-                      _searchQuery = query;
-                    });
-                  },
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 20),
-      ],
+
+          // Search Bar Row with Arrow Icon
+          Padding(
+            padding: const EdgeInsets.only(left: 50, right: 120),
+            child: Row(
+              children: [
+                // Rounded Back Arrow Icon
+                GestureDetector(
+                  onTap: () {
+                    FocusScope.of(context).unfocus();
+                    Navigator.pop(context);
+                  },
+                  child: SizedBox(
+                    width: 45,
+                    height: 45,
+                    child: Image.asset(
+                      'assets/images/bArrow.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 40),
+
+                // Search TextField
+                Expanded(
+                  child: TextField(
+                    controller: _searchController, // Assign controller
+                    focusNode: _searchFocusNode,   // Assign focus node
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      // Conditional hintText: Show "Search" only if not focused and empty
+                      hintText: _searchFocusNode.hasFocus || _searchController.text.isNotEmpty
+                          ? '' // Disappear if focused or has text
+                          : 'Search', // Show otherwise
+                      hintStyle: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 25,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 0, horizontal: 15),
+                      filled: true,
+                      fillColor: const Color(0xFFc9c9c9), // Use const for Color
+                      prefixIcon: const Padding(
+                        padding: EdgeInsets.only(left: 20.0, right: 8.0),
+                        child: Icon(
+                          Icons.search,
+                          color: Colors.white,
+                          size: 40,
+                        ),
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(50),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(50),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(50),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 18,
+                    ),
+                    onChanged: (query) {
+                      setState(() {
+                        _searchQuery = query;
+                      });
+                    },
+                    onTap: () {
+                      setState(() {}); // Trigger rebuild to update hint based on focus
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
     );
   }
 
@@ -1789,20 +1856,12 @@ class _Page4State extends State<Page4> {
           child: Container(
             decoration: BoxDecoration(
               color: const Color(0xFFF2D9F9),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.5),
-                  spreadRadius: 2,
-                  blurRadius: 5,
-                  offset: const Offset(0, 5),
-                ),
-              ],
+              borderRadius: BorderRadius.circular(19),
             ),
             child: Stack(
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(5),
+                  padding: const EdgeInsets.fromLTRB(14.0, 5.0, 22.0, 5.0),
                   child: Row(
                     children: [
                       Expanded(
@@ -1811,12 +1870,12 @@ class _Page4State extends State<Page4> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              item.name,
+                              _toTitleCase(item.name), // Apply the _toTitleCase function here
                               maxLines: 3,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                fontWeight: FontWeight.normal,
-                                fontSize: 19,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
                                 fontFamily: 'Poppins',
                               ),
                             ),
@@ -1838,16 +1897,16 @@ class _Page4State extends State<Page4> {
                         MouseRegion(
                           cursor: SystemMouseCursors.click,
                           child: Container(
-                            width: 40,
-                            height: 45,
+                            width: 41,
+                            height: 47,
                             decoration: BoxDecoration(
                               color: const Color(0xFFD887EF),
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(9),
                             ),
                             child: const Icon(
                               Icons.add,
                               color: Colors.black,
-                              size: 42,
+                              size: 43,
                             ),
                           ),
                         ),
@@ -1889,204 +1948,204 @@ class _Page4State extends State<Page4> {
   }
 
 
-  // --- MODIFIED _buildBottomNavBar to take activeOrdersCount ---
-  Widget _buildBottomNavBar(Map<String, int> activeOrdersCount) {
-    return Container(
-      height: 80,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(
-            color: Color(0xFFB2B2B2),
-            width: 3,
-          ),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 45.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _navItem(
-              'TakeAway.png',
-              0,
-              notification: _getNotificationCount(0, activeOrdersCount), // Use provider data
-              color: const Color(0xFFFFE26B), // Yellow notification for take away
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                    const DynamicOrderListScreen(
-                      orderType: 'takeaway',
-                      initialBottomNavItemIndex: 0,
-                    ),
-                  ),
-                );
-              },
-            ),
+  // // --- MODIFIED _buildBottomNavBar to take activeOrdersCount ---
+  // Widget _buildBottomNavBar(Map<String, int> activeOrdersCount) {
+  //   return Container(
+  //     height: 80,
+  //     decoration: const BoxDecoration(
+  //       color: Colors.white,
+  //       border: Border(
+  //         top: BorderSide(
+  //           color: Color(0xFFB2B2B2),
+  //           width: 3,
+  //         ),
+  //       ),
+  //     ),
+  //     child: Padding(
+  //       padding: const EdgeInsets.symmetric(horizontal: 45.0),
+  //       child: Row(
+  //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //         children: [
+  //           _navItem(
+  //             'TakeAway.png',
+  //             0,
+  //             notification: _getNotificationCount(0, activeOrdersCount), // Use provider data
+  //             color: const Color(0xFFFFE26B), // Yellow notification for take away
+  //             onTap: () {
+  //               Navigator.push(
+  //                 context,
+  //                 MaterialPageRoute(
+  //                   builder: (context) =>
+  //                   const DynamicOrderListScreen(
+  //                     orderType: 'takeaway',
+  //                     initialBottomNavItemIndex: 0,
+  //                   ),
+  //                 ),
+  //               );
+  //             },
+  //           ),
+  //
+  //           _navItem(
+  //             'DineIn.png',
+  //             1,
+  //             notification: _getNotificationCount(1, activeOrdersCount), // Use provider data
+  //             color: const Color(0xFFFFE26B), // Yellow notification for dine in
+  //             onTap: () {
+  //               Navigator.push(
+  //                 context,
+  //                 MaterialPageRoute(
+  //                   builder: (context) =>
+  //                   const DynamicOrderListScreen(
+  //                     orderType: 'dinein',
+  //                     initialBottomNavItemIndex: 1,
+  //                   ),
+  //                 ),
+  //               );
+  //             },
+  //           ),
+  //
+  //           _navItem(
+  //             'Delivery.png',
+  //             2,
+  //             notification: _getNotificationCount(2, activeOrdersCount), // Use provider data
+  //             color: const Color(0xFFFFE26B), // Yellow notification for delivery
+  //             onTap: () {
+  //               Navigator.push(
+  //                 context,
+  //                 MaterialPageRoute(
+  //                   builder: (context) =>
+  //                   const DynamicOrderListScreen(
+  //                     orderType: 'delivery',
+  //                     initialBottomNavItemIndex: 2,
+  //                   ),
+  //                 ),
+  //               );
+  //             },
+  //           ),
+  //
+  //           _navItem(
+  //             'web.png',
+  //             3,
+  //             notification: _getNotificationCount(3, activeOrdersCount), // Use provider data
+  //             color: const Color(0xFFFFE26B), // Yellow notification for website
+  //             onTap: () {
+  //               Navigator.push(
+  //                   context,
+  //                   MaterialPageRoute(builder: (context) => const WebsiteOrdersScreen(initialBottomNavItemIndex: 3)));
+  //             },
+  //           ),
+  //           _navItem('home.png', 4, onTap: () {
+  //             Navigator.pop(context);
+  //           }),
+  //
+  //           _navItem('More.png', 5, onTap: () {
+  //             Navigator.push(
+  //               context,
+  //               MaterialPageRoute(
+  //                 builder: (context) => const SettingsScreen(
+  //                   initialBottomNavItemIndex: 5,
+  //                 ),
+  //               ),
+  //             );
+  //           }),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 
-            _navItem(
-              'DineIn.png',
-              1,
-              notification: _getNotificationCount(1, activeOrdersCount), // Use provider data
-              color: const Color(0xFFFFE26B), // Yellow notification for dine in
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                    const DynamicOrderListScreen(
-                      orderType: 'dinein',
-                      initialBottomNavItemIndex: 1,
-                    ),
-                  ),
-                );
-              },
-            ),
-
-            _navItem(
-              'Delivery.png',
-              2,
-              notification: _getNotificationCount(2, activeOrdersCount), // Use provider data
-              color: const Color(0xFFFFE26B), // Yellow notification for delivery
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                    const DynamicOrderListScreen(
-                      orderType: 'delivery',
-                      initialBottomNavItemIndex: 2,
-                    ),
-                  ),
-                );
-              },
-            ),
-
-            _navItem(
-              'web.png',
-              3,
-              notification: _getNotificationCount(3, activeOrdersCount), // Use provider data
-              color: const Color(0xFFFFE26B), // Yellow notification for website
-              onTap: () {
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const WebsiteOrdersScreen(initialBottomNavItemIndex: 3)));
-              },
-            ),
-            _navItem('home.png', 4, onTap: () {
-              Navigator.pop(context);
-            }),
-
-            _navItem('More.png', 5, onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SettingsScreen(
-                    initialBottomNavItemIndex: 5,
-                  ),
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- MODIFIED _navItem to accept notification and color ---
-  Widget _navItem(String image, int index,
-      {String? notification, Color? color, required VoidCallback onTap}) {
-
-    bool isSelected = _selectedBottomNavItem == index;
-
-    String displayImage = image;
-
-    if (isSelected) {
-      // Logic to switch to white version of image if selected
-      if (image == 'TakeAway.png') {
-        displayImage = 'TakeAwaywhite.png';
-      } else if (image == 'DineIn.png') {
-        displayImage = 'DineInwhite.png';
-      } else if (image == 'Delivery.png') {
-        displayImage = 'Deliverywhite.png';
-      } else if (image == 'home.png' || image == 'More.png') {
-        // These might not have a 'white' version or you explicitly don't want them to change color
-        // For 'home.png' and 'More.png', the `color` property below will handle it
-      } else if (image.contains('.png')) {
-        displayImage = image.replaceAll('.png', 'white.png');
-      }
-    } else {
-      // Logic to switch back to original color version if not selected
-      if (image == 'TakeAwaywhite.png') {
-        displayImage = 'TakeAway.png';
-      } else if (image == 'DineInwhite.png') {
-        displayImage = 'DineIn.png';
-      } else if (image == 'Deliverywhite.png') {
-        displayImage = 'Delivery.png';
-      } else if (image.contains('white.png')) {
-        displayImage = image.replaceAll('white.png', '.png');
-      }
-    }
-
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () {
-          print("Nav item at index $index tapped from Page4.");
-          setState(() {
-            _selectedBottomNavItem = index;
-          });
-          onTap(); // Execute the specific tap action
-        },
-        child: Container(
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.black : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Image.asset(
-                'assets/images/$displayImage',
-                width: index == 2 ? 92 : 60, // Special sizing for Delivery icon
-                height: index == 2 ? 92 : 60,
-                color: isSelected ? Colors.white : const Color(0xFF616161),
-              ),
-              if (notification != null && notification.isNotEmpty)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: color ?? Colors.red, // Use passed color or default to red
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 20,
-                      minHeight: 20,
-                    ),
-                    child: Text(
-                      notification,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  // // --- MODIFIED _navItem to accept notification and color ---
+  // Widget _navItem(String image, int index,
+  //     {String? notification, Color? color, required VoidCallback onTap}) {
+  //
+  //   bool isSelected = _selectedBottomNavItem == index;
+  //
+  //   String displayImage = image;
+  //
+  //   if (isSelected) {
+  //     // Logic to switch to white version of image if selected
+  //     if (image == 'TakeAway.png') {
+  //       displayImage = 'TakeAwaywhite.png';
+  //     } else if (image == 'DineIn.png') {
+  //       displayImage = 'DineInwhite.png';
+  //     } else if (image == 'Delivery.png') {
+  //       displayImage = 'Deliverywhite.png';
+  //     } else if (image == 'home.png' || image == 'More.png') {
+  //       // These might not have a 'white' version or you explicitly don't want them to change color
+  //       // For 'home.png' and 'More.png', the `color` property below will handle it
+  //     } else if (image.contains('.png')) {
+  //       displayImage = image.replaceAll('.png', 'white.png');
+  //     }
+  //   } else {
+  //     // Logic to switch back to original color version if not selected
+  //     if (image == 'TakeAwaywhite.png') {
+  //       displayImage = 'TakeAway.png';
+  //     } else if (image == 'DineInwhite.png') {
+  //       displayImage = 'DineIn.png';
+  //     } else if (image == 'Deliverywhite.png') {
+  //       displayImage = 'Delivery.png';
+  //     } else if (image.contains('white.png')) {
+  //       displayImage = image.replaceAll('white.png', '.png');
+  //     }
+  //   }
+  //
+  //
+  //   return MouseRegion(
+  //     cursor: SystemMouseCursors.click,
+  //     child: GestureDetector(
+  //       onTap: () {
+  //         print("Nav item at index $index tapped from Page4.");
+  //         setState(() {
+  //           _selectedBottomNavItem = index;
+  //         });
+  //         onTap(); // Execute the specific tap action
+  //       },
+  //       child: Container(
+  //         padding: const EdgeInsets.all(5),
+  //         decoration: BoxDecoration(
+  //           color: isSelected ? Colors.black : Colors.transparent,
+  //           borderRadius: BorderRadius.circular(12),
+  //         ),
+  //         child: Stack(
+  //           alignment: Alignment.center,
+  //           children: [
+  //             Image.asset(
+  //               'assets/images/$displayImage',
+  //               width: index == 2 ? 92 : 60, // Special sizing for Delivery icon
+  //               height: index == 2 ? 92 : 60,
+  //               color: isSelected ? Colors.white : const Color(0xFF616161),
+  //             ),
+  //             if (notification != null && notification.isNotEmpty)
+  //               Positioned(
+  //                 top: 0,
+  //                 right: 0,
+  //                 child: Container(
+  //                   padding: const EdgeInsets.all(4),
+  //                   decoration: BoxDecoration(
+  //                     color: color ?? Colors.red, // Use passed color or default to red
+  //                     shape: BoxShape.circle,
+  //                   ),
+  //                   constraints: const BoxConstraints(
+  //                     minWidth: 20,
+  //                     minHeight: 20,
+  //                   ),
+  //                   child: Text(
+  //                     notification,
+  //                     style: const TextStyle(
+  //                       color: Colors.white,
+  //                       fontSize: 12,
+  //                       fontWeight: FontWeight.bold,
+  //                     ),
+  //                     textAlign: TextAlign.center,
+  //                   ),
+  //                 ),
+  //               ),
+  //           ],
+  //         ),
+  //       ),
+  //     ),
+  //   );
+  // }
 }
 
 class Category {

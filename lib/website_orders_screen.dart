@@ -2,11 +2,12 @@
 
 import 'package:epos/settings_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:epos/models/order.dart'; // Make sure this path is correct for your Order model
-import 'package:epos/dynamic_order_list_screen.dart'; // Ensure this is correct if navigating to it
-import 'package:epos/providers/order_provider.dart'; // Make sure this path is correct
+import 'package:epos/models/order.dart';
+import 'package:epos/dynamic_order_list_screen.dart';
+import 'package:epos/providers/order_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:epos/order_counts_provider.dart'; // Import for OrderCountsProvider
+import 'package:epos/order_counts_provider.dart';
+import 'package:epos/custom_bottom_nav_bar.dart';
 
 // Assuming HexColor extension is in order.dart or a common utility.
 extension HexColor on Color {
@@ -1324,217 +1325,242 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNavBar(),
-    );
-  }
 
-  Widget _buildBottomNavBar() {
-    print("WebsiteOrdersScreen: _buildBottomNavBar called.");
-    return Consumer<OrderCountsProvider>(
-      builder: (context, orderCountsProvider, child) {
-        final activeOrdersCount = orderCountsProvider.activeOrdersCount;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Divider(
-              height: 1,
-              thickness: 1,
-              color: Colors.grey,
-            ),
-            Container(
-              height: 90,
-              color: Colors.white,
-        child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 45.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _navItem(
-                    'TakeAway.png',
-                    0,
-                    notification: _getNotificationCount(0, activeOrdersCount),
-                    color: const Color(0xFFFFE26B),
-                    onTap: () {
-                      debugPrint("WebsiteOrdersScreen: Navigating to EPOS Takeaway.");
-                      if (_selectedBottomNavItem != 0) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const DynamicOrderListScreen(
-                              orderType: 'takeaway',
-                              initialBottomNavItemIndex: 0,
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                  _navItem(
-                    'DineIn.png',
-                    1,
-                    notification: _getNotificationCount(1, activeOrdersCount),
-                    color: const Color(0xFFFFE26B),
-                    onTap: () {
-                      debugPrint("WebsiteOrdersScreen: Navigating to EPOS Dine In.");
-                      if (_selectedBottomNavItem != 1) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const DynamicOrderListScreen(
-                              orderType: 'dinein',
-                              initialBottomNavItemIndex: 1,
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                  _navItem(
-                    'Delivery.png',
-                    2,
-                    notification: _getNotificationCount(2, activeOrdersCount),
-                    color: const Color(0xFFFFE26B),
-                    onTap: () {
-                      debugPrint("WebsiteOrdersScreen: Navigating to EPOS Delivery.");
-                      if (_selectedBottomNavItem != 2) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const DynamicOrderListScreen(
-                              orderType: 'delivery',
-                              initialBottomNavItemIndex: 2,
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                  _navItem(
-                    'web.png',
-                    3,
-                    notification: _getNotificationCount(3, activeOrdersCount),
-                    color: const Color(0xFFFFE26B),
-                    onTap: () {
-                      debugPrint("WebsiteOrdersScreen: Navigating to Website Orders.");
-                      if (_selectedBottomNavItem != 3) {
-                        setState(() {
-                          _selectedBottomNavItem = 3;
-                        });
-                      }
-                    },
-                  ),
-                  _navItem(
-                    'home.png',
-                    4,
-                    onTap: () {
-                      debugPrint("DynamicOrderListScreen: Navigating to Page4 (Home Screen).");
-                      Navigator.pushReplacementNamed(context, '/service-selection');
-                    },
-                  ),
-                  _navItem(
-                    'More.png',
-                    5,
-                    onTap: () {
-                      debugPrint("WebsiteOrdersScreen: Navigating to Settings Screen.");
-                      if (_selectedBottomNavItem != 5) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const SettingsScreen(
-                              initialBottomNavItemIndex: 5,
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-        ),
-            ),
-          ],
-        );
-      },
-    );
-  }
+      //bottomNavigationBar: _buildBottomNavBar(),
 
-  Widget _navItem(String image, int index,
-      {String? notification, Color? color, required VoidCallback onTap}) {
-
-    bool isSelected = _selectedBottomNavItem == index;
-
-    String displayImage = image;
-
-    if (isSelected) {
-      if (image == 'TakeAway.png') {
-        displayImage = 'TakeAwaywhite.png';
-      } else if (image == 'DineIn.png') {
-        displayImage = 'DineInwhite.png';
-      } else if (image == 'Delivery.png') {
-        displayImage = 'Deliverywhite.png';
-      } else if (image.contains('.png')) {
-        displayImage = image.replaceAll('.png', 'white.png');
-      }
-    } else {
-      if (image == 'TakeAwaywhite.png') {
-        displayImage = 'TakeAway.png';
-      } else if (image == 'DineInwhite.png') {
-        displayImage = 'DineIn.png';
-      } else if (image == 'Deliverywhite.png') {
-        displayImage = 'Delivery.png';
-      } else if (image.contains('white.png')) {
-        displayImage = image.replaceAll('white.png', '.png');
-      }
-    }
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.black : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Image.asset(
-                'assets/images/$displayImage',
-                width: index == 2 ? 92 : 60,
-                height: index == 2 ? 92 : 60,
-                color: isSelected ? Colors.white : const Color(0xFF616161),
-              ),
-              if (notification != null && notification.isNotEmpty)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: color ?? Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 20,
-                      minHeight: 20,
-                    ),
-                    child: Text(
-                      notification,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
+      bottomNavigationBar: CustomBottomNavBar(
+        selectedIndex: _selectedBottomNavItem,
+        showDivider: true,
+        onItemSelected: (index) {
+          if (index == 3) {
+            setState(() {
+              _selectedBottomNavItem = index;
+            });
+          }
+        },
       ),
     );
   }
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // Widget _buildBottomNavBar() {
+  //   print("WebsiteOrdersScreen: _buildBottomNavBar called.");
+  //   return Consumer<OrderCountsProvider>(
+  //     builder: (context, orderCountsProvider, child) {
+  //       final activeOrdersCount = orderCountsProvider.activeOrdersCount;
+  //       return Column(
+  //         mainAxisSize: MainAxisSize.min,
+  //         children: [
+  //           const Divider(
+  //             height: 1,
+  //             thickness: 1,
+  //             color: Colors.grey,
+  //           ),
+  //           Container(
+  //             height: 90,
+  //             color: Colors.white,
+  //       child: Padding(
+  //       padding: const EdgeInsets.symmetric(horizontal: 45.0),
+  //             child: Row(
+  //               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //               children: [
+  //                 _navItem(
+  //                   'TakeAway.png',
+  //                   0,
+  //                   notification: _getNotificationCount(0, activeOrdersCount),
+  //                   color: const Color(0xFFFFE26B),
+  //                   onTap: () {
+  //                     debugPrint("WebsiteOrdersScreen: Navigating to EPOS Takeaway.");
+  //                     if (_selectedBottomNavItem != 0) {
+  //                       Navigator.pushReplacement(
+  //                         context,
+  //                         MaterialPageRoute(
+  //                           builder: (context) => const DynamicOrderListScreen(
+  //                             orderType: 'takeaway',
+  //                             initialBottomNavItemIndex: 0,
+  //                           ),
+  //                         ),
+  //                       );
+  //                     }
+  //                   },
+  //                 ),
+  //                 _navItem(
+  //                   'DineIn.png',
+  //                   1,
+  //                   notification: _getNotificationCount(1, activeOrdersCount),
+  //                   color: const Color(0xFFFFE26B),
+  //                   onTap: () {
+  //                     debugPrint("WebsiteOrdersScreen: Navigating to EPOS Dine In.");
+  //                     if (_selectedBottomNavItem != 1) {
+  //                       Navigator.pushReplacement(
+  //                         context,
+  //                         MaterialPageRoute(
+  //                           builder: (context) => const DynamicOrderListScreen(
+  //                             orderType: 'dinein',
+  //                             initialBottomNavItemIndex: 1,
+  //                           ),
+  //                         ),
+  //                       );
+  //                     }
+  //                   },
+  //                 ),
+  //                 _navItem(
+  //                   'Delivery.png',
+  //                   2,
+  //                   notification: _getNotificationCount(2, activeOrdersCount),
+  //                   color: const Color(0xFFFFE26B),
+  //                   onTap: () {
+  //                     debugPrint("WebsiteOrdersScreen: Navigating to EPOS Delivery.");
+  //                     if (_selectedBottomNavItem != 2) {
+  //                       Navigator.pushReplacement(
+  //                         context,
+  //                         MaterialPageRoute(
+  //                           builder: (context) => const DynamicOrderListScreen(
+  //                             orderType: 'delivery',
+  //                             initialBottomNavItemIndex: 2,
+  //                           ),
+  //                         ),
+  //                       );
+  //                     }
+  //                   },
+  //                 ),
+  //                 _navItem(
+  //                   'web.png',
+  //                   3,
+  //                   notification: _getNotificationCount(3, activeOrdersCount),
+  //                   color: const Color(0xFFFFE26B),
+  //                   onTap: () {
+  //                     debugPrint("WebsiteOrdersScreen: Navigating to Website Orders.");
+  //                     if (_selectedBottomNavItem != 3) {
+  //                       setState(() {
+  //                         _selectedBottomNavItem = 3;
+  //                       });
+  //                     }
+  //                   },
+  //                 ),
+  //                 _navItem(
+  //                   'home.png',
+  //                   4,
+  //                   onTap: () {
+  //                     debugPrint("DynamicOrderListScreen: Navigating to Page4 (Home Screen).");
+  //                     Navigator.pushReplacementNamed(context, '/service-selection');
+  //                   },
+  //                 ),
+  //                 _navItem(
+  //                   'More.png',
+  //                   5,
+  //                   onTap: () {
+  //                     debugPrint("WebsiteOrdersScreen: Navigating to Settings Screen.");
+  //                     if (_selectedBottomNavItem != 5) {
+  //                       Navigator.push(
+  //                         context,
+  //                         MaterialPageRoute(
+  //                           builder: (context) => const SettingsScreen(
+  //                             initialBottomNavItemIndex: 5,
+  //                           ),
+  //                         ),
+  //                       );
+  //                     }
+  //                   },
+  //                 ),
+  //               ],
+  //             ),
+  //       ),
+  //           ),
+  //         ],
+  //       );
+  //     },
+  //   );
+  // }
+
+  // Widget _navItem(String image, int index,
+  //     {String? notification, Color? color, required VoidCallback onTap}) {
+  //
+  //   bool isSelected = _selectedBottomNavItem == index;
+  //
+  //   String displayImage = image;
+  //
+  //   if (isSelected) {
+  //     if (image == 'TakeAway.png') {
+  //       displayImage = 'TakeAwaywhite.png';
+  //     } else if (image == 'DineIn.png') {
+  //       displayImage = 'DineInwhite.png';
+  //     } else if (image == 'Delivery.png') {
+  //       displayImage = 'Deliverywhite.png';
+  //     } else if (image.contains('.png')) {
+  //       displayImage = image.replaceAll('.png', 'white.png');
+  //     }
+  //   } else {
+  //     if (image == 'TakeAwaywhite.png') {
+  //       displayImage = 'TakeAway.png';
+  //     } else if (image == 'DineInwhite.png') {
+  //       displayImage = 'DineIn.png';
+  //     } else if (image == 'Deliverywhite.png') {
+  //       displayImage = 'Delivery.png';
+  //     } else if (image.contains('white.png')) {
+  //       displayImage = image.replaceAll('white.png', '.png');
+  //     }
+  //   }
+  //
+  //   return MouseRegion(
+  //     cursor: SystemMouseCursors.click,
+  //     child: GestureDetector(
+  //       onTap: onTap,
+  //       child: Container(
+  //         padding: const EdgeInsets.all(5),
+  //         decoration: BoxDecoration(
+  //           color: isSelected ? Colors.black : Colors.transparent,
+  //           borderRadius: BorderRadius.circular(12),
+  //         ),
+  //         child: Stack(
+  //           alignment: Alignment.center,
+  //           children: [
+  //             Image.asset(
+  //               'assets/images/$displayImage',
+  //               width: index == 2 ? 92 : 60,
+  //               height: index == 2 ? 92 : 60,
+  //               color: isSelected ? Colors.white : const Color(0xFF616161),
+  //             ),
+  //             if (notification != null && notification.isNotEmpty)
+  //               Positioned(
+  //                 top: 0,
+  //                 right: 0,
+  //                 child: Container(
+  //                   padding: const EdgeInsets.all(4),
+  //                   decoration: BoxDecoration(
+  //                     color: color ?? Colors.red,
+  //                     shape: BoxShape.circle,
+  //                   ),
+  //                   constraints: const BoxConstraints(
+  //                     minWidth: 20,
+  //                     minHeight: 20,
+  //                   ),
+  //                   child: Text(
+  //                     notification,
+  //                     style: const TextStyle(
+  //                       color: Colors.white,
+  //                       fontSize: 12,
+  //                       fontWeight: FontWeight.bold,
+  //                     ),
+  //                     textAlign: TextAlign.center,
+  //                   ),
+  //                 ),
+  //               ),
+  //           ],
+  //         ),
+  //       ),
+  //     ),
+  //   );
+  // }
 }

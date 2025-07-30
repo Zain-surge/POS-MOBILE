@@ -54,38 +54,78 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
     super.dispose();
   }
 
-  // Method to count orders by type and update the provider
+  // Method to count orders by type AND determine dominant colors
   void _updateOrderCounts() {
-    // Get the provider instance without listening (since we are modifying it)
     final orderCountsProvider = Provider.of<OrderCountsProvider>(context, listen: false);
 
-    Map<String, int> counts = {
+    // Numeric counts for order types (UNCHANGED from your existing logic)
+    Map<String, int> currentTypeCounts = {
       'takeaway': 0,
       'dinein': 0,
       'delivery': 0,
       'website': 0,
     };
 
-    for (var order in _activeOrders) {
-      String orderType = order.orderType.toLowerCase();
-      String orderSource = order.orderSource.toLowerCase();
+    // NEW: Flags to track presence of critical colors for each type
+    Map<String, bool> hasRedOrder = {
+      'takeaway': false, 'dinein': false, 'delivery': false, 'website': false
+    };
+    Map<String, bool> hasYellowOrder = {
+      'takeaway': false, 'dinein': false, 'delivery': false, 'website': false
+    };
 
-      if (orderSource == 'website') {
-        counts['website'] = counts['website']! + 1;
+    // Loop through all active orders to update both counts and color flags
+    for (var order in _activeOrders) {
+      String orderTypeKey; // This will hold 'takeaway', 'dinein', 'delivery', or 'website'
+
+      // Determine the correct key for the order type/source
+      if (order.orderSource.toLowerCase() == 'website') {
+        orderTypeKey = 'website';
+      } else { // Assuming 'epos' or other internal sources map to traditional types
+        orderTypeKey = order.orderType.toLowerCase();
+      }
+
+      // Update numerical counts (your existing logic)
+      if (currentTypeCounts.containsKey(orderTypeKey)) {
+        currentTypeCounts[orderTypeKey] = currentTypeCounts[orderTypeKey]! + 1;
+      }
+
+
+      // NEW: Update color flags based on order status
+      String orderStatus = order.status.toLowerCase();
+      if (orderStatus == 'red' || orderStatus == 'declined') {
+        hasRedOrder[orderTypeKey] = true;
+      } else if (orderStatus == 'yellow') {
+        hasYellowOrder[orderTypeKey] = true;
+      }
+      // If it's 'green' or 'accepted', no need to set a flag,
+      // as it's the lowest priority color.
+    }
+
+    // NEW: Determine the dominant color for each order type
+    Map<String, Color> dominantColorsForTypes = {};
+    for (String typeKey in currentTypeCounts.keys) {
+      if (hasRedOrder[typeKey] == true) {
+        dominantColorsForTypes[typeKey] = Colors.red;
+      } else if (hasYellowOrder[typeKey] == true) {
+        dominantColorsForTypes[typeKey] = Colors.yellow;
+      } else if (currentTypeCounts[typeKey]! > 0) {
+        // If there are active orders of this type, and none are red/yellow, they must all be green
+        dominantColorsForTypes[typeKey] = Colors.green;
       } else {
-        if (orderType == 'takeaway') {
-          counts['takeaway'] = counts['takeaway']! + 1;
-        } else if (orderType == 'dinein') {
-          counts['dinein'] = counts['dinein']! + 1;
-        } else if (orderType == 'delivery') {
-          counts['delivery'] = counts['delivery']! + 1;
-        }
+        // If there are no active orders for this type, default to grey or a neutral color
+        dominantColorsForTypes[typeKey] = Colors.grey; // Or Colors.transparent, or Colors.blue, based on your UI
       }
     }
 
-    print('ActiveOrdersList: Calculated order counts: $counts');
-    // Update the provider with the new counts
-    orderCountsProvider.updateActiveOrdersCount(counts);
+
+    print('ActiveOrdersList: Calculated order type counts: $currentTypeCounts');
+    print('ActiveOrdersList: Calculated dominant colors: $dominantColorsForTypes');
+
+
+    // Update the provider with both the numerical counts and the dominant colors
+    orderCountsProvider.updateActiveOrdersCount(currentTypeCounts); // Update numerical counts
+    orderCountsProvider.updateDominantOrderColors(dominantColorsForTypes); // NEW: Update dominant colors
   }
 
   // --- Unified Order Processing Logic ---
@@ -808,22 +848,44 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
           const SizedBox(height: 30),
           Padding(
             padding: const EdgeInsets.only(top: 10.0, bottom: 10.0),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3D9FF),
-                borderRadius: BorderRadius.circular(50),
-              ),
-              child: const Text(
-                'Active Orders',
-                textAlign:TextAlign.left,
-                style: TextStyle(
-                  fontSize: 27,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                  fontFamily: 'Poppins',
+            child: Row( // <-- Wrap both containers in a Row
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Align to the start of the row
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3D9FF),
+                    borderRadius: BorderRadius.circular(50),
+                  ),
+                  child: const Text(
+                    'Active Orders',
+                    textAlign: TextAlign.left, // textAlign usually matters for multi-line text, but good practice
+                    style: TextStyle(
+                      fontSize: 25,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
                 ),
-              ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3D9FF), // You can choose a different color if you like
+                    borderRadius: BorderRadius.circular(50),
+                  ),
+                  child: const Text(
+                    'Unpaid Orders', // <-- Your new text
+                    textAlign: TextAlign.left,
+                    style: TextStyle(
+                      fontSize: 25, // Consistent font size
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
 
