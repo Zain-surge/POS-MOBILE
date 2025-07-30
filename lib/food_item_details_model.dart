@@ -24,14 +24,21 @@ extension StringCasingExtension on String {
 
 class FoodItemDetailsModal extends StatefulWidget {
   final FoodItem foodItem;
+  // This callback will now pass the final CartItem, whether it's new or updated
   final Function(CartItem) onAddToCart;
   final VoidCallback? onClose;
+
+  // NEW: Optional parameters for editing existing cart items
+  final CartItem? initialCartItem;
+  final bool isEditing;
 
   const FoodItemDetailsModal({
     super.key,
     required this.foodItem,
     required this.onAddToCart,
     this.onClose,
+    this.initialCartItem, // Pass the existing CartItem here when editing
+    this.isEditing = false, // Flag to indicate if we're in edit mode
   });
 
   @override
@@ -51,13 +58,12 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
 
   bool _makeItAMeal = false;
   String? _selectedDrink;
-  String? _selectedDrinkFlavor; // NEW: For drink flavors
+  String? _selectedDrinkFlavor;
 
   bool _noSalad = false;
   bool _noSauce = false;
   bool _noCream = false;
 
-  // NEW: Track if we're in size selection mode
   bool _isInSizeSelectionMode = false;
   bool _sizeHasBeenSelected = false;
 
@@ -114,15 +120,12 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     "J20 GLASS BOTTLE",
   ];
 
-  // NEW: Define flavors for specific drinks (key is the drink name)
   final Map<String, List<String>> _drinkFlavors = {
     "J20 GLASS BOTTLE": [
       "Apple & Raspberry",
       "Apple & Mango",
       "Orange & Passion Fruit"
     ],
-    // Add other drinks with flavors here if you want them to have the "size-like" flavor selection
-    // e.g., "Fancy Soda": ["Lime", "Cherry", "Cola"],
   };
 
   bool _isRemoveButtonPressed = false;
@@ -132,52 +135,97 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   void initState() {
     super.initState();
 
-    // Check if this item requires size selection
-    bool requiresSizeSelection = ([
-      'Pizza',
-      'GarlicBread',
-      'Shawarma',
-      'Wraps',
-      'Burgers'
-    ].contains(widget.foodItem.category) &&
-        widget.foodItem.price.keys.length > 1);
+    // --- NEW: Initialize state from initialCartItem if editing ---
+    if (widget.isEditing && widget.initialCartItem != null) {
+      final CartItem item = widget.initialCartItem!;
+      _quantity = item.quantity;
+      _reviewNotesController.text = item.comment ?? '';
 
-    if (requiresSizeSelection) {
-      _isInSizeSelectionMode = true;
-      _selectedSize = null;
-    } else {
-      // For items that don't require size selection or have only one size
-      if (widget.foodItem.price.keys.length == 1 &&
-          widget.foodItem.price.isNotEmpty) {
-        _selectedSize = widget.foodItem.price.keys.first;
-        _sizeHasBeenSelected = true;
+      // Parse selected options from the cart item
+      if (item.selectedOptions != null) {
+        for (var option in item.selectedOptions!) {
+          String lowerOption = option.toLowerCase();
+          if (lowerOption.startsWith('size:')) {
+            _selectedSize = option.split(':').last.trim();
+            _sizeHasBeenSelected = true;
+          } else if (lowerOption.startsWith('toppings:')) {
+            _selectedToppings.addAll(option.split(':').last.trim().split(',').map((s) => s.trim()));
+          } else if (lowerOption.startsWith('base:')) {
+            _selectedBase = option.split(':').last.trim();
+          } else if (lowerOption.startsWith('crust:')) {
+            _selectedCrust = option.split(':').last.trim();
+          } else if (lowerOption.startsWith('sauce dips:')) {
+            _selectedSauces.addAll(option.split(':').last.trim().split(',').map((s) => s.trim()));
+          } else if (lowerOption == 'make it a meal') {
+            _makeItAMeal = true;
+          } else if (lowerOption.startsWith('drink:')) {
+            String drinkAndFlavor = option.split(':').last.trim();
+            if (drinkAndFlavor.contains('(') && drinkAndFlavor.contains(')')) {
+              _selectedDrink = drinkAndFlavor.substring(0, drinkAndFlavor.indexOf('(')).trim();
+              _selectedDrinkFlavor = drinkAndFlavor.substring(drinkAndFlavor.indexOf('(') + 1, drinkAndFlavor.indexOf(')')).trim();
+            } else {
+              _selectedDrink = drinkAndFlavor;
+            }
+          } else if (lowerOption == 'no salad') {
+            _noSalad = true;
+          } else if (lowerOption == 'no sauce') {
+            _noSauce = true;
+          } else if (lowerOption == 'no cream') {
+            _noCream = true;
+          } else if (lowerOption.startsWith('flavor:') && !_drinkFlavors.containsKey(widget.foodItem.name)) {
+            // This handles standalone drink flavors if not already handled by 'drink:'
+            _selectedDrinkFlavor = option.split(':').last.trim();
+          }
+        }
       }
+      // If we are editing, we don't start in size selection mode, as a size should already be selected or not applicable.
       _isInSizeSelectionMode = false;
-    }
+      _sizeHasBeenSelected = _selectedSize != null || (widget.foodItem.price.keys.length == 1 && widget.foodItem.price.isNotEmpty);
 
-    if (widget.foodItem.category == 'Pizza' ||
-        widget.foodItem.category == 'GarlicBread') {
-      _selectedBase = "Tomato";
-      _selectedCrust = "Normal";
+    } else { // --- Existing Add New Item Logic ---
+      bool requiresSizeSelection = ([
+        'Pizza',
+        'GarlicBread',
+        'Shawarma',
+        'Wraps',
+        'Burgers'
+      ].contains(widget.foodItem.category) &&
+          widget.foodItem.price.keys.length > 1);
 
-      debugPrint(
-          "Default Toppings from FoodItem: ${widget.foodItem.defaultToppings}");
-      debugPrint(
-          "Default Cheese from FoodItem: ${widget.foodItem.defaultCheese}");
-
-      if (widget.foodItem.defaultToppings != null) {
-        _selectedToppings.addAll(widget.foodItem.defaultToppings!);
+      if (requiresSizeSelection) {
+        _isInSizeSelectionMode = true;
+        _selectedSize = null;
+      } else {
+        if (widget.foodItem.price.keys.length == 1 &&
+            widget.foodItem.price.isNotEmpty) {
+          _selectedSize = widget.foodItem.price.keys.first;
+          _sizeHasBeenSelected = true;
+        }
+        _isInSizeSelectionMode = false;
       }
-      if (widget.foodItem.defaultCheese != null) {
-        _selectedToppings.addAll(widget.foodItem.defaultCheese!);
-      }
-    }
 
-    // Initialize _selectedDrink for drinks that have flavors displayed like sizes
-    // This is crucial for the _drinkFlavors.containsKey check in _addToCart
-    if (_drinkFlavors.containsKey(widget.foodItem.name)) {
-      _selectedDrink = widget.foodItem.name; // Pre-select the drink itself
-      _selectedDrinkFlavor = null; // Ensure no flavor is selected by default
+      if (widget.foodItem.category == 'Pizza' ||
+          widget.foodItem.category == 'GarlicBread') {
+        _selectedBase = "Tomato";
+        _selectedCrust = "Normal";
+
+        debugPrint(
+            "Default Toppings from FoodItem: ${widget.foodItem.defaultToppings}");
+        debugPrint(
+            "Default Cheese from FoodItem: ${widget.foodItem.defaultCheese}");
+
+        if (widget.foodItem.defaultToppings != null) {
+          _selectedToppings.addAll(widget.foodItem.defaultToppings!);
+        }
+        if (widget.foodItem.defaultCheese != null) {
+          _selectedToppings.addAll(widget.foodItem.defaultCheese!);
+        }
+      }
+
+      if (_drinkFlavors.containsKey(widget.foodItem.name)) {
+        _selectedDrink = widget.foodItem.name;
+        _selectedDrinkFlavor = null;
+      }
     }
 
     _calculatedPricePerUnit = _calculatePricePerUnit();
@@ -189,7 +237,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     super.dispose();
   }
 
-// 3. Enhanced _calculatePricePerUnit() method with better debugging:
   double _calculatePricePerUnit() {
     debugPrint("--- Calculating Price for ${widget.foodItem.name} ---");
     debugPrint("Food Item Price Map: ${widget.foodItem.price}");
@@ -307,19 +354,18 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     setState(() {
       _selectedSize = size;
       _sizeHasBeenSelected = true;
-      _isInSizeSelectionMode = false; // Exit size selection mode
+      _isInSizeSelectionMode = false;
       _updatePriceDisplay();
     });
   }
 
   void _changeSize() {
     setState(() {
-      _isInSizeSelectionMode = true; // Enter size selection mode
+      _isInSizeSelectionMode = true;
     });
   }
 
-  void _addToCart() {
-    // Check for size selection
+  void _confirmSelection() { // Renamed from _addToCart to be more general
     if (widget.foodItem.price.keys.length > 1 && _selectedSize == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -330,7 +376,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       );
       return;
     }
-    // NEW: Check if "Make it a meal" is selected but no drink is chosen
+
     if (_makeItAMeal && _selectedDrink == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -354,7 +400,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           backgroundColor: Colors.grey,
         ),
       );
-      return; // Stop the function execution
+      return;
     }
 
     final List<String> selectedOptions = [];
@@ -382,7 +428,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       selectedOptions.add('Sauce Dips: ${_selectedSauces.join(', ')}');
     }
 
-    // Handle "Make it a Meal" drinks
     if (_makeItAMeal) {
       selectedOptions.add('Make it a meal');
       if (_selectedDrink != null) {
@@ -393,7 +438,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         selectedOptions.add(drinkOption);
       }
     }
-    // Handle standalone drinks with flavors (like J20 Glass Bottle)
     else if (_drinkFlavors.containsKey(widget.foodItem.name) &&
         _selectedDrinkFlavor != null) {
       selectedOptions.add('Flavor: $_selectedDrinkFlavor');
@@ -418,7 +462,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       pricePerUnit: _calculatedPricePerUnit,
     );
 
-    widget.onAddToCart(cartItem);
+    widget.onAddToCart(cartItem); // This will now handle update or add
     widget.onClose?.call();
   }
 
@@ -443,18 +487,17 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       1500.0,
     );
 
-    bool canAddToCart = true;
+    bool canConfirmSelection = true; // Renamed from canAddToCart
     if ((widget.foodItem.price.keys.length > 1 && _selectedSize == null) ||
         (_makeItAMeal && _selectedDrink == null)) {
-      canAddToCart = false;
+      canConfirmSelection = false;
     }
-    // NEW/UPDATED: Add condition for drink flavor selection
     if ((_drinkFlavors.containsKey(widget.foodItem.name) &&
-        _selectedDrinkFlavor == null) || // For standalone drinks
+        _selectedDrinkFlavor == null) ||
         (_makeItAMeal && _selectedDrink != null &&
             _drinkFlavors.containsKey(_selectedDrink!) &&
-            _selectedDrinkFlavor == null)) { // For meal deal drinks
-      canAddToCart = false;
+            _selectedDrinkFlavor == null)) {
+      canConfirmSelection = false;
     }
 
     debugPrint("Item Category: ${widget.foodItem.category}");
@@ -606,6 +649,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                                 if (_quantity > 1) {
                                   _quantity--;
                                 }
+                                _updatePriceDisplay(); // Update price on quantity change
                               });
                             },
                             child: Container(
@@ -662,6 +706,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                             onTap: () {
                               setState(() {
                                 _quantity++;
+                                _updatePriceDisplay(); // Update price on quantity change
                               });
                             },
                             child: Container(
@@ -681,7 +726,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                               ),
                             ),
                           ),
-                          ],
+                        ],
                       ],
                     ),
                   ),
@@ -692,7 +737,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       '×',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 60, // <-- INCREASED SIZE HERE
+                        fontSize: 60,
                         fontWeight: FontWeight.normal,
                       ),
                     ),
@@ -704,43 +749,35 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                //physics: const ClampingScrollPhysics(),
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Size selection (show when in size selection mode)
                     if (_isInSizeSelectionMode) ...[
                       _buildSizeSelectionSection(),
                     ]
-                    // All other options (show when not in size selection mode)
                     else
                       ...[
-                        // --- Quantity Control for non-size items ---
                         if (!_sizeHasBeenSelected) ...[
                           _buildQuantityControlOnly(),
                         ],
 
-                        // --- Flavor Selection for Specific Drinks (e.g., J20 Glass Bottle) ---
                         if (_drinkFlavors.containsKey(
                             widget.foodItem.name)) ...[
                           _buildFlavorSelectionSection(widget.foodItem.name),
                         ],
 
-                        // --- Pizza/Garlic Bread Options ---
                         if (widget.foodItem.category == 'Pizza' ||
                             widget.foodItem.category == 'GarlicBread') ...[
                           _buildOptionCategoryButtons(),
                           _buildSelectedOptionDisplay(),
                         ],
 
-                        // --- Make it a Meal / No Salad / No Sauce for Shawarma, Wraps, Burgers ---
                         if (['Shawarma', 'Wraps', 'Burgers'].contains(
                             widget.foodItem.category)) ...[
                           _buildMealAndExclusionOptions(),
                         ],
 
-                        // --- Milkshake Options ---
                         if (widget.foodItem.category == 'Milkshake') ...[
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -765,7 +802,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                           ),
                         ],
 
-                        // --- Review Notes ---
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -780,7 +816,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                             const SizedBox(height: 8),
                             TextField(
                               controller: _reviewNotesController,
-                              style: const TextStyle(color: Colors.white), // User input text color white
+                              style: const TextStyle(color: Colors.white),
                               decoration: InputDecoration(
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
@@ -857,9 +893,9 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       ),
                       const SizedBox(width: 15),
                       ElevatedButton(
-                        onPressed: canAddToCart ? _addToCart : null,
+                        onPressed: canConfirmSelection ? _confirmSelection : null, // Changed to _confirmSelection
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: canAddToCart ? Colors.black : Colors
+                          backgroundColor: canConfirmSelection ? Colors.black : Colors
                               .grey,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 18),
@@ -867,9 +903,9 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        child: const Text(
-                          'Add to Cart',
-                          style: TextStyle(
+                        child: Text( // Dynamic text based on mode
+                          widget.isEditing ? 'Update Cart' : 'Add to Cart',
+                          style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
@@ -910,7 +946,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   Widget _buildSizeSelectionSection() {
     return Container(
 
-      height: MediaQuery.of(context).size.height * 0.5, // This sets the container's height.
+      height: MediaQuery.of(context).size.height * 0.5,
       alignment: Alignment.center,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1001,6 +1037,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                   if (_quantity > 1) {
                     _quantity--;
                   }
+                  _updatePriceDisplay();
                 });
               },
               child: Container(
@@ -1055,6 +1092,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               onTap: () {
                 setState(() {
                   _quantity++;
+                  _updatePriceDisplay();
                 });
               },
               child: Container(
@@ -1079,12 +1117,11 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     );
   }
 
-  // NEW WIDGET: _buildFlavorSelectionSection for specific drinks like J20 Glass Bottle
   Widget _buildFlavorSelectionSection(String drinkName) {
     final List<String> flavors = _drinkFlavors[drinkName] ?? [];
 
     if (flavors.isEmpty) {
-      return const SizedBox.shrink(); // Don't show if no flavors are defined
+      return const SizedBox.shrink();
     }
 
     return Column(
@@ -1108,7 +1145,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               onTap: () {
                 setState(() {
                   _selectedDrinkFlavor = flavor;
-                  // No price update needed here unless flavors change the price.
                 });
               },
               child: Container(
@@ -1138,17 +1174,15 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     );
   }
 
-  // UPDATED WIDGET: _buildMealAndExclusionOptions (Only for 'Make it a meal' for non-drink items)
   Widget _buildMealAndExclusionOptions() {
     final bool isShawarmaOrWrap = ['Shawarma', 'Wraps'].contains(
-        widget.foodItem.category); // Corrected category name
+        widget.foodItem.category);
     final bool isBurger = widget.foodItem.category == 'Burgers';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 10),
-        // "Make it a meal" checkbox - only show for Shawarma, Wraps, Burgers
         Row(
           children: [
             Checkbox(
@@ -1157,7 +1191,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                 setState(() {
                   _makeItAMeal = value!;
                   _selectedDrink =
-                  null; // Reset drink and flavor when 'Make it a Meal' changes
+                  null;
                   _selectedDrinkFlavor = null;
                   _updatePriceDisplay();
                 });
@@ -1169,7 +1203,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           ],
         ),
 
-        // Drink selection dropdown for "Make it a meal"
         if (_makeItAMeal) ...[
           const SizedBox(height: 8),
           const Text('Select Drink', style: TextStyle(
@@ -1189,7 +1222,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
             onChanged: (value) {
               setState(() {
                 _selectedDrink = value;
-                _selectedDrinkFlavor = null; // Reset flavor when drink changes
+                _selectedDrinkFlavor = null;
               });
             },
             decoration: InputDecoration(
@@ -1209,7 +1242,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                   horizontal: 10, vertical: 8),
             ),
           ),
-          // Conditional display for drink flavors if the selected meal drink has flavors
           if (_selectedDrink != null &&
               _drinkFlavors.containsKey(_selectedDrink!)) ...[
             const SizedBox(height: 8),
@@ -1251,7 +1283,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
             ),
           ],
         ],
-        // No Salad / No Sauce checkboxes - only show for Shawarma, Wraps, and Burgers
         if (isShawarmaOrWrap || isBurger) ...[
           const SizedBox(height: 10),
           Row(
@@ -1292,7 +1323,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
 
   Widget _buildCrustDisplay() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch, // Changed to stretch
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Wrap(
           spacing: 15,
@@ -1309,7 +1340,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 18), // Increased padding
+                      horizontal: 20, vertical: 18),
                   decoration: BoxDecoration(
                     color: isActive ? Colors.grey[100] : Colors.black,
                     borderRadius: BorderRadius.circular(8),
@@ -1332,8 +1363,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     );
   }
 
-
-  //helper
   Widget _buildOptionCategoryButtons() {
     final List<String> categories = ['Toppings', 'Base', 'Crust', 'Sauce Dips'];
 
@@ -1356,17 +1385,15 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     decoration: BoxDecoration(
                       color: isSelected ? Colors.grey[100] : Colors.black,
-                      // Background color change
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       category,
                       textAlign: TextAlign.center,
-                      style: TextStyle( // Removed 'const' because color will change dynamically
+                      style: TextStyle(
                         color: isSelected ? Colors.black : Colors.white,
-                        // Text color based on selection
                         fontSize: 20,
-                        fontWeight: FontWeight.bold, // Text is always bold
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
@@ -1407,10 +1434,10 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   }
   Widget _buildToppingsDisplay(List<String> reorderedToppings) {
     final double modalWidth = min(
-      MediaQuery.of(context).size.width * 0.95, // Increased from 0.9 to 0.95
-      1000.0, // Increased from 900.0 to 1000.0
+      MediaQuery.of(context).size.width * 0.95,
+      1000.0,
     );
-    final double horizontalPaddingOfParent = 30.0; // Reduced from 40.0 to 30.0
+    final double horizontalPaddingOfParent = 30.0;
     final double availableWidthForWrap = modalWidth - horizontalPaddingOfParent;
 
     const double itemSpacing = 12.0;
@@ -1433,7 +1460,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                 (widget.foodItem.defaultCheese ?? []).contains(topping);
 
             return SizedBox(
-              width: idealItemWidth, // Use the calculated idealItemWidth for consistency
+              width: idealItemWidth,
               child: InkWell(
                 onTap: () {
                   setState(() {
@@ -1490,12 +1517,9 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               child: InkWell(
                 onTap: () {
                   setState(() {
-                    // Prevent deselecting Tomato if it's already selected
                     if (isTomato && isActive) {
-                      // Do nothing - cannot deselect Tomato
                       return;
                     }
-                    // Allow selecting any base (including switching to Tomato)
                     _selectedBase = base;
                     _updatePriceDisplay();
                   });
@@ -1513,7 +1537,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                     style: TextStyle(
                       color: isActive ? Colors.black : Colors.white,
                       fontSize: 18,
-                      // Optional: Make Tomato text bold when selected to indicate it's required
                       fontWeight: isTomato && isActive ? FontWeight.bold : FontWeight.normal,
                     ),
                   ),
@@ -1531,11 +1554,11 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       MediaQuery.of(context).size.width * 0.9,
       900.0,
     );
-    final double horizontalPaddingOfParent = 40.0; // Increased padding
+    final double horizontalPaddingOfParent = 40.0;
     final double availableWidthForWrap = modalWidth - horizontalPaddingOfParent;
 
     const double itemSpacing = 12.0;
-    const int desiredColumns = 3; // Changed to 3 columns for sauces
+    const int desiredColumns = 3;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1560,7 +1583,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 18), // Increased padding
+                      horizontal: 20, vertical: 18),
                   decoration: BoxDecoration(
                     color: isActive ? Colors.grey[100] : Colors.black,
                     borderRadius: BorderRadius.circular(8),
