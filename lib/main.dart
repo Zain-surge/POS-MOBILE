@@ -23,7 +23,7 @@ void main() {
       providers: [
         // Using OrderCountsProvider instead of OrderProvider
         ChangeNotifierProvider(create: (_) => OrderProvider()),
-        ChangeNotifierProvider(create: (_) => OrderCountsProvider()), // <--- CHANGED
+        ChangeNotifierProvider(create: (_) => OrderCountsProvider()),
       ],
       child: const MainAppWrapper(
         child: MyApp(),

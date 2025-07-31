@@ -45,7 +45,7 @@ class _Page4State extends State<Page4> {
   FoodItem? _modalFoodItem;
   String _searchQuery = '';
   bool _hasProcessedFirstStep = false;
-  String _selectedPaymentType = 'cash';
+  String _selectedPaymentType = '';
   late String selectedServiceImage;
   late String _actualOrderType;
   int _selectedBottomNavItem = -1;
@@ -1042,22 +1042,32 @@ class _Page4State extends State<Page4> {
           ),
         ),
 
+        // --- ADD THE HORIZONTAL DIVIDER  ---
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 60.0),
+          padding: const EdgeInsets.symmetric(horizontal: 55.0),
           child: Divider(
             height: 0,
+            thickness: 3,
             color: const Color(0xFFB2B2B2),
           ),
         ),
 
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text('Subtotal',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            Text('£${subtotal.toStringAsFixed(2)}',
-                style: const TextStyle(fontSize: 16)),
-          ],
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0), // Adjust the value as needed
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Subtotal',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+              ),
+              Text(
+                '£${subtotal.toStringAsFixed(2)}',
+                style: const TextStyle(fontSize: 22),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 10),
 
@@ -1072,19 +1082,20 @@ class _Page4State extends State<Page4> {
                   _proceedToNextStep();
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
                   decoration: BoxDecoration(
-                    color: _selectedPaymentType == 'cash' ? Colors.black : Colors.grey[300],
+                    color: _selectedPaymentType == 'cash' ? Colors.grey[300] : Colors.black,
                     borderRadius: BorderRadius.circular(8),
-                    border: _selectedPaymentType == 'cash' ? null : Border.all(color: Colors.grey),
+                    border: _selectedPaymentType == 'cash' ? Border.all(color: Colors.grey) : null,
                   ),
                   child: Center(
                     child: Text(
                       'Cash',
                       style: TextStyle(
-                        color: _selectedPaymentType == 'cash' ? Colors.white : Colors.black,
+                        // If 'cash' is selected, text is black; otherwise, it's white.
+                        color: _selectedPaymentType == 'cash' ? Colors.black : Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 20,
+                        fontSize: 29,
                         fontFamily: 'Poppins',
                       ),
                     ),
@@ -1103,19 +1114,22 @@ class _Page4State extends State<Page4> {
                   _proceedToNextStep();
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
                   decoration: BoxDecoration(
-                    color: _selectedPaymentType == 'card' ? Colors.black : Colors.grey[300],
+                    // If 'card' is selected, it's grey; otherwise, it's black.
+                    color: _selectedPaymentType == 'card' ? Colors.grey[300] : Colors.black,
                     borderRadius: BorderRadius.circular(8),
-                    border: _selectedPaymentType == 'card' ? null : Border.all(color: Colors.grey),
+                    // If 'card' is selected, show a grey border; otherwise, there's no border.
+                    border: _selectedPaymentType == 'card' ? Border.all(color: Colors.grey) : null,
                   ),
                   child: Center(
                     child: Text(
                       'Card',
                       style: TextStyle(
-                        color: _selectedPaymentType == 'card' ? Colors.white : Colors.black,
+                        // If 'card' is selected, text is black; otherwise, it's white.
+                        color: _selectedPaymentType == 'card' ? Colors.black : Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 20,
+                        fontSize: 29,
                         fontFamily: 'Poppins',
                       ),
                     ),
@@ -1124,9 +1138,9 @@ class _Page4State extends State<Page4> {
               ),
             ),
             const SizedBox(width: 10),
-            Image.asset('assets/images/men.png', width: 45, height: 45),
           ],
         ),
+        const SizedBox(height: 10),
       ],
     );
   }
@@ -1390,7 +1404,20 @@ class _Page4State extends State<Page4> {
               _buildServiceHighlight('delivery', 'Delivery.png'),
             ],
           ),
-          const SizedBox(height: 20),
+          // --- Conditional Radio Buttons Below ---
+          if (_actualOrderType.toLowerCase() == 'takeaway' && !_hasProcessedFirstStep)
+            Padding(
+              padding: const EdgeInsets.only(top: 7.0, left:18),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  _buildRadioOption('takeaway', 'Takeaway'),
+                  const SizedBox(width: 20), // Space between radio buttons
+                  _buildRadioOption('collection', 'Collection'),
+                ],
+              ),
+            ),
+          const SizedBox(height: 10),
 
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 60.0),
@@ -1422,7 +1449,6 @@ class _Page4State extends State<Page4> {
     }
     return _buildCartSummary();
   }
-
   Widget _buildServiceHighlight(String type, String imageName) {
     bool isSelected = _actualOrderType.toLowerCase() == type.toLowerCase() ||
         (type.toLowerCase() == 'takeaway' && _actualOrderType.toLowerCase() == 'collection');
@@ -1433,76 +1459,59 @@ class _Page4State extends State<Page4> {
 
     String baseImageNameForSizing = imageName.replaceAll('white.png', '.png');
 
-    return Column(
-      children: [
-        InkWell(
-          onTap: _hasProcessedFirstStep
-              ? null
-              : () {
-            bool switchingFromDineInToOthers = (_actualOrderType.toLowerCase() == 'dinein' &&
-                (type.toLowerCase() == 'delivery' || type.toLowerCase() == 'takeaway'));
+    // This function now only builds the main icon container
+    return InkWell(
+      onTap: _hasProcessedFirstStep
+          ? null
+          : () {
+        bool switchingFromDineInToOthers = (_actualOrderType.toLowerCase() == 'dinein' &&
+            (type.toLowerCase() == 'delivery' || type.toLowerCase() == 'takeaway'));
 
-            bool switchingToDineIn = ((_actualOrderType.toLowerCase() == 'delivery' ||
-                _actualOrderType.toLowerCase() == 'takeaway' ||
-                _actualOrderType.toLowerCase() == 'collection') &&
-                type.toLowerCase() == 'dinein');
+        bool switchingToDineIn = ((_actualOrderType.toLowerCase() == 'delivery' ||
+            _actualOrderType.toLowerCase() == 'takeaway' ||
+            _actualOrderType.toLowerCase() == 'collection') &&
+            type.toLowerCase() == 'dinein');
 
-            setState(() {
-              if (type.toLowerCase() == 'takeaway') {
-                _actualOrderType = 'takeaway';
-                _takeawaySubType = 'takeaway';
-              } else {
-                _actualOrderType = type;
-                _takeawaySubType = type.toLowerCase() == 'collection' ? 'collection' : 'takeaway';
-              }
-              _selectedBottomNavItem = _getBottomNavItemIndexForOrderType(type);
+        setState(() {
+          if (type.toLowerCase() == 'takeaway') {
+            _actualOrderType = 'takeaway';
+            _takeawaySubType = 'takeaway'; // Still set this for radio button state
+          } else {
+            _actualOrderType = type;
+            _takeawaySubType = type.toLowerCase() == 'collection' ? 'collection' : 'takeaway'; // Also for consistency
+          }
+          _selectedBottomNavItem = _getBottomNavItemIndexForOrderType(type);
 
-              if (switchingFromDineInToOthers || switchingToDineIn) {
-                _cartItems.clear();
-                _customerDetails = null;
-                _hasProcessedFirstStep = false;
-                _showPayment = false;
-              }
-            });
-          },
-          child: Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: isSelected ? Colors.black : Colors.transparent,
-              borderRadius: BorderRadius.circular(50),
-              border: _hasProcessedFirstStep && !isSelected
-                  ? Border.all(color: Colors.grey.withOpacity(0.5), width: 1)
-                  : null,
-            ),
-            child: Center(
-              child: Image.asset(
-                'assets/images/$displayImage',
-                width: baseImageNameForSizing == 'Delivery.png' ? 80 : 50,
-                height: baseImageNameForSizing == 'Delivery.png' ? 80 : 50,
-                fit: BoxFit.contain,
-                color: _hasProcessedFirstStep && !isSelected
-                    ? Colors.grey.withOpacity(0.5)
-                    : (isSelected ? Colors.white : const Color(0xFF616161)),
-              ),
-            ),
+          if (switchingFromDineInToOthers || switchingToDineIn) {
+            _cartItems.clear();
+            _customerDetails = null;
+            _hasProcessedFirstStep = false;
+            _showPayment = false;
+          }
+        });
+      },
+      child: Container(
+        width: 85,
+        height: 85,
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.black : Colors.transparent,
+          borderRadius: BorderRadius.circular(15),
+          border: _hasProcessedFirstStep && !isSelected
+              ? Border.all(color: Colors.grey.withOpacity(0.5), width: 1)
+              : null,
+        ),
+        child: Center(
+          child: Image.asset(
+            'assets/images/$displayImage',
+            width: baseImageNameForSizing == 'Delivery.png' ? 80 : 50,
+            height: baseImageNameForSizing == 'Delivery.png' ? 80 : 50,
+            fit: BoxFit.contain,
+            color: _hasProcessedFirstStep && !isSelected
+                ? Colors.grey.withOpacity(0.5)
+                : (isSelected ? Colors.white : const Color(0xFF616161)),
           ),
         ),
-
-        if (type.toLowerCase() == 'takeaway' &&
-            (isSelected || _actualOrderType.toLowerCase() == 'collection') &&
-            !_hasProcessedFirstStep)
-          Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Column(
-              children: [
-                _buildRadioOption('takeaway', 'Takeaway'),
-                const SizedBox(height: 4),
-                _buildRadioOption('collection', 'Collection'),
-              ],
-            ),
-          ),
-      ],
+      ),
     );
   }
 
@@ -1522,8 +1531,8 @@ class _Page4State extends State<Page4> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 16,
-              height: 16,
+              width: 19,
+              height: 19,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(

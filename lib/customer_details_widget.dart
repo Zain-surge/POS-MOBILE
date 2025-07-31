@@ -476,41 +476,45 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
               ),
             ),
           ),
-
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 42.0),
-            child: Divider(thickness: 2, color: Colors.grey),
+          // --- ADD THE HORIZONTAL DIVIDER  ---
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 55.0),
+            child: Divider(
+              height: 0,
+              thickness: 3,
+              color: const Color(0xFFB2B2B2),
+            ),
           ),
 
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Subtotal',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'Poppins',
-                      ),
-                    ),
-                    Text(
-                      '£${widget.subtotal.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontFamily: 'Poppins',
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
+                // Row(
+                //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                //   children: [
+                //     const Text(
+                //       'Subtotal',
+                //       style: TextStyle(
+                //         fontSize: 22,
+                //         fontWeight: FontWeight.w600,
+                //         fontFamily: 'Poppins',
+                //       ),
+                //     ),
+                //     Text(
+                //       '£${widget.subtotal.toStringAsFixed(2)}',
+                //       style: const TextStyle(
+                //         fontSize: 22,
+                //         fontFamily: 'Poppins',
+                //       ),
+                //     ),
+                //   ],
+                // ),
+                // const SizedBox(height: 8),
 
-                Row(
+                Row( // This Row now contains only the "Next" button
                   children: [
-                    Expanded(
+                    Expanded( // The "Next" button will now expand to fill the entire row
                       child: MouseRegion(
                         cursor: SystemMouseCursors.click,
                         child: GestureDetector(
@@ -528,10 +532,10 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
                             }
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            padding: const EdgeInsets.symmetric(vertical: 20), // Increased vertical padding here
                             decoration: BoxDecoration(
                               color: Colors.black,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(15),
                             ),
                             child: const Center(
                               child: Text(
@@ -539,7 +543,7 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 18,
+                                  fontSize: 22,
                                   fontFamily: 'Poppins',
                                 ),
                               ),
@@ -548,26 +552,7 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: GestureDetector(
-                        onTap: () {
-                          if (_formKey.currentState!.validate()) {
-                            final customerDetails = CustomerDetails(
-                              name: _nameController.text.trim(),
-                              phoneNumber: _phoneController.text.trim(),
-                              email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
-                              streetAddress: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
-                              city: _cityController.text.trim().isEmpty ? null : _cityController.text.trim(),
-                              postalCode: _postalCodeController.text.trim().isEmpty ? null : _postalCodeController.text.trim(),
-                            );
-                            widget.onCustomerDetailsSubmitted(customerDetails);
-                          }
-                        },
-                        child: Image.asset('assets/images/men.png', width: 40, height: 40),
-                      ),
-                    ),
+                    // Removed SizedBox(width: 8) and Image.asset('assets/images/men.png')
                   ],
                 )
               ],
