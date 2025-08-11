@@ -75,12 +75,10 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
 
     switch (state) {
       case AppLifecycleState.resumed:
-        debugPrint("DynamicOrderListScreen: App resumed, resuming polling");
         eposOrdersProvider.resumePolling();
         break;
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
-        debugPrint("DynamicOrderListScreen: App paused/inactive, pausing polling");
         eposOrdersProvider.pausePolling();
         break;
       case AppLifecycleState.detached:
@@ -95,7 +93,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
     _orderStatusSubscription = orderApiService.orderStatusOrDriverChangedStream.listen((payload) {
       _handleOrderStatusOrDriverChange(payload);
     });
-    debugPrint("DynamicOrderListScreen: Subscribed to orderStatusOrDriverChangedStream.");
   }
 
   void _handleOrderStatusOrDriverChange(Map<String, dynamic> payload) {
@@ -104,7 +101,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
     final int? newDriverId = payload['new_driver_id'] as int?;
 
     if (orderId == null || newStatusBackend == null) {
-      debugPrint('Socket payload missing order_id or new_status: $payload');
       return;
     }
 
@@ -133,7 +129,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
       } else if (orderIndexInCompleted != -1) {
         targetOrder = completedOrders.removeAt(orderIndexInCompleted);
       } else {
-        debugPrint('Socket: Order with ID $orderId not found in current lists. Attempting full reload.');
         _loadOrdersFromProvider();
         return;
       }
@@ -159,9 +154,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
 
         // ✅ IMPORTANT: Log the delivery status transition
         if (newInternalStatus == 'ready' && newDriverId != null) {
-          debugPrint('🚚 Delivery Order ${orderId}: Driver ${newDriverId} assigned - Status should show "On Its Way"');
         } else if (shouldBeCompleted) {
-          debugPrint('✅ Delivery Order ${orderId}: Completed - Status should show "Completed"');
         }
       } else {
         // For non-delivery orders, use original logic
@@ -180,7 +173,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
       if (_selectedOrder?.orderId == orderId) {
         _selectedOrder = updatedOrder;
         // ✅ CRITICAL: Force UI refresh for selected order display
-        debugPrint('🔄 Selected order updated - forcing display refresh for order ${orderId}');
       }
 
       // Adjust selected order if current selected disappears
@@ -188,9 +180,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
         _selectedOrder = activeOrders.isNotEmpty ? activeOrders.first :
         (completedOrders.isNotEmpty ? completedOrders.first : null);
       }
-
-      debugPrint("Socket: Order ${orderId} updated. Internal status: ${updatedOrder.status}, Driver ID: ${updatedOrder.driverId}");
-      debugPrint("🎯 Display status will be: ${updatedOrder.getDisplayStatusLabel()}");
     });
   }
 
@@ -227,7 +216,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
   void didUpdateWidget(covariant DynamicOrderListScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.orderType != oldWidget.orderType) {
-      debugPrint("DynamicOrderListScreen: orderType changed from ${oldWidget.orderType} to ${widget.orderType}. Reloading orders.");
 
       // Reset filters based on new order type
       if (widget.orderType.toLowerCase() == 'takeaway') {
@@ -289,15 +277,11 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
   }
 
   void _loadOrdersFromProvider() {
-    debugPrint("DynamicOrderListScreen: _loadOrdersFromProvider called for ${widget.orderType}.");
 
     final eposOrdersProvider = Provider.of<EposOrdersProvider>(context, listen: false);
 
     // Get filtered orders from provider based on order type
     List<Order> filteredOrders = _getFilteredOrdersFromProvider(eposOrdersProvider);
-
-    debugPrint("DynamicOrderListScreen: Got ${filteredOrders.length} filtered orders from provider.");
-
     List<Order> tempActive = [];
     List<Order> tempCompleted = [];
 
@@ -325,24 +309,17 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
 
     tempCompleted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-    debugPrint("DynamicOrderListScreen: Filtered and separated into ${tempActive.length} active and ${tempCompleted.length} completed orders.");
-
     setState(() {
       activeOrders = tempActive;
       completedOrders = tempCompleted;
 
-      debugPrint("DynamicOrderListScreen: setState called. Active orders: ${activeOrders.length}, Completed orders: ${completedOrders.length}.");
-
       // Handle selected order logic
       if (activeOrders.isEmpty && completedOrders.isEmpty) {
         _selectedOrder = null;
-        debugPrint("DynamicOrderListScreen: No orders available, _selectedOrder set to null.");
       } else if (_selectedOrder == null && activeOrders.isNotEmpty) {
         _selectedOrder = activeOrders.first;
-        debugPrint("DynamicOrderListScreen: First active order selected by default: ${_selectedOrder!.orderId}");
       } else if (_selectedOrder == null && completedOrders.isNotEmpty) {
         _selectedOrder = completedOrders.first;
-        debugPrint("DynamicOrderListScreen: No active orders, first completed order selected by default: ${_selectedOrder?.orderId}");
       } else if (_selectedOrder != null) {
         // Check if the currently selected order still exists in the lists
         bool selectedOrderExists = activeOrders.any((o) => o.orderId == _selectedOrder!.orderId) ||
@@ -352,14 +329,11 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
           // Selected order no longer exists, select a new one
           if (activeOrders.isNotEmpty) {
             _selectedOrder = activeOrders.first;
-            debugPrint("DynamicOrderListScreen: Previously selected order no longer exists, selected first active: ${_selectedOrder!.orderId}");
-          } else if (completedOrders.isNotEmpty) {
+                 } else if (completedOrders.isNotEmpty) {
             _selectedOrder = completedOrders.first;
-            debugPrint("DynamicOrderListScreen: Previously selected order no longer exists, selected first completed: ${_selectedOrder!.orderId}");
-          } else {
+              } else {
             _selectedOrder = null;
-            debugPrint("DynamicOrderListScreen: Previously selected order no longer exists, no orders available");
-          }
+             }
         } else {
           // Update the selected order with the latest data from the lists
           Order? updatedSelectedOrder = activeOrders.firstWhere(
@@ -371,13 +345,10 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
           );
           if (updatedSelectedOrder.orderId == _selectedOrder!.orderId) {
             _selectedOrder = updatedSelectedOrder;
-            debugPrint("DynamicOrderListScreen: Selected order updated with latest data: ${_selectedOrder!.orderId}");
           }
         }
       }
     });
-
-    debugPrint("DynamicOrderListScreen: _loadOrdersFromProvider finished.");
   }
 
   // FIXED: Get filtered orders from provider based on screen type
@@ -572,7 +543,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
   }
 
   String _nextStatus(String current) {
-    debugPrint("nextStatus: Current status is '$current'.");
     String newStatus;
     switch (current.toLowerCase()) {
       case 'pending':
@@ -587,7 +557,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
       default:
         newStatus = 'Pending';
     }
-    debugPrint("nextStatus: Returning '$newStatus'.");
     return newStatus;
   }
 

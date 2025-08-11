@@ -167,7 +167,6 @@ class CustomBottomNavBar extends StatelessWidget {
                   count: takeawayCount,
                   bubbleColor: takeawayColor,
                   onTap: () {
-                    debugPrint("Navigating to Takeaway orders.");
                     if (selectedIndex != 0) {
                       Navigator.pushReplacement(
                         context,
@@ -189,7 +188,6 @@ class CustomBottomNavBar extends StatelessWidget {
                   count: combinedDineinCount, // Show combined count of dinein + takeout
                   bubbleColor: combinedDineinColor, // Show highest priority color
                   onTap: () {
-                    debugPrint("Navigating to Dine-In orders.");
                     if (selectedIndex != 1) {
                       Navigator.pushReplacement(
                         context,
@@ -211,7 +209,6 @@ class CustomBottomNavBar extends StatelessWidget {
                   count: deliveryCount,
                   bubbleColor: deliveryColor,
                   onTap: () {
-                    debugPrint("Navigating to Delivery orders.");
                     if (selectedIndex != 2) {
                       Navigator.pushReplacement(
                         context,
@@ -233,7 +230,6 @@ class CustomBottomNavBar extends StatelessWidget {
                   count: websiteCount,
                   bubbleColor: websiteColor,
                   onTap: () {
-                    debugPrint("Navigating to Website Orders.");
                     if (selectedIndex != 3) {
                       Navigator.pushReplacement(
                         context,
@@ -254,7 +250,6 @@ class CustomBottomNavBar extends StatelessWidget {
                   count: 0, // No count for home
                   bubbleColor: const Color(0xFF8cdd69), // Default color
                   onTap: () {
-                    debugPrint("Navigating to Home Screen.");
                     Navigator.pushReplacementNamed(context, '/service-selection');
                   },
                 ),
@@ -266,7 +261,6 @@ class CustomBottomNavBar extends StatelessWidget {
                   count: 0, // No count for more
                   bubbleColor: const Color(0xFF8cdd69), // Default color
                   onTap: () {
-                    debugPrint("Navigating to Settings Screen.");
                     if (selectedIndex != 5) {
                       Navigator.push(
                         context,
@@ -302,7 +296,6 @@ class CustomBottomNavBar extends StatelessWidget {
     );
   }
 
-  // Helper method to convert Color to readable string for debugging
   String _colorToString(Color color) {
     if (color == const Color(0xFF8cdd69)) return 'GREEN';
     if (color == const Color(0xFFFFE26B)) return 'YELLOW';

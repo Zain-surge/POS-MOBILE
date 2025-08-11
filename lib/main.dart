@@ -14,6 +14,8 @@ import 'package:epos/providers/epos_orders_provider.dart';
 import 'package:epos/providers/active_orders_provider.dart';
 import 'package:epos/providers/food_item_details_provider.dart';
 import 'package:epos/providers/page4_state_provider.dart';
+import 'package:epos/providers/sales_report_provider.dart'; // NEW: Sales Report Provider
+import 'package:epos/sales_report_screen.dart'; // NEW: Sales Report Screen
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -130,6 +132,15 @@ void main() {
           },
           lazy: false, // Make non-lazy to ensure state is available immediately
         ),
+
+        // NEW: SalesReportProvider - INDEPENDENT PROVIDER FOR SALES REPORTS
+        ChangeNotifierProvider<SalesReportProvider>(
+          create: (_) {
+            print('📊 CREATING SalesReportProvider');
+            return SalesReportProvider();
+          },
+          lazy: false, // Make non-lazy to ensure immediate availability
+        ),
       ],
       child: const MainAppWrapper(
         child: MyApp(),
@@ -231,6 +242,13 @@ class _MyAppState extends State<MyApp> {
                 // activeOrdersCount is now obtained via Provider in Page4
               ),
             );
+
+        // NEW: Sales Report Route
+          case '/sales-report':
+            return MaterialPageRoute(
+              builder: (context) => const SalesReportScreen(),
+            );
+
           default:
             return MaterialPageRoute(
               builder: (context) => isLoading ? _buildLoadingScreen() : _buildHomeScreen(),
@@ -286,7 +304,8 @@ class _MyAppState extends State<MyApp> {
                 child: const Text('Retry'),
               ),
             ],
-          ],),
+          ],
+        ),
       ),
     );
   }

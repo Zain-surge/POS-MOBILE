@@ -817,12 +817,6 @@ class _DriverPortalTabState extends State<DriverPortalTab>
   }
 
   void _showOrderDetails(Order order) {
-    // Debug print to check order data
-    print('🔍 Order Details Debug:');
-    print('Order ID: ${order.orderId}');
-    print('Order Total Price: ${order.orderTotalPrice}');
-    print('Customer Name: ${order.customerName}');
-    print('Items count: ${order.items.length}');
 
     showDialog(
       context: context,

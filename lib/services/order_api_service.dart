@@ -204,16 +204,9 @@ class OrderApiService {
         break;
       default:
         statusToSend = newStatus.toLowerCase();
-        print('Warning: No color mapping found for status "$newStatus". Sending as is.');
         break;
     }
 
-    print('DEBUG: Attempting to send update status request to URL: $url');
-    print('DEBUG: Sending body: ${jsonEncode(<String, dynamic>{
-      'order_id': orderId,
-      'status': statusToSend,
-      'driver_id': null,
-    })}');
 
     try {
       final response = await http.post(
@@ -226,8 +219,6 @@ class OrderApiService {
         }),
       );
 
-      print('DEBUG: Received response for order $orderId, status: ${response.statusCode}');
-      print('DEBUG: Response body: ${response.body}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         print('Successfully updated order status $orderId to $newStatus (sent as $statusToSend)');
@@ -259,8 +250,6 @@ class OrderApiService {
         }),
       );
 
-      print('DEBUG: Received response for customer search: ${response.statusCode}');
-      print('DEBUG: Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = json.decode(response.body);

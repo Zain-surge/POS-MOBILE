@@ -165,8 +165,6 @@ class Order {
       return 0.0;
     }
 
-    print('🔍 DEBUG - Full JSON received: $json');
-    print('🔍 DEBUG - order_total_price: ${json['order_total_price']}');
 
     double totalPrice = 0.0;
 
@@ -180,15 +178,11 @@ class Order {
     } else if (json['orderTotalPrice'] != null) {
       totalPrice = parseDouble(json['orderTotalPrice'], 'orderTotalPrice');
     } else {
-      print('🔍 DEBUG - No total field found, calculating from items');
       final items = (json['items'] as List?)
           ?.map((itemJson) => OrderItem.fromJson(itemJson))
           .toList() ?? [];
       totalPrice = items.fold(0.0, (sum, item) => sum + item.totalPrice);
     }
-
-    print('🔍 DEBUG - Final calculated total: $totalPrice');
-
     return Order(
       orderId: json['order_id'] ?? 0,
       paymentType: json['payment_type'] ?? 'N/A',

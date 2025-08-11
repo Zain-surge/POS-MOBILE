@@ -105,9 +105,6 @@ class DriverOrderProvider with ChangeNotifier {
           'items': items,
         };
 
-        // Debug log to verify driver assignment
-        print('🔍 Order ${orderData['order_id']}: driver_id=${orderData['driver_id']}, status=${orderData['status']}');
-
         return Order.fromJson(orderJson);
       }).toList();
 

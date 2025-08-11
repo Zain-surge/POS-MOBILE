@@ -28,20 +28,11 @@ class ActiveOrdersProvider with ChangeNotifier {
     final status = order.status.toLowerCase();
     final source = order.orderSource.toLowerCase();
 
-    print('🔍 _shouldDisplayWebsiteOrder: Order ${order.orderId}, source: $source, status: $status');
-
     if (source != 'website') {
       return false;
     }
 
     bool shouldShow = status == 'accepted' || status == 'green' || status == 'ready';
-
-    print('🌐 Website order ${order.orderId}: status="$status" -> shouldShow=$shouldShow');
-
-    if (!shouldShow) {
-      print('🚫 Website order ${order.orderId} WILL NOT be displayed (status: $status)');
-    }
-
     return shouldShow;
   }
 
@@ -61,16 +52,11 @@ class ActiveOrdersProvider with ChangeNotifier {
 //anyorder
   bool _shouldDisplayOrder(Order order) {
     final source = order.orderSource.toLowerCase();
-
-    print('🔍 Checking if order ${order.orderId} should be displayed...');
-    print('📋 Order details: source=$source, status=${order.status}, type=${order.orderType}');
-
     if (source == 'website') {
       return _shouldDisplayWebsiteOrder(order);
     } else if (source == 'epos') {
       return _shouldDisplayEposOrder(order);
     } else {
-      print('⚠️ Unknown order source: $source for order ${order.orderId}');
       return false;
     }
   }
@@ -91,12 +77,10 @@ class ActiveOrdersProvider with ChangeNotifier {
       // Schedule update when order becomes yellow (30 minutes)
       final Duration timeUntilYellow = greenToYellowThreshold - timeSinceCreated;
       nextUpdate = Timer(timeUntilYellow, () {
-        print('⏰ Order ${order.orderId} becoming YELLOW');
         _calculateAndUpdateCounts();
 
         // Schedule next update for red (15 minutes later)
         _scheduledUpdates[order.orderId] = Timer(const Duration(minutes: 15), () {
-          print('⏰ Order ${order.orderId} becoming RED');
           _calculateAndUpdateCounts();
           _scheduledUpdates.remove(order.orderId);
         });

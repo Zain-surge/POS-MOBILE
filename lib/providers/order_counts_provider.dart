@@ -43,11 +43,6 @@ class OrderCountsProvider extends ChangeNotifier {
 
   // Combined method to update both counts and colors with better logging
   void updateAllCountsAndColors(Map<String, int> newCounts, Map<String, Color> newColors) {
-    print('🔄 OrderCountsProvider: updateAllCountsAndColors called');
-    print('🔄 Current counts: $_activeOrdersCount');
-    print('🔄 New counts: $newCounts');
-    print('🔄 Current colors: ${_dominantOrderColors.map((k, v) => MapEntry(k, _colorToString(v)))}');
-    print('🔄 New colors: ${newColors.map((k, v) => MapEntry(k, _colorToString(v)))}');
 
     bool countsChanged = false;
     bool colorsChanged = false;
@@ -55,7 +50,6 @@ class OrderCountsProvider extends ChangeNotifier {
     // Check for count changes
     newCounts.forEach((key, value) {
       if (_activeOrdersCount[key] != value) {
-        print('🔄 Count changed for $key: ${_activeOrdersCount[key]} -> $value');
         countsChanged = true;
       }
     });
@@ -63,7 +57,6 @@ class OrderCountsProvider extends ChangeNotifier {
     // Check for color changes
     newColors.forEach((key, value) {
       if (_dominantOrderColors[key] != value) {
-        print('🔄 Color changed for $key: ${_colorToString(_dominantOrderColors[key]!)} -> ${_colorToString(value)}');
         colorsChanged = true;
       }
     });
@@ -72,20 +65,11 @@ class OrderCountsProvider extends ChangeNotifier {
       _activeOrdersCount = Map.from(newCounts);
       _dominantOrderColors = Map.from(newColors);
 
-      print('✅ OrderCountsProvider: Changes detected - updating state');
-      print('✅ Final counts: $_activeOrdersCount');
-      print('✅ Final colors: ${_dominantOrderColors.map((k, v) => MapEntry(k, _colorToString(v)))}');
-      print('✅ Combined dinein count: $combinedDineinCount');
-      print('✅ Combined dinein color: ${_colorToString(combinedDineinColor)}');
-
-      // Force UI update
       Future.microtask(() {
         notifyListeners();
-        print('🔔 OrderCountsProvider: notifyListeners() called');
       });
 
     } else {
-      print('ℹ️ OrderCountsProvider: No changes detected, skipping update');
     }
   }
 
@@ -106,7 +90,6 @@ class OrderCountsProvider extends ChangeNotifier {
 
   //Reset all counts and colors
   void resetCounts() {
-    print('🔄 OrderCountsProvider: Resetting all counts and colors');
 
     _activeOrdersCount = {
       'takeaway': 0,
@@ -125,8 +108,6 @@ class OrderCountsProvider extends ChangeNotifier {
 
     Future.microtask(() {
       notifyListeners();
-      print('🔔 OrderCountsProvider: reset notifyListeners() called');
-      print('✅ OrderCountsProvider: All counts and colors reset to default');
     });
   }
 
@@ -137,17 +118,10 @@ class OrderCountsProvider extends ChangeNotifier {
       final oldCount = _activeOrdersCount[lowerCaseOrderType];
       if (oldCount != count) {
         _activeOrdersCount[lowerCaseOrderType] = count;
-        print('🔄 Set $lowerCaseOrderType count: $oldCount -> $count');
-
         Future.microtask(() {
           notifyListeners();
-          print('🔔 OrderCountsProvider: setCount notifyListeners() called');
         });
-      } else {
-        print('ℹ️ OrderCountsProvider: $lowerCaseOrderType count already $count, no change needed');
       }
-    } else {
-      debugPrint('Warning: Attempted to set count for unknown order type: $orderType');
     }
   }
 
@@ -157,19 +131,8 @@ class OrderCountsProvider extends ChangeNotifier {
   // Method to get individual dinein count (excluding takeout)
   int get dineinCount => _activeOrdersCount['dinein'] ?? 0;
 
-  // Debug method to print current state
-  void printCurrentState() {
-    print('📊 OrderCountsProvider Current State:');
-    print('📊 Counts: $_activeOrdersCount');
-    print('📊 Colors: ${_dominantOrderColors.map((k, v) => MapEntry(k, _colorToString(v)))}');
-    print('📊 Combined dinein count: $combinedDineinCount');
-    print('📊 Combined dinein color: ${_colorToString(combinedDineinColor)}');
-  }
-
   // Method to force a UI update (for debugging)
   void forceUpdate() {
-    print('🔄 OrderCountsProvider: Force update triggered');
     notifyListeners();
-    print('🔔 OrderCountsProvider: Force notifyListeners() called');
   }
 }

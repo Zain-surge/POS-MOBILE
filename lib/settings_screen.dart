@@ -1,15 +1,10 @@
 // lib/settings_screen.dart (Updated with Driver Settings)
 
 import 'dart:async';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:share_plus/share_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../services/api_service.dart';
-import 'package:epos/sales_report_screen.dart';
 import 'package:epos/custom_bottom_nav_bar.dart';
 import 'driver_management_screen.dart'; // Add this import
 
@@ -784,41 +779,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _loadSalesReport() async {
-    setState(() {
-      _isLoadingSalesReport = true;
-    });
-
-    try {
-      final salesReport = await ApiService.getSalesReport();
-      setState(() {
-        _salesReport = salesReport;
-      });
-    } catch (e) {
-      print('Error loading sales report: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to load sales report: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      setState(() {
-        _isLoadingSalesReport = false;
-      });
-    }
-  }
-
   Widget _buildSalesReportItem() {
     return GestureDetector(
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => const SalesReportScreen(
-              initialBottomNavItemIndex: 5,
-            ),
-          ),
-        );
+        // Use named route navigation to leverage the global SalesReportProvider
+        Navigator.of(context).pushNamed('/sales-report');
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),

@@ -218,7 +218,6 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error searching customer: ${e.toString()}')),
       );
-      debugPrint('Error searching customer: $e');
     } finally {
       setState(() {
         _isSearching = false;

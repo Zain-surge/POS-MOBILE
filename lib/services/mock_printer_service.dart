@@ -61,7 +61,6 @@ class MockPrinterService implements IPrinterService {
     }
     _statusController.add('Printing ${_connectedDevice!.name} (Mock)...');
     await Future.delayed(const Duration(seconds: 2));
-    debugPrint('Mock Print Data (${bytes.length} bytes): ${String.fromCharCodes(bytes)}');
     _statusController.add('Print Complete (${_connectedDevice!.name} Mock)');
     return true;
   }

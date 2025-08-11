@@ -285,7 +285,6 @@ class _Page4State extends State<Page4> {
 
     // IMPORTANT: Switch to the correct order type FIRST before loading state
     final incomingOrderType = widget.selectedOrderType;
-    debugPrint("📋 Page4 initializing with incoming order type: $incomingOrderType");
 
     // Determine the correct order type and sub type
     String actualOrderType;
@@ -342,16 +341,7 @@ class _Page4State extends State<Page4> {
     _selectedBottomNavItem = -1;
     foodItems = widget.foodItems;
 
-    debugPrint("📋 Page4 initialized with ${foodItems.length} food items");
-    debugPrint("📋 Actual Order Type: $_actualOrderType");
-    debugPrint("📋 Cart Items: ${_cartItems.length}");
-    debugPrint("📋 Customer Details: ${_customerDetails?.name ?? 'None'}");
-    debugPrint("📋 Has Processed First Step: $_hasProcessedFirstStep");
-    debugPrint("📋 Modal Open: $_isModalOpen");
-    debugPrint("📋 Search Query: '$_searchQuery'");
-
     final categoriesInData = foodItems.map((e) => e.category).toSet();
-    debugPrint("📂 Categories in data: $categoriesInData");
 
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _getLeftPanelDimensions();
@@ -381,7 +371,6 @@ class _Page4State extends State<Page4> {
 
     // Ensure we're saving to the correct order type
     if (stateProvider.currentOrderType != _actualOrderType) {
-      debugPrint('⚠️ State provider order type mismatch! Provider: ${stateProvider.currentOrderType}, Page: $_actualOrderType');
       stateProvider.switchToOrderType(_actualOrderType, _takeawaySubType);
     }
 
@@ -416,13 +405,6 @@ class _Page4State extends State<Page4> {
       editingIndex: _editingCommentIndex,
       editingText: _commentEditingController.text,
     );
-
-    debugPrint('💾 Saved state for order type: $_actualOrderType');
-    debugPrint('   - Cart items: ${_cartItems.length}');
-    debugPrint('   - Customer: ${_customerDetails?.name ?? 'None'}');
-    debugPrint('   - Has processed first step: $_hasProcessedFirstStep');
-    debugPrint('   - Modal open: $_isModalOpen');
-    debugPrint('   - Search query: "$_searchQuery"');
   }
 
 
@@ -450,7 +432,6 @@ class _Page4State extends State<Page4> {
           renderBox.size.height,
         );
       });
-      debugPrint('Left Panel Rect for Modal Positioning: $_leftPanelRect');
     }
   }
 
@@ -488,17 +469,14 @@ class _Page4State extends State<Page4> {
   void fetchItems() async {
     try {
       final items = await ApiService.fetchMenuItems();
-      debugPrint(" Items fetched: ${items.length}");
 
       final categoriesInData = items.map((e) => e.category).toSet();
-      debugPrint(" 📂 Categories in data: $categoriesInData");
 
       setState(() {
         foodItems = items;
         isLoading = false;
       });
     } catch (e) {
-      debugPrint(' Error fetching items: $e');
       if (mounted) {
         _showErrorSnackBar('Failed to load menu items: $e');
       }
@@ -633,7 +611,6 @@ class _Page4State extends State<Page4> {
           foodItems[itemIndex] = originalItemState;
         }
       });
-      debugPrint('Error toggling item availability for ${item.name}: $e');
       if (mounted) {
         _showErrorSnackBar('Failed to update ${item.name} availability.');
       }

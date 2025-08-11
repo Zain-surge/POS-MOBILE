@@ -89,9 +89,11 @@ class Page4StateProvider extends ChangeNotifier {
 
   // Current active order type
   String _currentOrderType = 'takeaway';
+
   String get currentOrderType => _currentOrderType;
 
   String _takeawaySubType = 'takeaway';
+
   String get takeawaySubType => _takeawaySubType;
 
   // Get current state based on active order type
@@ -101,31 +103,46 @@ class Page4StateProvider extends ChangeNotifier {
 
   // Getters that return current order type's state
   List<CartItem> get cartItems => _currentState.cartItems;
+
   CustomerDetails? get customerDetails => _currentState.customerDetails;
+
   String get selectedPaymentType => _currentState.selectedPaymentType;
+
   bool get hasProcessedFirstStep => _currentState.hasProcessedFirstStep;
+
   bool get showPayment => _currentState.showPayment;
-  double get appliedDiscountPercentage => _currentState.appliedDiscountPercentage;
+
+  double get appliedDiscountPercentage =>
+      _currentState.appliedDiscountPercentage;
+
   double get discountAmount => _currentState.discountAmount;
+
   bool get showDiscountPage => _currentState.showDiscountPage;
+
   bool get wasDiscountPageShown => _currentState.wasDiscountPageShown;
+
   int get selectedCategory => _currentState.selectedCategory;
+
   String get searchQuery => _currentState.searchQuery;
+
   bool get isEditMode => _currentState.isEditMode;
+
   bool get isSearchBarExpanded => _currentState.isSearchBarExpanded;
 
   // NEW: Modal state getters
   bool get isModalOpen => _currentState.isModalOpen;
+
   FoodItem? get modalFoodItem => _currentState.modalFoodItem;
+
   int? get editingCartIndex => _currentState.editingCartIndex;
 
   // NEW: Comment editing state getters
   int? get editingCommentIndex => _currentState.editingCommentIndex;
+
   String get commentEditingText => _currentState.commentEditingText;
 
   // NEW: Method to switch order type and load appropriate state
   void switchToOrderType(String orderType, String subType) {
-    debugPrint('🔄 Page4StateProvider: Switching from $_currentOrderType to $orderType');
 
     _currentOrderType = orderType;
     _takeawaySubType = subType;
@@ -133,15 +150,7 @@ class Page4StateProvider extends ChangeNotifier {
     // Ensure the state exists for this order type
     if (!_orderTypeStates.containsKey(orderType)) {
       _orderTypeStates[orderType] = OrderTypeState();
-      debugPrint('✅ Created new state for order type: $orderType');
-    } else {
-      debugPrint('📋 Loading existing state for order type: $orderType');
-      debugPrint('   - Cart items: ${_currentState.cartItems.length}');
-      debugPrint('   - Customer details: ${_currentState.customerDetails?.name ?? 'None'}');
-      debugPrint('   - Has processed first step: ${_currentState.hasProcessedFirstStep}');
-      debugPrint('   - Modal open: ${_currentState.isModalOpen}');
-      debugPrint('   - Search query: ${_currentState.searchQuery}');
-    }
+        }
 
     notifyListeners();
   }
@@ -149,7 +158,6 @@ class Page4StateProvider extends ChangeNotifier {
   // Methods to update current order type's state
   void updateCartItems(List<CartItem> items) {
     _currentState.cartItems = List.from(items);
-    debugPrint('🛒 Updated cart items for $_currentOrderType: ${items.length} items');
     notifyListeners();
   }
 
@@ -179,7 +187,6 @@ class Page4StateProvider extends ChangeNotifier {
 
   void updateCustomerDetails(CustomerDetails? details) {
     _currentState.customerDetails = details;
-    debugPrint('👤 Updated customer details for $_currentOrderType: ${details?.name ?? 'None'}');
     notifyListeners();
   }
 
@@ -195,7 +202,6 @@ class Page4StateProvider extends ChangeNotifier {
 
   void updateProcessedFirstStep(bool processed) {
     _currentState.hasProcessedFirstStep = processed;
-    debugPrint('✅ Updated processed first step for $_currentOrderType: $processed');
     notifyListeners();
   }
 
@@ -210,7 +216,8 @@ class Page4StateProvider extends ChangeNotifier {
     bool? showPage,
     bool? wasShown,
   }) {
-    if (percentage != null) _currentState.appliedDiscountPercentage = percentage;
+    if (percentage != null)
+      _currentState.appliedDiscountPercentage = percentage;
     if (amount != null) _currentState.discountAmount = amount;
     if (showPage != null) _currentState.showDiscountPage = showPage;
     if (wasShown != null) _currentState.wasDiscountPageShown = wasShown;
@@ -226,7 +233,8 @@ class Page4StateProvider extends ChangeNotifier {
     if (category != null) _currentState.selectedCategory = category;
     if (search != null) _currentState.searchQuery = search;
     if (editMode != null) _currentState.isEditMode = editMode;
-    if (searchExpanded != null) _currentState.isSearchBarExpanded = searchExpanded;
+    if (searchExpanded != null)
+      _currentState.isSearchBarExpanded = searchExpanded;
     notifyListeners();
   }
 
@@ -246,7 +254,6 @@ class Page4StateProvider extends ChangeNotifier {
       _currentState.editingCartIndex = null;
     }
 
-    debugPrint('🪟 Updated modal state for $_currentOrderType: open=$isOpen, editing=${editingIndex != null}');
     notifyListeners();
   }
 
@@ -262,19 +269,15 @@ class Page4StateProvider extends ChangeNotifier {
     if (editingIndex == null) {
       _currentState.commentEditingText = '';
     }
-
-    debugPrint('💬 Updated comment editing state for $_currentOrderType: index=$editingIndex');
     notifyListeners();
   }
 
   void resetCurrentOrderType() {
-    debugPrint('🔄 Resetting state for order type: $_currentOrderType');
     _currentState.reset();
     notifyListeners();
   }
 
   void resetAllOrderTypes() {
-    debugPrint('🔄 Resetting ALL order type states');
     for (var state in _orderTypeStates.values) {
       state.reset();
     }
@@ -305,25 +308,5 @@ class Page4StateProvider extends ChangeNotifier {
       'editingCartIndex': _currentState.editingCartIndex,
       'appliedDiscountPercentage': _currentState.appliedDiscountPercentage,
     };
-  }
-
-  // Method to get state summary for debugging
-  void printStateSummary() {
-    debugPrint('📊 Page4StateProvider State Summary:');
-    debugPrint('   Current Order Type: $_currentOrderType');
-    debugPrint('   Takeaway Sub Type: $_takeawaySubType');
-
-    for (var entry in _orderTypeStates.entries) {
-      final orderType = entry.key;
-      final state = entry.value;
-      debugPrint('   $orderType:');
-      debugPrint('     - Cart Items: ${state.cartItems.length}');
-      debugPrint('     - Customer: ${state.customerDetails?.name ?? 'None'}');
-      debugPrint('     - First Step: ${state.hasProcessedFirstStep}');
-      debugPrint('     - Show Payment: ${state.showPayment}');
-      debugPrint('     - Modal Open: ${state.isModalOpen}');
-      debugPrint('     - Search Query: "${state.searchQuery}"');
-      debugPrint('     - Category: ${state.selectedCategory}');
-    }
   }
 }

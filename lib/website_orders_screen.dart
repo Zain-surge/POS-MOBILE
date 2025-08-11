@@ -880,7 +880,6 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                             onTap: () {
                               setState(() {
                                 _selectedOrder = order;
-                                debugPrint("WebsiteOrdersScreen: Order ID ${order.orderId} selected.");
                               });
                             },
                             child: Container(
@@ -909,7 +908,6 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                       onTap: () {
                                         setState(() {
                                           _selectedOrder = order;
-                                          debugPrint("WebSiteOrdersScreen: Order ID ${order.orderId} (inner tap) selected.");
                                         });
                                       },
                                       child: Container(
@@ -952,7 +950,6 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                           order.status.toLowerCase() == 'red';
 
                                       if (isFinalState) {
-                                        debugPrint("WebsiteOrdersScreen: Order ID ${order.orderId} is already in a final state. No status change.");
                                         if (mounted) {
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             SnackBar(content: Text('Order ${order.orderId} is already ${order.statusLabel}.')),
@@ -979,7 +976,6 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                         return; // Prevent update
                                       }
 
-                                      debugPrint("WebsiteOrdersScreen: Attempting to change status for order ID ${order.orderId} from ${order.status} to $nextIntendedStatus.");
 
                                       final orderProvider = Provider.of<OrderProvider>(context, listen: false);
                                       final orderCountsProvider = Provider.of<OrderCountsProvider>(context, listen: false);

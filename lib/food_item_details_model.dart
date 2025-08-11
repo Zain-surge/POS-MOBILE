@@ -210,11 +210,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         _selectedBase = "Tomato";
         _selectedCrust = "Normal";
 
-        debugPrint(
-            "Default Toppings from FoodItem: ${widget.foodItem.defaultToppings}");
-        debugPrint(
-            "Default Cheese from FoodItem: ${widget.foodItem.defaultCheese}");
-
         if (widget.foodItem.defaultToppings != null) {
           _selectedToppings.addAll(widget.foodItem.defaultToppings!);
         }
@@ -239,13 +234,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   }
 
   double _calculatePricePerUnit() {
-    debugPrint("--- Calculating Price for ${widget.foodItem.name} ---");
-    debugPrint("Food Item Price Map: ${widget.foodItem.price}");
-    debugPrint("Selected Size: $_selectedSize");
-    debugPrint("Selected Base: $_selectedBase");
-    debugPrint("Selected Crust: $_selectedCrust");
-    debugPrint("Selected Toppings: $_selectedToppings");
-    debugPrint("Selected Sauces: $_selectedSauces");
 
     double price = 0.0;
 
@@ -254,11 +242,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     } else if (widget.foodItem.price.keys.length == 1 && widget.foodItem.price.isNotEmpty) {
       price = widget.foodItem.price.values.first;
     } else {
-      debugPrint("No valid size selected or price not found");
       return 0.0;
     }
-
-    debugPrint("Base price: $price");
 
     if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'GarlicBread') {
       // Calculate topping costs
@@ -280,8 +265,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         }
       }
       price += toppingCost;
-      debugPrint("After toppings: $price (added: $toppingCost)");
-
       // Calculate base cost
       double baseCost = 0.0;
       if (_selectedBase != null && _selectedBase != "Tomato") {
@@ -298,7 +281,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         }
       }
       price += baseCost;
-      debugPrint("After base: $price (added: $baseCost)");
 
       // Calculate crust cost
       double crustCost = 0.0;
@@ -316,7 +298,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         }
       }
       price += crustCost;
-      debugPrint("After crust: $price (added: $crustCost)");
 
       // Calculate sauce costs
       double sauceCost = 0.0;
@@ -328,15 +309,12 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         }
       }
       price += sauceCost;
-      debugPrint("After sauces: $price (added: $sauceCost)");
     } else if (['Shawarma', 'Wraps', 'Burgers'].contains(widget.foodItem.category)) {
       if (_makeItAMeal) {
         price += 1.9;
-        debugPrint("After meal addition: $price");
       }
     }
 
-    debugPrint("Final calculated price: $price");
     return price;
   }
 
@@ -597,11 +575,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       canConfirmSelection = false;
     }
 
-    debugPrint("Item Category: ${widget.foodItem.category}");
-    debugPrint("Price keys length for rendering: ${widget.foodItem.price.keys
-        .length}");
-    debugPrint("Is in size selection mode: $_isInSizeSelectionMode");
-    debugPrint("Size has been selected: $_sizeHasBeenSelected");
 
     return GestureDetector(
       onTap: () {

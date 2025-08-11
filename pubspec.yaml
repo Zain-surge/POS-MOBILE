@@ -26,7 +26,6 @@ dependencies:
   usb_serial: ^0.5.2
   pdf: ^3.11.3
   phone_numbers_parser: ^9.0.3
-  share_plus: ^11.0.0
   fl_chart: ^1.0.0
   printing: ^5.14.2
   google_fonts: ^6.3.0
