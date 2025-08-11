@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:epos/models/order_models.dart'; // Assuming PaymentDetails is here
 import 'package:epos/services/thermal_printer_service.dart';
-import 'package:epos/custom_amount_dialer.dart';
 import 'dart:async';
 import 'dart:ui';
 
@@ -70,7 +69,6 @@ class _PaymentWidgetState extends State<PaymentWidget> {
 
     _amountPaidController.addListener(_onAmountPaidChanged);
     _calculatePresetAmounts();
-    _checkPrinterStatus();
   }
 
   // New method to handle the amount returned from the payment dialer.

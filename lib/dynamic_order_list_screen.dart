@@ -67,7 +67,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
 
     _loadOrdersFromProvider();
     _initializeSocketListener();
-    _checkPrinterStatus();
   }
 
   @override

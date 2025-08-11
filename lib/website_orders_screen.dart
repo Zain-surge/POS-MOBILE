@@ -60,9 +60,6 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
         orderProvider.startPolling();
       }
     });
-
-    // Add printer status check
-    _checkPrinterStatus();
   }
 
   Future<void> _checkPrinterStatus() async {
@@ -1505,5 +1502,4 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
       ),
     );
   }
-
 }

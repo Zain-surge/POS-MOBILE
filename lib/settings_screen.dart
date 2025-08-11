@@ -1,3 +1,5 @@
+// lib/settings_screen.dart (Updated with Driver Settings)
+
 import 'dart:async';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
@@ -9,6 +11,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../services/api_service.dart';
 import 'package:epos/sales_report_screen.dart';
 import 'package:epos/custom_bottom_nav_bar.dart';
+import 'driver_management_screen.dart'; // Add this import
 
 class SettingsScreen extends StatefulWidget {
   final int initialBottomNavItemIndex;
@@ -113,6 +116,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     return time;
   }
+
   Future<void> _loadOffers() async {
     setState(() {
       _isLoadingOffers = true;
@@ -605,6 +609,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // NEW: Driver Settings Item
+  Widget _buildDriverSettingsItem() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const DriverManagementScreen(),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: Colors.grey.shade300, width: 1),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Driver Settings',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.local_shipping,
+                        color: Colors.orange.shade600,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Manage',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.orange.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.grey.shade600,
+                    size: 16,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildTimeCard({
     required String title,
     required TimeOfDay? time,
@@ -728,83 +809,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _generateSalesReportPDF() async {
-    if (_salesReport == null) return;
-
-    final pdf = pw.Document();
-
-    pdf.addPage(
-      pw.Page(
-        build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text('Sales Report - ${_salesReport!['date']}',
-                  style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 20),
-
-              pw.Text('Total Sales: \$${_salesReport!['total_sales']}',
-                  style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 20),
-
-              pw.Text('Sales by Payment Type:',
-                  style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 10),
-              ...(_salesReport!['sales_by_payment_type'] as List).map((item) =>
-                  pw.Text('${item['payment_type']}: ${item['count']} orders - \$${item['total']}')),
-              pw.SizedBox(height: 20),
-
-              pw.Text('Sales by Order Type:',
-                  style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 10),
-              ...(_salesReport!['sales_by_order_type'] as List).map((item) =>
-                  pw.Text('${item['order_type']}: ${item['count']} orders - \$${item['total']}')),
-              pw.SizedBox(height: 20),
-
-              pw.Text('Sales by Order Source:',
-                  style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 10),
-              ...(_salesReport!['sales_by_order_source'] as List).map((item) =>
-                  pw.Text('${item['source']}: ${item['count']} orders - \$${item['total']}')),
-              pw.SizedBox(height: 20),
-
-              if (_salesReport!['most_selling_item'] != null) ...[
-                pw.Text('Most Selling Item:',
-                    style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                pw.SizedBox(height: 10),
-                pw.Text('${_salesReport!['most_selling_item']['item_name']}: ${_salesReport!['most_selling_item']['quantity_sold']} sold - \$${_salesReport!['most_selling_item']['total_sales']}'),
-              ],
-            ],
-          );
-        },
-      ),
-    );
-
-    try {
-      // Mobile-only approach using path_provider
-      final output = await getTemporaryDirectory();
-      final file = File('${output.path}/sales_report_${_salesReport!['date']}.pdf');
-      await file.writeAsBytes(await pdf.save());
-
-      await Share.shareXFiles([XFile(file.path)], text: 'Sales Report for ${_salesReport!['date']}');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('PDF generated and shared successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      print('Error generating PDF: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to generate PDF: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
   Widget _buildSalesReportItem() {
     return GestureDetector(
       onTap: () {
@@ -882,8 +886,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
-
-
 
   Future<void> _initializeBluetooth() async {
     try {
@@ -1229,8 +1231,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // Settings List
             Expanded(
               child: SingleChildScrollView(
-                child:
-                Column(
+                child: Column(
                   children: [
                     _buildSettingItem(
                       title: 'Bluetooth',
@@ -1244,7 +1245,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     _buildShopTimingsItem(),
                     _buildOffersItem(),
-                    _buildSalesReportItem(), // Add this line
+                    _buildDriverSettingsItem(), // NEW: Added Driver Settings
+                    _buildSalesReportItem(),
                     _buildSettingItem(
                       title: 'Show delivery menu',
                       value: _showDeliveryMenu,
@@ -1261,10 +1263,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
-
-
-     // bottomNavigationBar: _buildBottomNavBar(),
-
       bottomNavigationBar: CustomBottomNavBar(
         selectedIndex: _selectedBottomNavItem,
         showDivider: true,
@@ -1276,131 +1274,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
-
-
-
-
-
-
-  //
-  // Widget _buildBottomNavBar() {
-  //   return Column(
-  //     mainAxisSize: MainAxisSize.min,
-  //     children: [
-  //       const Divider(
-  //         height: 3,
-  //         thickness: 1,
-  //         color: const Color(0xFFB2B2B2),
-  //       ),
-  //       Container(
-  //         height: 90,
-  //         color: Colors.white,
-  //         child: Row(
-  //           mainAxisAlignment: MainAxisAlignment.spaceAround,
-  //           children: [
-  //             // Nav Item 0: Takeaway Orders
-  //             BottomNavItem(
-  //               image: 'TakeAway.png',
-  //               index: 0,
-  //               selectedIndex: _selectedBottomNavItem,
-  //               onTap: () {
-  //                 setState(() {
-  //                   _selectedBottomNavItem = 0;
-  //                   Navigator.of(context).pushReplacement(
-  //                     MaterialPageRoute(
-  //                       builder: (context) => const DynamicOrderListScreen(
-  //                         orderType: 'takeaway',
-  //                         initialBottomNavItemIndex: 0,
-  //                       ),
-  //                     ),
-  //                   );
-  //                 });
-  //               },
-  //             ),
-  //             // Nav Item 1: Dine-In Orders
-  //             BottomNavItem(
-  //               image: 'DineIn.png',
-  //               index: 1,
-  //               selectedIndex: _selectedBottomNavItem,
-  //               onTap: () {
-  //                 setState(() {
-  //                   _selectedBottomNavItem = 1;
-  //                   Navigator.of(context).pushReplacement(
-  //                     MaterialPageRoute(
-  //                       builder: (context) => const DynamicOrderListScreen(
-  //                         orderType: 'dinein',
-  //                         initialBottomNavItemIndex: 1,
-  //                       ),
-  //                     ),
-  //                   );
-  //                 });
-  //               },
-  //             ),
-  //             // Nav Item 2: Delivery Orders
-  //             BottomNavItem(
-  //               image: 'Delivery.png',
-  //               index: 2,
-  //               selectedIndex: _selectedBottomNavItem,
-  //               onTap: () {
-  //                 setState(() {
-  //                   _selectedBottomNavItem = 2;
-  //                   Navigator.of(context).pushReplacement(
-  //                     MaterialPageRoute(
-  //                       builder: (context) => const DynamicOrderListScreen(
-  //                         orderType: 'delivery',
-  //                         initialBottomNavItemIndex: 2,
-  //                       ),
-  //                     ),
-  //                   );
-  //                 });
-  //               },
-  //             ),
-  //             // Nav Item 3: Website Orders
-  //             BottomNavItem(
-  //               image: 'web.png',
-  //               index: 3,
-  //               selectedIndex: _selectedBottomNavItem,
-  //               onTap: () {
-  //                 setState(() {
-  //                   _selectedBottomNavItem = 3;
-  //                   Navigator.of(context).pushReplacement(
-  //                     MaterialPageRoute(
-  //                       builder: (context) => WebsiteOrdersScreen(
-  //                         initialBottomNavItemIndex: 3,
-  //                       ),
-  //                     ),
-  //                   );
-  //                 });
-  //               },
-  //             ),
-  //             // Nav Item 4: Home
-  //             BottomNavItem(
-  //               image: 'home.png',
-  //               index: 4,
-  //               selectedIndex: _selectedBottomNavItem,
-  //               onTap: () {
-  //                 setState(() {
-  //                   _selectedBottomNavItem = 4;
-  //                   Navigator.pushReplacementNamed(context, '/service-selection');
-  //                 });
-  //               },
-  //             ),
-  //             // Nav Item 5: More (Current Screen)
-  //             BottomNavItem(
-  //               image: 'More.png',
-  //               index: 5,
-  //               selectedIndex: _selectedBottomNavItem,
-  //               onTap: () {
-  //                 setState(() {
-  //                   _selectedBottomNavItem = 5;
-  //                   // Already on Settings screen, no navigation needed
-  //                 });
-  //               },
-  //             ),
-  //           ],
-  //         ),
-  //       ),
-  //     ],
-  //   );
-  // }
 }

@@ -122,10 +122,10 @@ class _MainAppWrapperState extends State<MainAppWrapper>
 
   void _handleAcceptOrder(Order order) async {
     print("MainAppWrapper: Accepting order ${order.orderId}");
-    bool success = await OrderApiService.updateOrderStatus(order.orderId, 'accepted');
+    bool success = await OrderApiService.updateOrderStatus(order.orderId, 'yellow');
     if (success) {
-      _showSnackBar('Order ${order.orderId} accepted.');
-      OrderApiService().addAcceptedOrder(order.copyWith(status: 'accepted'));
+      _showSnackBar('Order ${order.orderId} yellow.');
+      OrderApiService().addAcceptedOrder(order.copyWith(status: 'yellow'));
       Provider.of<OrderProvider>(context, listen: false).fetchWebsiteOrders();
     } else {
       _showSnackBar('Failed to accept order ${order.orderId}.');
