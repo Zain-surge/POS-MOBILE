@@ -1,8 +1,10 @@
 // lib/screens/driver_management_screen.dart
 
+import 'package:epos/widgets/live_updating_pill.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../services/driver_api_service.dart';
 import '../providers/driver_order_provider.dart';
 import '../models/order.dart';
@@ -44,11 +46,11 @@ class _DriverManagementScreenState extends State<DriverManagementScreen> {
                       ),
                     ),
                   ),
-                  const Expanded(
+                  Expanded(
                     child: Center(
                       child: Text(
                         'Driver Management',
-                        style: TextStyle(
+                        style: GoogleFonts.poppins(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: Colors.black,
@@ -99,7 +101,7 @@ class _DriverManagementScreenState extends State<DriverManagementScreen> {
         child: Text(
           title,
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: GoogleFonts.poppins(
             color: isSelected ? Colors.white : Colors.black,
             fontWeight: FontWeight.w600,
             fontSize: 14,
@@ -147,9 +149,9 @@ class _AddDriverTabState extends State<AddDriverTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Add New Driver',
-          style: TextStyle(
+          style: GoogleFonts.poppins(
             fontSize: 18,
             fontWeight: FontWeight.bold,
             color: Colors.black,
@@ -252,9 +254,9 @@ class _AddDriverTabState extends State<AddDriverTab> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: const Text(
+                      child: Text(
                         'Cancel',
-                        style: TextStyle(
+                        style: GoogleFonts.poppins(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
                         ),
@@ -279,9 +281,9 @@ class _AddDriverTabState extends State<AddDriverTab> {
                           strokeWidth: 2,
                         ),
                       )
-                          : const Text(
+                          : Text(
                         'Add Driver',
-                        style: TextStyle(
+                        style: GoogleFonts.poppins(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
                         ),
@@ -307,9 +309,13 @@ class _AddDriverTabState extends State<AddDriverTab> {
       controller: controller,
       obscureText: obscureText,
       validator: validator,
+      style: GoogleFonts.poppins(
+        fontSize: 14,
+        color: Colors.black87,
+      ),
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: TextStyle(
+        hintStyle: GoogleFonts.poppins(
           color: Colors.grey.shade500,
           fontSize: 14,
         ),
@@ -328,6 +334,10 @@ class _AddDriverTabState extends State<AddDriverTab> {
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: Colors.red),
+        ),
+        errorStyle: GoogleFonts.poppins(
+          fontSize: 12,
+          color: Colors.red,
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         filled: true,
@@ -362,8 +372,13 @@ class _AddDriverTabState extends State<AddDriverTab> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Driver created successfully'),
+          SnackBar(
+            content: Text(
+              'Driver created successfully',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -373,7 +388,12 @@ class _AddDriverTabState extends State<AddDriverTab> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to create driver: $e'),
+            content: Text(
+              'Failed to create driver: $e',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -429,9 +449,9 @@ class _DeactivateDriverTabState extends State<DeactivateDriverTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Deactivate Driver',
-          style: TextStyle(
+          style: GoogleFonts.poppins(
             fontSize: 18,
             fontWeight: FontWeight.bold,
             color: Colors.black,
@@ -450,9 +470,13 @@ class _DeactivateDriverTabState extends State<DeactivateDriverTab> {
             children: [
               TextField(
                 controller: _usernameController,
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: Colors.black87,
+                ),
                 decoration: InputDecoration(
                   hintText: 'Enter Username',
-                  hintStyle: TextStyle(
+                  hintStyle: GoogleFonts.poppins(
                     color: Colors.grey.shade500,
                     fontSize: 14,
                   ),
@@ -488,9 +512,9 @@ class _DeactivateDriverTabState extends State<DeactivateDriverTab> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: const Text(
+                    child: Text(
                       'Cancel',
-                      style: TextStyle(
+                      style: GoogleFonts.poppins(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
                       ),
@@ -515,9 +539,9 @@ class _DeactivateDriverTabState extends State<DeactivateDriverTab> {
                         strokeWidth: 2,
                       ),
                     )
-                        : const Text(
+                        : Text(
                       'Deactivate',
-                      style: TextStyle(
+                      style: GoogleFonts.poppins(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
                       ),
@@ -542,8 +566,13 @@ class _DeactivateDriverTabState extends State<DeactivateDriverTab> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Driver deactivated successfully'),
+          SnackBar(
+            content: Text(
+              'Driver deactivated successfully',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -553,7 +582,12 @@ class _DeactivateDriverTabState extends State<DeactivateDriverTab> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to deactivate driver: $e'),
+            content: Text(
+              'Failed to deactivate driver: $e',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -582,8 +616,25 @@ class DriverPortalTab extends StatefulWidget {
   State<DriverPortalTab> createState() => _DriverPortalTabState();
 }
 
-class _DriverPortalTabState extends State<DriverPortalTab> {
+class _DriverPortalTabState extends State<DriverPortalTab>
+    with TickerProviderStateMixin {
   DateTime _selectedDate = DateTime.now();
+  late AnimationController _colorAnimationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _colorAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+  }
+
+  @override
+  void dispose() {
+    _colorAnimationController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -594,9 +645,9 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
           children: [
             Row(
               children: [
-                const Text(
+                Text(
                   'Select Date:',
-                  style: TextStyle(
+                  style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: Colors.black,
@@ -618,7 +669,7 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
                       children: [
                         Text(
                           DateFormat('dd/MM/yyyy').format(_selectedDate),
-                          style: const TextStyle(
+                          style: GoogleFonts.poppins(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
@@ -646,24 +697,33 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
                   children: [
                     Text(
                       'Error: ${provider.error}',
-                      style: const TextStyle(color: Colors.red),
+                      style: GoogleFonts.poppins(
+                        color: Colors.red,
+                        fontWeight: FontWeight.w500,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () => provider.loadOrders(),
-                      child: const Text('Retry'),
+                      child: Text(
+                        'Retry',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               )
                   : provider.orders.isEmpty
-                  ? const Center(
+                  ? Center(
                 child: Text(
                   'No orders found for selected date',
-                  style: TextStyle(
+                  style: GoogleFonts.poppins(
                     fontSize: 16,
                     color: Colors.grey,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               )
@@ -687,15 +747,11 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
   }
 
   Widget _buildOrdersGrid(List<Order> orders) {
-    // Sort orders by time (most recent first)
     orders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-    // Group orders into rows of 3
     List<List<Order>> orderRows = [];
     for (int i = 0; i < orders.length; i += 3) {
       orderRows.add(orders.skip(i).take(3).toList());
     }
-
     return Column(
       children: orderRows.map((orderRow) => _buildOrderRow(orderRow)).toList(),
     );
@@ -704,13 +760,11 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
   Widget _buildOrderRow(List<Order> orders) {
     return Column(
       children: [
-        // Divider line above
         Container(
           height: 1,
           color: Colors.grey.shade300,
           margin: const EdgeInsets.symmetric(vertical: 20),
         ),
-        // Row with 3 orders (each order has driver name + postal code)
         Row(
           children: [
             for (int i = 0; i < 3; i++) ...[
@@ -722,9 +776,7 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
                   ),
                 )
               else
-                const Expanded(child: SizedBox()), // Empty space if less than 3 orders
-
-              // Vertical divider between columns (except after last column)
+                const Expanded(child: SizedBox()),
               if (i < 2)
                 Container(
                   width: 1,
@@ -734,7 +786,6 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
             ],
           ],
         ),
-        // Divider line below
         Container(
           height: 1,
           color: Colors.grey.shade300,
@@ -748,34 +799,20 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        // Driver name pill
-        _buildPillCard(order.customerName, order),
-        const SizedBox(width: 40), // More space between pills
-        // Postal code pill
-        _buildPillCard(order.postalCode ?? 'N/A', order),
+        // Driver name pill with live updates
+        LiveUpdatingPill(
+          text: order.customerName,
+          order: order,
+          onTap: () => _showOrderDetails(order),
+        ),
+        const SizedBox(width: 40),
+        // Postal code pill with live updates
+        LiveUpdatingPill(
+          text: order.postalCode ?? 'N/A',
+          order: order,
+          onTap: () => _showOrderDetails(order),
+        ),
       ],
-    );
-  }
-
-  Widget _buildPillCard(String text, Order order) {
-    return GestureDetector(
-      onTap: () => _showOrderDetails(order),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade300,
-          borderRadius: BorderRadius.circular(40),
-        ),
-        child: Text(
-          text,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ),
     );
   }
 
@@ -815,7 +852,7 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
                     children: [
                       Text(
                         'Order #${order.orderId}',
-                        style: const TextStyle(
+                        style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.black87,
@@ -896,7 +933,7 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style: GoogleFonts.poppins(
             fontSize: 16,
             fontWeight: FontWeight.bold,
             color: Colors.black87,
@@ -929,7 +966,7 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
             width: 80,
             child: Text(
               '$label:',
-              style: TextStyle(
+              style: GoogleFonts.poppins(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: Colors.grey.shade700,
@@ -939,7 +976,7 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
+              style: GoogleFonts.poppins(
                 fontSize: 14,
                 color: Colors.black87,
               ),
@@ -966,7 +1003,7 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
             child: Center(
               child: Text(
                 '${item.quantity}',
-                style: TextStyle(
+                style: GoogleFonts.poppins(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                   color: Colors.blue.shade700,
@@ -981,7 +1018,7 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
               children: [
                 Text(
                   item.itemName,
-                  style: const TextStyle(
+                  style: GoogleFonts.poppins(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: Colors.black87,
@@ -990,7 +1027,7 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
                 if (item.description.isNotEmpty)
                   Text(
                     item.description,
-                    style: TextStyle(
+                    style: GoogleFonts.poppins(
                       fontSize: 12,
                       color: Colors.grey.shade600,
                     ),
@@ -999,8 +1036,8 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
             ),
           ),
           Text(
-            '£${item.totalPrice}',  // Since item total_price is also stored as string
-            style: const TextStyle(
+            '£${item.totalPrice}',
+            style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.bold,
               color: Colors.black87,
@@ -1036,6 +1073,7 @@ class _DriverPortalTabState extends State<DriverPortalTab> {
               surface: Colors.white,
               onSurface: Colors.black,
             ),
+            textTheme: GoogleFonts.poppinsTextTheme(),
           ),
           child: child!,
         );

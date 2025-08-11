@@ -1,4 +1,4 @@
-// lib/providers/driver_order_provider.dart
+// lib/providers/driver_order_provider.dart - ENHANCED with better live updates
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -11,6 +11,7 @@ class DriverOrderProvider with ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   Timer? _pollTimer;
+  Timer? _colorUpdateTimer; // New timer for live color updates
   String _selectedDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
   List<Order> get orders => _orders;
@@ -18,17 +19,35 @@ class DriverOrderProvider with ChangeNotifier {
   String? get error => _error;
   String get selectedDate => _selectedDate;
 
-  // Start polling for live updates
+  // Start polling for live updates with enhanced frequency
   void startPolling() {
     _pollTimer?.cancel();
+    _colorUpdateTimer?.cancel();
+
     loadOrders(); // Load immediately
+
+    // Poll for new data every 30 seconds
     _pollTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       loadOrders(showLoading: false); // Don't show loading indicator for polling
+    });
+
+    // Update colors every 60 seconds for live time-based changes
+    _colorUpdateTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
+      _updateColorsLive();
     });
   }
 
   void stopPolling() {
     _pollTimer?.cancel();
+    _colorUpdateTimer?.cancel();
+  }
+
+  // Method to update colors live without fetching new data
+  void _updateColorsLive() {
+    // Just notify listeners to trigger color recalculation
+    // The statusColor getter will automatically calculate new colors based on current time
+    print('🎨 Live color update triggered at ${DateTime.now()}');
+    notifyListeners();
   }
 
   void setSelectedDate(String date) {
@@ -48,7 +67,7 @@ class DriverOrderProvider with ChangeNotifier {
     try {
       final ordersData = await DriverApiService.getOrdersWithDriver(_selectedDate);
 
-      _orders = ordersData.map((orderData) {
+      List<Order> newOrders = ordersData.map((orderData) {
         // Parse items exactly as API provides
         List<Map<String, dynamic>> items = [];
         if (orderData['items'] != null) {
@@ -69,7 +88,7 @@ class DriverOrderProvider with ChangeNotifier {
           'payment_type': 'cod',
           'transaction_id': orderData['order_id'].toString(),
           'order_type': 'delivery',
-          'driver_id': orderData['driver_id'],
+          'driver_id': orderData['driver_id'], // Ensure this is not null for assigned orders
           'status': orderData['status'],
           'created_at': _parseOrderTime(orderData['order_time']),
           'change_due': null,
@@ -86,10 +105,37 @@ class DriverOrderProvider with ChangeNotifier {
           'items': items,
         };
 
+        // Debug log to verify driver assignment
+        print('🔍 Order ${orderData['order_id']}: driver_id=${orderData['driver_id']}, status=${orderData['status']}');
+
         return Order.fromJson(orderJson);
       }).toList();
 
+      // Check if orders have actually changed to avoid unnecessary rebuilds
+      bool ordersChanged = false;
+      if (_orders.length != newOrders.length) {
+        ordersChanged = true;
+      } else {
+        for (int i = 0; i < _orders.length; i++) {
+          final oldOrder = _orders[i];
+          final newOrder = newOrders[i];
+
+          if (oldOrder.orderId != newOrder.orderId ||
+              oldOrder.status != newOrder.status ||
+              oldOrder.driverId != newOrder.driverId) {
+            ordersChanged = true;
+            break;
+          }
+        }
+      }
+
+      _orders = newOrders;
       _error = null;
+
+      if (ordersChanged) {
+        print('📊 Orders changed - triggering UI update');
+      }
+
     } catch (e) {
       print('Error loading driver orders: $e');
       _error = e.toString();
@@ -100,10 +146,9 @@ class DriverOrderProvider with ChangeNotifier {
     } finally {
       if (showLoading) {
         _isLoading = false;
-        notifyListeners();
-      } else {
-        notifyListeners();
       }
+      // Always notify listeners to ensure UI updates
+      notifyListeners();
     }
   }
 

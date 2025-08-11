@@ -29,6 +29,7 @@ dependencies:
   share_plus: ^11.0.0
   fl_chart: ^1.0.0
   printing: ^5.14.2
+  google_fonts: ^6.3.0
 
 dev_dependencies:
   flutter_test:
