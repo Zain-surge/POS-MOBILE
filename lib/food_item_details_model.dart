@@ -210,6 +210,11 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         _selectedBase = "Tomato";
         _selectedCrust = "Normal";
 
+        debugPrint(
+            "Default Toppings from FoodItem: ${widget.foodItem.defaultToppings}");
+        debugPrint(
+            "Default Cheese from FoodItem: ${widget.foodItem.defaultCheese}");
+
         if (widget.foodItem.defaultToppings != null) {
           _selectedToppings.addAll(widget.foodItem.defaultToppings!);
         }
@@ -234,6 +239,13 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   }
 
   double _calculatePricePerUnit() {
+    debugPrint("--- Calculating Price for ${widget.foodItem.name} ---");
+    debugPrint("Food Item Price Map: ${widget.foodItem.price}");
+    debugPrint("Selected Size: $_selectedSize");
+    debugPrint("Selected Base: $_selectedBase");
+    debugPrint("Selected Crust: $_selectedCrust");
+    debugPrint("Selected Toppings: $_selectedToppings");
+    debugPrint("Selected Sauces: $_selectedSauces");
 
     double price = 0.0;
 
@@ -242,8 +254,11 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     } else if (widget.foodItem.price.keys.length == 1 && widget.foodItem.price.isNotEmpty) {
       price = widget.foodItem.price.values.first;
     } else {
+      debugPrint("No valid size selected or price not found");
       return 0.0;
     }
+
+    debugPrint("Base price: $price");
 
     if (widget.foodItem.category == 'Pizza' || widget.foodItem.category == 'GarlicBread') {
       // Calculate topping costs
@@ -265,6 +280,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         }
       }
       price += toppingCost;
+      debugPrint("After toppings: $price (added: $toppingCost)");
+
       // Calculate base cost
       double baseCost = 0.0;
       if (_selectedBase != null && _selectedBase != "Tomato") {
@@ -281,6 +298,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         }
       }
       price += baseCost;
+      debugPrint("After base: $price (added: $baseCost)");
 
       // Calculate crust cost
       double crustCost = 0.0;
@@ -298,6 +316,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         }
       }
       price += crustCost;
+      debugPrint("After crust: $price (added: $crustCost)");
 
       // Calculate sauce costs
       double sauceCost = 0.0;
@@ -309,12 +328,15 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         }
       }
       price += sauceCost;
+      debugPrint("After sauces: $price (added: $sauceCost)");
     } else if (['Shawarma', 'Wraps', 'Burgers'].contains(widget.foodItem.category)) {
       if (_makeItAMeal) {
         price += 1.9;
+        debugPrint("After meal addition: $price");
       }
     }
 
+    debugPrint("Final calculated price: $price");
     return price;
   }
 
@@ -445,9 +467,38 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     widget.onClose?.call();
   }
 
-  // --- NEW---
-  Widget _buildToppingsDisplay(List<String> allToppings) {
+  // --- NEW Helper Method for button-based UI ---
+  Widget _buildOptionButton({
+    required String title,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 18),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isActive ? Colors.grey[100] : Colors.black,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          title,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: isActive ? Colors.black : Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.normal,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
+  }
 
+  // --- Original `_buildToppingsDisplay` method (unchanged) ---
+  Widget _buildToppingsDisplay(List<String> allToppings) {
     // 1. Get the list of default toppings and cheeses
     final defaultToppingsAndCheese = [
       ...(widget.foodItem.defaultToppings ?? []),
@@ -540,41 +591,254 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     );
   }
 
+  // --- MODIFIED `_buildMealAndExclusionOptions` method ---
+  Widget _buildMealAndExclusionOptions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Make it a Meal
+            Expanded(
+              child: _buildOptionButton(
+                title: 'Make it a Meal',
+                isActive: _makeItAMeal,
+                onTap: () {
+                  setState(() {
+                    _makeItAMeal = !_makeItAMeal;
+                    if (!_makeItAMeal) {
+                      _selectedDrink = null;
+                      _selectedDrinkFlavor = null;
+                    }
+                    _updatePriceDisplay();
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 15),
+            // No Salad
+            Expanded(
+              child: _buildOptionButton(
+                title: 'No Salad',
+                isActive: _noSalad,
+                onTap: () {
+                  setState(() {
+                    _noSalad = !_noSalad;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 15),
+            // No Sauce
+            Expanded(
+              child: _buildOptionButton(
+                title: 'No Sauce',
+                isActive: _noSauce,
+                onTap: () {
+                  setState(() {
+                    _noSauce = !_noSauce;
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
+        if (_makeItAMeal) ...[
+          const SizedBox(height: 20),
+          _buildDrinkSelectionSection(),
+        ]
+      ],
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final List<String> reorderedToppings = List.from(_allToppings);
-    // reorderedToppings.sort((a, b) {
-    //   final isDefaultA = (widget.foodItem.defaultToppings ?? []).contains(a) ||
-    //       (widget.foodItem.defaultCheese ?? []).contains(a);
-    //   final isDefaultB = (widget.foodItem.defaultToppings ?? []).contains(b) ||
-    //       (widget.foodItem.defaultCheese ?? []).contains(b);
-    //   if (isDefaultA && !isDefaultB) return -1;
-    //   if (!isDefaultA && isDefaultB) return 1;
-    //   return a.compareTo(b);
-    // });
+  // --- NEW METHOD for drink selection with buttons ---
+  Widget _buildDrinkSelectionSection() {
+    final double modalWidth = min(
+      MediaQuery.of(context).size.width * 0.95,
+      1000.0,
+    );
+    const double horizontalPaddingOfParent = 30.0;
+    final double availableWidthForWrap = modalWidth - horizontalPaddingOfParent;
+
+    const double itemSpacing = 12.0;
+    const int desiredColumns = 5;
+
+    final double idealItemWidth = (availableWidthForWrap -
+        (itemSpacing * (desiredColumns - 1))) / desiredColumns;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Choose a Drink:',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 15),
+        Wrap(
+          spacing: itemSpacing,
+          runSpacing: 15,
+          alignment: WrapAlignment.start,
+          children: _allDrinks.map((drink) {
+            final bool isActive = _selectedDrink == drink;
+            return SizedBox(
+              width: idealItemWidth,
+              child: _buildOptionButton(
+                title: drink,
+                isActive: isActive,
+                onTap: () {
+                  setState(() {
+                    _selectedDrink = drink;
+                    // Reset flavor if the new drink doesn't have flavors or is different
+                    if (!_drinkFlavors.containsKey(drink)) {
+                      _selectedDrinkFlavor = null;
+                    }
+                    _updatePriceDisplay();
+                  });
+                },
+              ),
+            );
+          }).toList(),
+        ),
+        if (_selectedDrink != null && _drinkFlavors.containsKey(_selectedDrink!)) ...[
+          const SizedBox(height: 20),
+          _buildFlavorSelectionSection(_selectedDrink!),
+        ],
+      ],
+    );
+  }
+
+  // --- MODIFIED METHOD for flavors with buttons ---
+  Widget _buildFlavorSelectionSection(String drinkName) {
+    final List<String> flavors = _drinkFlavors[drinkName] ?? [];
+
+    if (flavors.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     final double modalWidth = min(
-      MediaQuery
-          .of(context)
-          .size
-          .width * 0.8,
+      MediaQuery.of(context).size.width * 0.95,
+      1000.0,
+    );
+    const double horizontalPaddingOfParent = 30.0;
+    final double availableWidthForWrap = modalWidth - horizontalPaddingOfParent;
+
+    const double itemSpacing = 12.0;
+    const int desiredColumns = 5;
+
+    final double idealItemWidth = (availableWidthForWrap -
+        (itemSpacing * (desiredColumns - 1))) / desiredColumns;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Choose a flavor for ${drinkName.capitalize()}:',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 15),
+        Wrap(
+          spacing: itemSpacing,
+          runSpacing: 15,
+          alignment: WrapAlignment.spaceBetween,
+          children: flavors.map((flavor) {
+            final bool isActive = _selectedDrinkFlavor == flavor;
+            return SizedBox(
+              width: idealItemWidth,
+              child: _buildOptionButton(
+                title: flavor,
+                isActive: isActive,
+                onTap: () {
+                  setState(() {
+                    _selectedDrinkFlavor = flavor;
+                  });
+                },
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // --- MODIFIED METHOD for milkshake options with a button ---
+  Widget _buildQuantityControlOnly() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.foodItem.category == 'Milkshake') ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Expanded(
+                child: _buildOptionButton(
+                  title: 'No Cream',
+                  isActive: _noCream,
+                  onTap: () {
+                    setState(() {
+                      _noCream = !_noCream;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+        ]
+      ],
+    );
+  }
+
+  String _getDisplaySize(String size) {
+    switch (size.toLowerCase()) {
+      case 'regular':
+        return 'Reg';
+      case 'large':
+        return 'Lrg';
+      case 'default':
+        return 'Def';
+      default:
+      // Handle sizes like '10 inch', '12 inch', etc.
+        final parts = size.split(' ');
+        if (parts.isNotEmpty) {
+          return parts.first; // e.g., "10"
+        }
+        return size;
+    }
+  }
+
+  // --- REPLACED `build` METHOD with your original UI ---
+  @override
+  Widget build(BuildContext context) {
+    final double modalWidth = min(
+      MediaQuery.of(context).size.width * 0.8,
       1500.0,
     );
 
-    bool canConfirmSelection = true; // Renamed from canAddToCart
+    bool canConfirmSelection = true;
     if ((widget.foodItem.price.keys.length > 1 && _selectedSize == null) ||
-        (_makeItAMeal && _selectedDrink == null)) {
+        (_makeItAMeal && _selectedDrink == null) ||
+        (_makeItAMeal && _selectedDrink != null && _drinkFlavors.containsKey(_selectedDrink!) && _selectedDrinkFlavor == null)) {
       canConfirmSelection = false;
     }
-    if ((_drinkFlavors.containsKey(widget.foodItem.name) &&
-        _selectedDrinkFlavor == null) ||
-        (_makeItAMeal && _selectedDrink != null &&
-            _drinkFlavors.containsKey(_selectedDrink!) &&
-            _selectedDrinkFlavor == null)) {
+    if ((_drinkFlavors.containsKey(widget.foodItem.name) && _selectedDrinkFlavor == null)) {
       canConfirmSelection = false;
     }
 
+    debugPrint("Item Category: ${widget.foodItem.category}");
+    debugPrint("Price keys length for rendering: ${widget.foodItem.price.keys
+        .length}");
+    debugPrint("Is in size selection mode: $_isInSizeSelectionMode");
+    debugPrint("Size has been selected: $_sizeHasBeenSelected");
 
     return GestureDetector(
       onTap: () {
@@ -652,7 +916,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                                 _getDisplaySize(_selectedSize!),
                                 style: TextStyle(
                                   color: Colors.black,
-                                  fontSize: _getDisplaySize(_selectedSize!).toLowerCase() == 'default' ? 14 : 24,
+                                  fontSize: _getDisplaySize(_selectedSize!)
+                                      .toLowerCase() == 'default' ? 14 : 24,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -673,7 +938,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       decoration: BoxDecoration(
                         color: Colors.black,
                         borderRadius: BorderRadius.circular(8),
-
                       ),
                       child: Text(
                         widget.foodItem.name.toUpperCase(),
@@ -729,7 +993,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                                     ? Colors.grey[100]
                                     : Colors.black,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.grey[100]!, width: 4),
+                                border: Border.all(color: Colors.grey[100]!,
+                                    width: 4),
                               ),
                               child: const Icon(
                                 Icons.remove,
@@ -786,7 +1051,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                                     ? Colors.grey[100]
                                     : Colors.black,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.grey[100]!, width: 4),
+                                border: Border.all(color: Colors.grey[100]!,
+                                    width: 4),
                               ),
                               child: const Icon(
                                 Icons.add,
@@ -799,7 +1065,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 20 ),
+                  const SizedBox(width: 20),
                   InkWell(
                     onTap: _closeModal,
                     child: const Text(
@@ -848,29 +1114,10 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                         ],
 
                         if (widget.foodItem.category == 'Milkshake') ...[
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Checkbox(
-                                    value: _noCream,
-                                    onChanged: (bool? value) {
-                                      setState(() {
-                                        _noCream = value!;
-                                      });
-                                    },
-                                    activeColor: Colors.grey[100],
-                                  ),
-                                  const Text('No Cream', style: TextStyle(
-                                      fontSize: 16, color: Colors.white)),
-                                ],
-                              ),
-                              const SizedBox(height: 20),
-                            ],
-                          ),
+                          _buildQuantityControlOnly(),
                         ],
 
+                        const SizedBox(height: 20),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -911,11 +1158,13 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                             const SizedBox(height: 20),
                           ],
                         ),
+                        const SizedBox(height: 20),
                       ],
                   ],
                 ),
               ),
             ),
+
 
             // Footer with total and buttons
             Container(
@@ -992,26 +1241,9 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     );
   }
 
-  String _getDisplaySize(String sizeKey) {
-    final Map<String, Map<String, String>> categorySizeDisplayMap = {
-      'Shawarma': {
-        'naan': 'Large',
-        'pitta': 'Small',
-      },
-    };
 
-    final Map<String,
-        String>? currentCategoryMap = categorySizeDisplayMap[widget.foodItem
-        .category];
 
-    if (currentCategoryMap != null && currentCategoryMap.containsKey(sizeKey)) {
-      return currentCategoryMap[sizeKey]!;
-    } else if (sizeKey.toLowerCase().contains('inch')) {
-      return '${sizeKey.split(' ')[0]}"';
-    } else {
-      return sizeKey.capitalize();
-    }
-  }
+
   Widget _buildSizeSelectionSection() {
     return Container(
 
@@ -1077,320 +1309,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       ),
     );
   }
-
-  Widget _buildQuantityControlOnly() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            InkWell(
-              onTapDown: (_) {
-                setState(() {
-                  _isRemoveButtonPressed = true;
-                });
-              },
-              onTapUp: (_) {
-                setState(() {
-                  _isRemoveButtonPressed = false;
-                });
-              },
-              onTapCancel: () {
-                setState(() {
-                  _isRemoveButtonPressed = false;
-                });
-              },
-              onTap: () {
-                setState(() {
-                  if (_quantity > 1) {
-                    _quantity--;
-                  }
-                  _updatePriceDisplay();
-                });
-              },
-              child: Container(
-                width: 45,
-                height: 45,
-                decoration: BoxDecoration(
-                  color: _isRemoveButtonPressed ? Colors.grey : Colors.black,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFB2B2B2), width: 3),
-                ),
-                child: const Icon(
-                  Icons.remove,
-                  color: Colors.white,
-                  size: 22,
-                ),
-              ),
-            ),
-            Container(
-              width: 55,
-              height: 45,
-              margin: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.grey[100]!),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                '$_quantity',
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            InkWell(
-              onTapDown: (_) {
-                setState(() {
-                  _isAddButtonPressed = true;
-                });
-              },
-              onTapUp: (_) {
-                setState(() {
-                  _isAddButtonPressed = false;
-                });
-              },
-              onTapCancel: () {
-                setState(() {
-                  _isAddButtonPressed = false;
-                });
-              },
-              onTap: () {
-                setState(() {
-                  _quantity++;
-                  _updatePriceDisplay();
-                });
-              },
-              child: Container(
-                width: 45,
-                height: 45,
-                decoration: BoxDecoration(
-                  color: _isAddButtonPressed ? Colors.grey : Colors.black,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFB2B2B2), width: 3),
-                ),
-                child: const Icon(
-                  Icons.add,
-                  color: Colors.white,
-                  size: 22,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-      ],
-    );
-  }
-
-  Widget _buildFlavorSelectionSection(String drinkName) {
-    final List<String> flavors = _drinkFlavors[drinkName] ?? [];
-
-    if (flavors.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Select Flavor',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: flavors.map((flavor) {
-            final bool isActive = _selectedDrinkFlavor == flavor;
-            return InkWell(
-              onTap: () {
-                setState(() {
-                  _selectedDrinkFlavor = flavor;
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 18, vertical: 14),
-                decoration: BoxDecoration(
-                  color: isActive ? Colors.grey : Colors.black,
-                  borderRadius: BorderRadius.circular(40),
-                  border: Border.all(
-                    color: isActive ? Colors.white : Colors.grey,
-                    width: 2,
-                  ),
-                ),
-                child: Text(
-                  flavor,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 20),
-      ],
-    );
-  }
-
-  Widget _buildMealAndExclusionOptions() {
-    final bool isShawarmaOrWrap = ['Shawarma', 'Wraps'].contains(
-        widget.foodItem.category);
-    final bool isBurger = widget.foodItem.category == 'Burgers';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Checkbox(
-              value: _makeItAMeal,
-              onChanged: (bool? value) {
-                setState(() {
-                  _makeItAMeal = value!;
-                  _selectedDrink =
-                  null;
-                  _selectedDrinkFlavor = null;
-                  _updatePriceDisplay();
-                });
-              },
-              activeColor: Colors.grey[100],
-            ),
-            const Text('Make it a meal ',
-                style: TextStyle(fontSize: 20, color: Colors.white)),
-          ],
-        ),
-
-        if (_makeItAMeal) ...[
-          const SizedBox(height: 8),
-          const Text('Select Drink', style: TextStyle(
-              fontWeight: FontWeight.normal,
-              fontSize: 18,
-              color: Colors.white)),
-          DropdownButtonFormField<String>(
-            value: _selectedDrink,
-            hint: const Text(
-                'Select a drink', style: TextStyle(color: Colors.white)),
-            items: _allDrinks.map((drink) {
-              return DropdownMenuItem(
-                value: drink,
-                child: Text(drink),
-              );
-            }).toList(),
-            onChanged: (value) {
-              setState(() {
-                _selectedDrink = value;
-                _selectedDrinkFlavor = null;
-              });
-            },
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey[100]!),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey[100]!),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey[100]!),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 8),
-            ),
-          ),
-          if (_selectedDrink != null &&
-              _drinkFlavors.containsKey(_selectedDrink!)) ...[
-            const SizedBox(height: 8),
-            const Text('Select Flavor', style: TextStyle(
-                fontWeight: FontWeight.normal,
-                fontSize: 16,
-                color: Colors.white)),
-            DropdownButtonFormField<String>(
-              value: _selectedDrinkFlavor,
-              hint: const Text(
-                  'Select a flavor', style: TextStyle(color: Colors.white)),
-              items: _drinkFlavors[_selectedDrink!]!.map((flavor) {
-                return DropdownMenuItem(
-                  value: flavor,
-                  child: Text(flavor),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  _selectedDrinkFlavor = value;
-                });
-              },
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey[100]!),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey[100]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey[100]!),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 8),
-              ),
-            ),
-          ],
-        ],
-        if (isShawarmaOrWrap || isBurger) ...[
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Checkbox(
-                value: _noSalad,
-                onChanged: (bool? value) {
-                  setState(() {
-                    _noSalad = value!;
-                  });
-                },
-                activeColor: Colors.grey[100],
-              ),
-              const Text('No Salad',
-                  style: TextStyle(fontSize: 20, color: Colors.white)),
-            ],
-          ),
-          Row(
-            children: [
-              Checkbox(
-                value: _noSauce,
-                onChanged: (bool? value) {
-                  setState(() {
-                    _noSauce = value!;
-                  });
-                },
-                activeColor: Colors.grey[100],
-              ),
-              const Text('No Sauce',
-                  style: TextStyle(fontSize: 20, color: Colors.white)),
-            ],
-          ),
-        ],
-        const SizedBox(height: 20),
-      ],
-    );
-  }
-
-
 
   Widget _buildOptionCategoryButtons() {
     final List<String> categories = ['Toppings', 'Base', 'Crust', 'Sauce Dips'];
@@ -1614,3 +1532,44 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     );
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

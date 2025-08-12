@@ -2,7 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:epos/services/order_api_service.dart';
+import 'package:epos/services/thermal_printer_service.dart';
 import 'package:epos/models/order.dart';
+import 'package:epos/models/cart_item.dart';
+import 'package:epos/models/food_item.dart';
 import 'package:epos/new_order_notification_widget.dart';
 import 'package:epos/providers/website_orders_provider.dart';
 import 'package:provider/provider.dart';
@@ -20,18 +23,14 @@ class MainAppWrapper extends StatefulWidget {
   State<MainAppWrapper> createState() => _MainAppWrapperState();
 }
 
-class _MainAppWrapperState extends State<MainAppWrapper>
-    with TickerProviderStateMixin {
+class _MainAppWrapperState extends State<MainAppWrapper> {
   late OrderApiService _orderApiService;
   StreamSubscription<Order>? _newOrderSubscription;
 
   final List<Order> _activeNewOrderNotifications = [];
-  final Set<int> _processingOrderIds = {};
 
-  // Animation controllers for each notification
-  final Map<int, AnimationController> _animationControllers = {};
-  final Map<int, Animation<double>> _slideAnimations = {};
-  final Map<int, Animation<double>> _fadeAnimations = {};
+  // Change this line:
+  final Set<int> _processingOrderIds = {}; // Changed from Set<String> to Set<int>
 
   @override
   void initState() {
@@ -54,58 +53,15 @@ class _MainAppWrapperState extends State<MainAppWrapper>
   void _addNewOrderNotification(Order order) {
     setState(() {
       _activeNewOrderNotifications.add(order);
-      _processingOrderIds.add(order.orderId);
-
-      // Create animation controller for this notification
-      final controller = AnimationController(
-        duration: const Duration(milliseconds: 500),
-        vsync: this,
-      );
-
-      _animationControllers[order.orderId] = controller;
-
-      // Create slide animation (from top)
-      _slideAnimations[order.orderId] = Tween<double>(
-        begin: -1.0,
-        end: 0.0,
-      ).animate(CurvedAnimation(
-        parent: controller,
-        curve: Curves.easeOutCubic,
-      ));
-
-      // Create fade animation
-      _fadeAnimations[order.orderId] = Tween<double>(
-        begin: 0.0,
-        end: 1.0,
-      ).animate(CurvedAnimation(
-        parent: controller,
-        curve: Curves.easeInOut,
-      ));
-
-      // Start the animation
-      controller.forward();
-
+      _processingOrderIds.add(order.orderId); // This line will now work
       print("MainAppWrapper: New order notification added for order ${order.orderId}. Total active notifications: ${_activeNewOrderNotifications.length}");
     });
   }
 
-  void _removeNewOrderNotification(Order order) async {
-    final controller = _animationControllers[order.orderId];
-
-    if (controller != null) {
-      // Animate out
-      await controller.reverse();
-
-      // Clean up after animation completes
-      controller.dispose();
-      _animationControllers.remove(order.orderId);
-      _slideAnimations.remove(order.orderId);
-      _fadeAnimations.remove(order.orderId);
-    }
-
+  void _removeNewOrderNotification(Order order) {
     setState(() {
       _activeNewOrderNotifications.removeWhere((o) => o.orderId == order.orderId);
-      _processingOrderIds.remove(order.orderId);
+      _processingOrderIds.remove(order.orderId); // This line will now work
       print("MainAppWrapper: Notification for order ${order.orderId} removed. Remaining active notifications: ${_activeNewOrderNotifications.length}");
     });
   }
@@ -120,12 +76,87 @@ class _MainAppWrapperState extends State<MainAppWrapper>
     }
   }
 
+  // Convert Order items to CartItem format for the printer service
+  List<CartItem> _convertOrderToCartItems(Order order) {
+    return order.items.map((orderItem) {
+      // Calculate price per unit from total price and quantity
+      double pricePerUnit = orderItem.quantity > 0 ? (orderItem.totalPrice / orderItem.quantity) : 0.0;
+
+      return CartItem(
+        foodItem: orderItem.foodItem ?? FoodItem(
+          id: orderItem.itemId ?? 0,
+          name: orderItem.itemName,
+          category: orderItem.itemType,
+          price: {'default': pricePerUnit},
+          image: orderItem.imageUrl ?? '',
+          availability: true,
+        ),
+        quantity: orderItem.quantity,
+        selectedOptions: null, // OrderItem doesn't have selectedOptions
+        comment: orderItem.comment,
+        pricePerUnit: pricePerUnit,
+      );
+    }).toList();
+  }
+
+  Future<void> _printOrderReceipt(Order order) async {
+    try {
+      print("MainAppWrapper: Starting to print receipt for order ${order.orderId}");
+
+      // Convert Order items to CartItem format
+      List<CartItem> cartItems = _convertOrderToCartItems(order);
+
+      // Calculate subtotal
+      double subtotal = order.orderTotalPrice;
+
+      // Use the thermal printer service to print
+      bool success = await ThermalPrinterService().printReceiptWithUserInteraction(
+        transactionId: order.orderId.toString(),
+        orderType: order.orderType,
+        cartItems: cartItems,
+        subtotal: subtotal,
+        totalCharge: order.orderTotalPrice,
+        changeDue: order.changeDue,
+        extraNotes: order.orderExtraNotes,
+        customerName: order.customerName,
+        customerEmail: order.customerEmail,
+        phoneNumber: order.phoneNumber,
+        streetAddress: order.streetAddress,
+        city: order.city,
+        postalCode: order.postalCode,
+        paymentType: order.paymentType,
+        onShowMethodSelection: (availableMethods) {
+          // Handle case when no printer is connected
+          _showSnackBar("Available printing methods: ${availableMethods.join(', ')}. Please check printer connections.");
+        },
+      );
+
+      if (success) {
+        print("MainAppWrapper: Receipt printed successfully for order ${order.orderId}");
+        _showSnackBar('Receipt printed for order ${order.orderId}');
+      } else {
+        print("MainAppWrapper: Failed to print receipt for order ${order.orderId}");
+        _showSnackBar('Failed to print receipt for order ${order.orderId}. Please check printer connection.');
+      }
+    } catch (e) {
+      print('MainAppWrapper: Error printing receipt for order ${order.orderId}: $e');
+      _showSnackBar('Error printing receipt for order ${order.orderId}: $e');
+    }
+  }
+
   void _handleAcceptOrder(Order order) async {
     print("MainAppWrapper: Accepting order ${order.orderId}");
-    bool success = await OrderApiService.updateOrderStatus(order.orderId, 'yellow');
+
+    // First update the order status
+    bool success = await OrderApiService.updateOrderStatus(order.orderId, 'accepted');
+
     if (success) {
-      _showSnackBar('Order ${order.orderId} yellow.');
-      OrderApiService().addAcceptedOrder(order.copyWith(status: 'yellow'));
+      _showSnackBar('Order ${order.orderId} accepted.');
+
+      // Print the receipt automatically after successful acceptance
+      await _printOrderReceipt(order);
+
+      // Refresh the orders
       Provider.of<OrderProvider>(context, listen: false).fetchWebsiteOrders();
     } else {
       _showSnackBar('Failed to accept order ${order.orderId}.');
@@ -134,7 +165,9 @@ class _MainAppWrapperState extends State<MainAppWrapper>
 
   void _handleDeclineOrder(Order order) async {
     print("MainAppWrapper: Declining order ${order.orderId}");
-    bool success = await OrderApiService.updateOrderStatus(order.orderId, 'declined');
+    // Note: If orderId is int, ensure your API method `updateOrderStatus` can handle it.
+    // If it expects a String, you'll need to convert order.orderId.toString() there.
+    bool success = await OrderApiService.updateOrderStatus(order.orderId, 'declined'); // Potentially convert to String for API
     if (success) {
       _showSnackBar('Order ${order.orderId} declined.');
     } else {
@@ -145,15 +178,6 @@ class _MainAppWrapperState extends State<MainAppWrapper>
   @override
   void dispose() {
     _newOrderSubscription?.cancel();
-
-    // Dispose all animation controllers
-    for (final controller in _animationControllers.values) {
-      controller.dispose();
-    }
-    _animationControllers.clear();
-    _slideAnimations.clear();
-    _fadeAnimations.clear();
-
     super.dispose();
   }
 
@@ -176,30 +200,12 @@ class _MainAppWrapperState extends State<MainAppWrapper>
             ),
 
           ..._activeNewOrderNotifications.map((order) {
-            final slideAnimation = _slideAnimations[order.orderId];
-            final fadeAnimation = _fadeAnimations[order.orderId];
-
-            if (slideAnimation == null || fadeAnimation == null) {
-              return const SizedBox.shrink();
-            }
-
-            return AnimatedBuilder(
-              animation: _animationControllers[order.orderId]!,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(0, slideAnimation.value * MediaQuery.of(context).size.height * 0.3),
-                  child: FadeTransition(
-                    opacity: fadeAnimation,
-                    child: NewOrderNotificationWidget(
-                      key: ValueKey(order.orderId),
-                      order: order,
-                      onAccept: _handleAcceptOrder,
-                      onDecline: _handleDeclineOrder,
-                      onDismiss: () => _removeNewOrderNotification(order),
-                    ),
-                  ),
-                );
-              },
+            return NewOrderNotificationWidget(
+              key: ValueKey(order.orderId),
+              order: order,
+              onAccept: _handleAcceptOrder,
+              onDecline: _handleDeclineOrder,
+              onDismiss: () => _removeNewOrderNotification(order),
             );
           }).toList(),
         ],

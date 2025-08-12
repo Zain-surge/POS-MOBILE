@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../services/api_service.dart';
 import 'package:epos/custom_bottom_nav_bar.dart';
+import 'admin_portal_screen.dart';
 import 'driver_management_screen.dart'; // Add this import
 
 class SettingsScreen extends StatefulWidget {
@@ -22,8 +23,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late int _selectedBottomNavItem;
-  Map<String, dynamic>? _salesReport;
-  bool _isLoadingSalesReport = false;
 
   // Settings states
   bool _bluetoothEnabled = false;
@@ -779,7 +778,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Widget _buildSalesReportItem() {
+  Widget _buildTodaysSalesReportItem() {
     return GestureDetector(
       onTap: () {
         // Use named route navigation to leverage the global SalesReportProvider
@@ -796,7 +795,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
-              'Sales Report',
+              "Today's Sales Report",
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -815,7 +814,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Row(
                     children: [
                       Icon(
-                        Icons.assessment,
+                        Icons.today,
                         color: Colors.blue.shade600,
                         size: 16,
                       ),
@@ -1031,6 +1030,82 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildAdminPortalItem() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const AdminPortalScreen(),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: Colors.grey.shade300, width: 1),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Admin Portal',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.admin_panel_settings,
+                        color: Colors.red.shade600,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Protected',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.red.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.grey.shade600,
+                    size: 16,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildShopTimingsItem() {
     return GestureDetector(
       onTap: _showTimingsDialog,
@@ -1210,17 +1285,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     _buildShopTimingsItem(),
                     _buildOffersItem(),
-                    _buildDriverSettingsItem(), // NEW: Added Driver Settings
-                    _buildSalesReportItem(),
-                    _buildSettingItem(
-                      title: 'Show delivery menu',
-                      value: _showDeliveryMenu,
-                      onChanged: (value) {
-                        setState(() {
-                          _showDeliveryMenu = value;
-                        });
-                      },
-                    ),
+                    _buildTodaysSalesReportItem(), // UPDATED: Only today's report
+                    _buildAdminPortalItem(), // UPDATED: Admin Portal instead of Driver Settings
                   ],
                 ),
               ),
@@ -1239,4 +1305,5 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+
 }

@@ -89,11 +89,6 @@ class _Page4State extends State<Page4> {
     );
   }
 
-  void _resetPaymentSelection() {
-    setState(() {
-      _selectedPaymentType = '';
-    });
-  }
 
   void _preserveCustomerDataForOrderTypeChange(String newOrderType) {
     // Store current customer data in temporary variables
@@ -285,6 +280,7 @@ class _Page4State extends State<Page4> {
 
     // IMPORTANT: Switch to the correct order type FIRST before loading state
     final incomingOrderType = widget.selectedOrderType;
+    debugPrint("📋 Page4 initializing with incoming order type: $incomingOrderType");
 
     // Determine the correct order type and sub type
     String actualOrderType;
@@ -341,7 +337,16 @@ class _Page4State extends State<Page4> {
     _selectedBottomNavItem = -1;
     foodItems = widget.foodItems;
 
+    debugPrint("📋 Page4 initialized with ${foodItems.length} food items");
+    debugPrint("📋 Actual Order Type: $_actualOrderType");
+    debugPrint("📋 Cart Items: ${_cartItems.length}");
+    debugPrint("📋 Customer Details: ${_customerDetails?.name ?? 'None'}");
+    debugPrint("📋 Has Processed First Step: $_hasProcessedFirstStep");
+    debugPrint("📋 Modal Open: $_isModalOpen");
+    debugPrint("📋 Search Query: '$_searchQuery'");
+
     final categoriesInData = foodItems.map((e) => e.category).toSet();
+    debugPrint("📂 Categories in data: $categoriesInData");
 
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _getLeftPanelDimensions();
@@ -371,6 +376,7 @@ class _Page4State extends State<Page4> {
 
     // Ensure we're saving to the correct order type
     if (stateProvider.currentOrderType != _actualOrderType) {
+      debugPrint('⚠️ State provider order type mismatch! Provider: ${stateProvider.currentOrderType}, Page: $_actualOrderType');
       stateProvider.switchToOrderType(_actualOrderType, _takeawaySubType);
     }
 
@@ -405,6 +411,13 @@ class _Page4State extends State<Page4> {
       editingIndex: _editingCommentIndex,
       editingText: _commentEditingController.text,
     );
+
+    debugPrint('💾 Saved state for order type: $_actualOrderType');
+    debugPrint('   - Cart items: ${_cartItems.length}');
+    debugPrint('   - Customer: ${_customerDetails?.name ?? 'None'}');
+    debugPrint('   - Has processed first step: $_hasProcessedFirstStep');
+    debugPrint('   - Modal open: $_isModalOpen');
+    debugPrint('   - Search query: "$_searchQuery"');
   }
 
 
@@ -432,6 +445,7 @@ class _Page4State extends State<Page4> {
           renderBox.size.height,
         );
       });
+      debugPrint('Left Panel Rect for Modal Positioning: $_leftPanelRect');
     }
   }
 
@@ -469,14 +483,17 @@ class _Page4State extends State<Page4> {
   void fetchItems() async {
     try {
       final items = await ApiService.fetchMenuItems();
+      debugPrint(" Items fetched: ${items.length}");
 
       final categoriesInData = items.map((e) => e.category).toSet();
+      debugPrint(" 📂 Categories in data: $categoriesInData");
 
       setState(() {
         foodItems = items;
         isLoading = false;
       });
     } catch (e) {
+      debugPrint(' Error fetching items: $e');
       if (mounted) {
         _showErrorSnackBar('Failed to load menu items: $e');
       }
@@ -611,6 +628,7 @@ class _Page4State extends State<Page4> {
           foodItems[itemIndex] = originalItemState;
         }
       });
+      debugPrint('Error toggling item availability for ${item.name}: $e');
       if (mounted) {
         _showErrorSnackBar('Failed to update ${item.name} availability.');
       }
@@ -1607,6 +1625,8 @@ class _Page4State extends State<Page4> {
                 String? selectedSize;
                 String? selectedCrust;
                 String? selectedBase;
+                String? selectedDrink;
+                bool isMeal = false;
                 List<String> toppings = [];
                 List<String> sauceDips = [];
                 bool hasOptions = false;
@@ -1616,7 +1636,17 @@ class _Page4State extends State<Page4> {
                   for (var option in item.selectedOptions!) {
                     String lowerOption = option.toLowerCase();
 
-                    if (lowerOption.contains('size:')) {
+                    // Check for meal option
+                    if (lowerOption.contains('make it a meal')) {
+                      isMeal = true;
+                      hasOptions = true;
+                    } else if (lowerOption.contains('drink:')) {
+                      String drink = option.split(':').last.trim();
+                      if (drink.isNotEmpty) {
+                        selectedDrink = drink;
+                        hasOptions = true;
+                      }
+                    } else if (lowerOption.contains('size:')) {
                       String size = option.split(':').last.trim();
                       if (size.toLowerCase() != 'default') {
                         selectedSize = size;
@@ -1686,7 +1716,7 @@ class _Page4State extends State<Page4> {
                   child: Column(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+                        padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
@@ -1719,7 +1749,7 @@ class _Page4State extends State<Page4> {
                                                     fontSize: 15,
                                                     fontFamily: 'Poppins',
                                                     color: Colors.grey,
-                                                    fontStyle: FontStyle.italic,
+                                                    fontStyle: FontStyle.normal,
                                                   ),
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
@@ -1776,6 +1806,28 @@ class _Page4State extends State<Page4> {
                                                     maxLines: 2,
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
+                                                // Display meal information
+                                                if (isMeal && selectedDrink != null) ...[
+                                                  const Text(
+                                                    'MEAL',
+                                                    style: TextStyle(
+                                                      fontSize: 15,
+                                                      fontFamily: 'Poppins',
+                                                      color: Colors.black,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                  Text(
+                                                    'Drink: $selectedDrink',
+                                                    style: const TextStyle(
+                                                      fontSize: 15,
+                                                      fontFamily: 'Poppins',
+                                                      color: Colors.black,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ],
                                               ],
                                             ],
                                           ),
@@ -2034,7 +2086,7 @@ class _Page4State extends State<Page4> {
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
                 ),
                 Text(
-                  '${subtotal.toStringAsFixed(2)}',
+                  '£${subtotal.toStringAsFixed(2)}',
                   style: const TextStyle(fontSize: 20),
                 ),
               ],
@@ -2051,7 +2103,7 @@ class _Page4State extends State<Page4> {
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
                 ),
                 Text(
-                  '- ${currentDiscountAmount.toStringAsFixed(2)}',
+                  '- £${currentDiscountAmount.toStringAsFixed(2)}',
                   style: const TextStyle(fontSize: 20, color: Colors.red),
                 ),
               ],
@@ -2070,7 +2122,7 @@ class _Page4State extends State<Page4> {
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
               ),
               Text(
-                '${finalTotal.toStringAsFixed(2)}',
+                '£${finalTotal.toStringAsFixed(2)}',
                 style: const TextStyle(fontSize: 22),
               ),
             ],
@@ -2340,6 +2392,9 @@ class _Page4State extends State<Page4> {
     if (!mounted) return;
 
     try {
+      // Extract customer details from orderData
+      final guestData = orderData['guest'] as Map<String, dynamic>?;
+
       await ThermalPrinterService().printReceiptWithUserInteraction(
         transactionId: id1,
         orderType: _actualOrderType,
@@ -2348,6 +2403,24 @@ class _Page4State extends State<Page4> {
         totalCharge: totalCharge,
         extraNotes: extraNotes.isNotEmpty ? extraNotes : null,
         changeDue: changeDue,
+        // Add customer details
+        customerName: guestData?['name'] as String?,
+        customerEmail: guestData?['email'] as String?,
+        phoneNumber: guestData?['phone_number'] as String?,
+        streetAddress: guestData?['street_address'] as String?,
+        city: guestData?['city'] as String?,
+        postalCode: guestData?['postal_code'] as String?,
+        paymentType: _selectedPaymentType,
+        onShowMethodSelection: (availableMethods) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("Available printing methods: ${availableMethods.join(', ')}. Please check printer connections."),
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
+        },
       );
     } catch (e) {
       print('Background printing failed: $e');

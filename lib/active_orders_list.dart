@@ -133,11 +133,19 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
     }
     return '${source.toUpperCase()} ${type.toUpperCase()}';
   }
-  Map<String, dynamic> _extractAllOptionsFromDescription(String description) {
+
+  // UPDATED METHOD WITH DEFAULT VALUE FILTERING (same as website screen)
+  Map<String, dynamic> _extractAllOptionsFromDescription(
+      String description, {
+        List<String>? defaultFoodItemToppings,
+        List<String>? defaultFoodItemCheese,
+      }) {
     Map<String, dynamic> options = {
       'size': null,
       'crust': null,
       'base': null,
+      'drink': null, // NEW: Add drink support
+      'isMeal': false, // NEW: Add meal detection
       'toppings': <String>[],
       'sauceDips': <String>[],
       'baseItemName': description,
@@ -146,24 +154,29 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
 
     List<String> optionsList = [];
     String baseItemName = description;
-    bool foundOptions = false;
+    bool foundOptionsSyntax = false;
+    bool anyNonDefaultOptionFound = false;
 
+    // Check if it's parentheses format (EPOS): "Item Name (Size: Large, Crust: Thin)"
     final optionMatch = RegExp(r'\((.*?)\)').firstMatch(description);
     if (optionMatch != null && optionMatch.group(1) != null) {
+      // EPOS format with parentheses
       String optionsString = optionMatch.group(1)!;
       baseItemName = description.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
-      foundOptions = true;
+      foundOptionsSyntax = true;
       optionsList = _smartSplitOptions(optionsString);
-
     } else if (description.contains('\n') || description.contains(':')) {
+      // Website format with newlines: "Size: 7 inch\nBase: Tomato\nCrust: Normal"
       List<String> lines = description.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
 
+      // Check if any line contains options (has colons)
       List<String> optionLines = lines.where((line) => line.contains(':')).toList();
 
       if (optionLines.isNotEmpty) {
-        foundOptions = true;
+        foundOptionsSyntax = true;
         optionsList = optionLines;
 
+        // Find the first line that doesn't contain a colon (likely the item name)
         String foundItemName = '';
         for (var line in lines) {
           if (!line.contains(':')) {
@@ -173,64 +186,116 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
         }
 
         if (foundItemName.isNotEmpty) {
-          baseItemName = foundItemName;
+          options['baseItemName'] = foundItemName;
         } else {
-          baseItemName = description;
+          options['baseItemName'] = description; // Fallback to full description
         }
       }
     }
 
-    if (!foundOptions) {
+    // If no options syntax found, it's a simple description like "Chocolate Milkshake"
+    if (!foundOptionsSyntax) {
       options['baseItemName'] = description;
       options['hasOptions'] = false;
       return options;
     }
 
-    options['hasOptions'] = true;
+    // --- NEW: Combine default toppings and cheese from the FoodItem ---
+    final Set<String> defaultToppingsAndCheese = {};
+    if (defaultFoodItemToppings != null) {
+      defaultToppingsAndCheese.addAll(defaultFoodItemToppings.map((t) => t.trim().toLowerCase()));
+    }
+    if (defaultFoodItemCheese != null) {
+      defaultToppingsAndCheese.addAll(defaultFoodItemCheese.map((c) => c.trim().toLowerCase()));
+    }
+
+    // Process the options and apply filtering for default values
     for (var option in optionsList) {
       String lowerOption = option.toLowerCase();
 
-      if (lowerOption.startsWith('size:')) {
+      // NEW: Check for meal option
+      if (lowerOption.contains('make it a meal') || lowerOption.contains('meal')) {
+        options['isMeal'] = true;
+        anyNonDefaultOptionFound = true;
+      }
+      // NEW: Extract drink information
+      else if (lowerOption.startsWith('drink:')) {
+        String drinkValue = option.substring('drink:'.length).trim();
+        if (drinkValue.isNotEmpty) {
+          options['drink'] = drinkValue;
+          anyNonDefaultOptionFound = true;
+        }
+      }
+      else if (lowerOption.startsWith('size:')) {
         String sizeValue = option.substring('size:'.length).trim();
-        if (sizeValue.isNotEmpty) {
+        // FILTER: Only show if not default
+        if (sizeValue.isNotEmpty && sizeValue.toLowerCase() != 'default') {
           options['size'] = sizeValue;
+          anyNonDefaultOptionFound = true;
         }
       } else if (lowerOption.startsWith('crust:')) {
         String crustValue = option.substring('crust:'.length).trim();
-        if (crustValue.isNotEmpty) {
+        // FILTER: Only show if not normal
+        if (crustValue.isNotEmpty && crustValue.toLowerCase() != 'normal') {
           options['crust'] = crustValue;
+          anyNonDefaultOptionFound = true;
         }
       } else if (lowerOption.startsWith('base:')) {
         String baseValue = option.substring('base:'.length).trim();
-        if (baseValue.isNotEmpty) {
+        // FILTER: Only show if not tomato (example default base)
+        if (baseValue.isNotEmpty && baseValue.toLowerCase() != 'tomato') {
           if (baseValue.contains(',')) {
             List<String> baseList = baseValue.split(',').map((b) => b.trim()).toList();
             options['base'] = baseList.join(', ');
           } else {
             options['base'] = baseValue;
           }
+          anyNonDefaultOptionFound = true;
         }
       } else if (lowerOption.startsWith('toppings:') || lowerOption.startsWith('extra toppings:')) {
         String prefix = lowerOption.startsWith('extra toppings:') ? 'extra toppings:' : 'toppings:';
         String toppingsValue = option.substring(prefix.length).trim();
 
         if (toppingsValue.isNotEmpty) {
-          List<String> toppingsList = toppingsValue.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
-          options['toppings'] = toppingsList;
+          List<String> currentToppingsFromDescription = toppingsValue.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+
+          // --- FILTER: Against FoodItem's default toppings/cheese ---
+          List<String> filteredToppings = currentToppingsFromDescription.where((topping) {
+            String trimmedToppingLower = topping.trim().toLowerCase();
+            // Also keep the general "none", "no toppings" filter
+            return !defaultToppingsAndCheese.contains(trimmedToppingLower) &&
+                !['none', 'no toppings', 'standard', 'default'].contains(trimmedToppingLower);
+          }).toList();
+
+          if (filteredToppings.isNotEmpty) {
+            List<String> existingToppings = List<String>.from(options['toppings']);
+            existingToppings.addAll(filteredToppings);
+            options['toppings'] = existingToppings.toSet().toList();
+            anyNonDefaultOptionFound = true;
+          }
         }
       } else if (lowerOption.startsWith('sauce dips:')) {
         String sauceDipsValue = option.substring('sauce dips:'.length).trim();
         if (sauceDipsValue.isNotEmpty) {
           List<String> sauceDipsList = sauceDipsValue.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
-          options['sauceDips'] = sauceDipsList;
+          List<String> currentSauceDips = List<String>.from(options['sauceDips']);
+          currentSauceDips.addAll(sauceDipsList);
+          options['sauceDips'] = currentSauceDips.toSet().toList();
+          anyNonDefaultOptionFound = true;
         }
+      } else if (lowerOption == 'no salad' || lowerOption == 'no sauce' || lowerOption == 'no cream') {
+        List<String> currentToppings = List<String>.from(options['toppings']);
+        currentToppings.add(option);
+        options['toppings'] = currentToppings.toSet().toList();
+        anyNonDefaultOptionFound = true;
       }
     }
 
-    options['baseItemName'] = baseItemName;
+    options['hasOptions'] = anyNonDefaultOptionFound;
     return options;
   }
 
+  // Helper method for EPOS format (parentheses) smart splitting
   List<String> _smartSplitOptions(String optionsString) {
     List<String> result = [];
     String current = '';
@@ -394,17 +459,24 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
               ),
             ),
             const SizedBox(height: 10),
-
             Expanded(
               child: ListView.builder(
                 itemCount: _selectedOrder!.items.length,
                 itemBuilder: (context, itemIndex) {
                   final item = _selectedOrder!.items[itemIndex];
-                  Map<String, dynamic> itemOptions = _extractAllOptionsFromDescription(item.description);
+
+                  // UPDATED: Pass default toppings and cheese for filtering
+                  Map<String, dynamic> itemOptions = _extractAllOptionsFromDescription(
+                    item.description,
+                    defaultFoodItemToppings: item.foodItem?.defaultToppings,
+                    defaultFoodItemCheese: item.foodItem?.defaultCheese,
+                  );
 
                   String? selectedSize = itemOptions['size'];
                   String? selectedCrust = itemOptions['crust'];
                   String? selectedBase = itemOptions['base'];
+                  String? selectedDrink = itemOptions['drink']; // NEW: Add drink extraction
+                  bool isMeal = itemOptions['isMeal'] ?? false; // NEW: Add meal detection
                   List<String> toppings = itemOptions['toppings'] ?? [];
                   List<String> sauceDips = itemOptions['sauceDips'] ?? [];
                   String baseItemName = item.itemName;
@@ -438,17 +510,22 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
+                                            // If no options found, display the description as simple text
                                             if (!hasOptions)
                                               Text(
                                                 item.description,
                                                 style: const TextStyle(
                                                   fontSize: 15,
                                                   fontFamily: 'Poppins',
-                                                  color: Colors.black,
+                                                  color: Colors.grey,
+                                                  fontStyle: FontStyle.normal,
                                                 ),
                                                 overflow: TextOverflow.ellipsis,
                                               ),
+
+                                            // If options exist, display them individually (ONLY NON-DEFAULT ONES)
                                             if (hasOptions) ...[
+                                              // Display Size (only if not default)
                                               if (selectedSize != null)
                                                 Text(
                                                   'Size: $selectedSize',
@@ -459,6 +536,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                                                   ),
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
+                                              // Display Crust (only if not default)
                                               if (selectedCrust != null)
                                                 Text(
                                                   'Crust: $selectedCrust',
@@ -469,6 +547,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                                                   ),
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
+                                              // Display Base (only if not default)
                                               if (selectedBase != null)
                                                 Text(
                                                   'Base: $selectedBase',
@@ -479,17 +558,19 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                                                   ),
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
+                                              // Display Toppings (only if not empty after filtering)
                                               if (toppings.isNotEmpty)
                                                 Text(
-                                                  'Toppings: ${toppings.join(', ')}',
+                                                  'Extra Toppings: ${toppings.join(', ')}',
                                                   style: const TextStyle(
                                                     fontSize: 15,
-                                                    fontFamily: 'Poppins',
+                                                    fontFamily: 'Poppings',
                                                     color: Colors.black,
                                                   ),
                                                   maxLines: 3,
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
+                                              // Display Sauce Dips (only if not empty)
                                               if (sauceDips.isNotEmpty)
                                                 Text(
                                                   'Sauce Dips: ${sauceDips.join(', ')}',
@@ -501,6 +582,29 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                                                   maxLines: 2,
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
+
+                                              // Display meal information - NEW ADDITION
+                                              if (isMeal && selectedDrink != null) ...[
+                                                const Text(
+                                                  'MEAL',
+                                                  style: TextStyle(
+                                                    fontSize: 15,
+                                                    fontFamily: 'Poppins',
+                                                    color: Colors.black,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                Text(
+                                                  'Drink: $selectedDrink',
+                                                  style: const TextStyle(
+                                                    fontSize: 15,
+                                                    fontFamily: 'Poppins',
+                                                    color: Colors.black,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ],
                                             ],
                                           ],
                                         ),
@@ -546,35 +650,37 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),
-                                    if (item.comment != null && item.comment!.isNotEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 8.0),
-                                        child: Container(
-                                          width: double.infinity,
-                                          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFFDF1C7),
-                                            borderRadius: BorderRadius.circular(8.0),
-                                          ),
-                                          child: Center(
-                                            child: Text(
-                                              'Comment: ${item.comment!}',
-                                              textAlign: TextAlign.center,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                color: Colors.black,
-                                                fontFamily: 'Poppins',
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
                                   ],
                                 ),
                               ),
                             ],
                           ),
                         ),
+
+                        // Comment section moved outside the main row
+                        if (item.comment != null && item.comment!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFDF1C7),
+                                borderRadius: BorderRadius.circular(8.0),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Comment: ${item.comment!}',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.black,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   );
@@ -599,7 +705,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                         borderRadius: BorderRadius.circular(15),
                       ),
                       child: Text(
-                        '€ ${_selectedOrder!.orderTotalPrice.toStringAsFixed(2)}',
+                        '£ ${_selectedOrder!.orderTotalPrice.toStringAsFixed(2)}',
                         style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                       ),
                     ),

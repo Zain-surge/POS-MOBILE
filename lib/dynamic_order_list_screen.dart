@@ -47,7 +47,8 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
   bool _isPrinterConnected = false;
   bool _isCheckingPrinter = false;
   Timer? _reloadDebounceTimer;
-  bool _isUpdatingStatus = false;
+  Timer? _printerStatusTimer;
+
   final ScrollController _scrollController = ScrollController();
 
   late StreamSubscription<Map<String, dynamic>> _orderStatusSubscription;
@@ -55,7 +56,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this); // Add this line
+    WidgetsBinding.instance.addObserver(this);
     _selectedBottomNavItem = widget.initialBottomNavItemIndex;
 
     // Initialize filters based on order type
@@ -67,6 +68,17 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
 
     _loadOrdersFromProvider();
     _initializeSocketListener();
+    _startPrinterStatusChecking(); // Add this line
+  }
+
+  // Add this new method
+  void _startPrinterStatusChecking() {
+    _checkPrinterStatus();
+
+    // Create a periodic timer and store the reference
+    _printerStatusTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      _checkPrinterStatus();
+    });
   }
 
   @override
@@ -75,10 +87,12 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
 
     switch (state) {
       case AppLifecycleState.resumed:
+        debugPrint("DynamicOrderListScreen: App resumed, resuming polling");
         eposOrdersProvider.resumePolling();
         break;
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
+        debugPrint("DynamicOrderListScreen: App paused/inactive, pausing polling");
         eposOrdersProvider.pausePolling();
         break;
       case AppLifecycleState.detached:
@@ -93,6 +107,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
     _orderStatusSubscription = orderApiService.orderStatusOrDriverChangedStream.listen((payload) {
       _handleOrderStatusOrDriverChange(payload);
     });
+    debugPrint("DynamicOrderListScreen: Subscribed to orderStatusOrDriverChangedStream.");
   }
 
   void _handleOrderStatusOrDriverChange(Map<String, dynamic> payload) {
@@ -101,6 +116,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
     final int? newDriverId = payload['new_driver_id'] as int?;
 
     if (orderId == null || newStatusBackend == null) {
+      debugPrint('Socket payload missing order_id or new_status: $payload');
       return;
     }
 
@@ -129,6 +145,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
       } else if (orderIndexInCompleted != -1) {
         targetOrder = completedOrders.removeAt(orderIndexInCompleted);
       } else {
+        debugPrint('Socket: Order with ID $orderId not found in current lists. Attempting full reload.');
         _loadOrdersFromProvider();
         return;
       }
@@ -154,7 +171,9 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
 
         // ✅ IMPORTANT: Log the delivery status transition
         if (newInternalStatus == 'ready' && newDriverId != null) {
+          debugPrint('🚚 Delivery Order ${orderId}: Driver ${newDriverId} assigned - Status should show "On Its Way"');
         } else if (shouldBeCompleted) {
+          debugPrint('✅ Delivery Order ${orderId}: Completed - Status should show "Completed"');
         }
       } else {
         // For non-delivery orders, use original logic
@@ -173,6 +192,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
       if (_selectedOrder?.orderId == orderId) {
         _selectedOrder = updatedOrder;
         // ✅ CRITICAL: Force UI refresh for selected order display
+        debugPrint('🔄 Selected order updated - forcing display refresh for order ${orderId}');
       }
 
       // Adjust selected order if current selected disappears
@@ -180,22 +200,24 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
         _selectedOrder = activeOrders.isNotEmpty ? activeOrders.first :
         (completedOrders.isNotEmpty ? completedOrders.first : null);
       }
+
+      debugPrint("Socket: Order ${orderId} updated. Internal status: ${updatedOrder.status}, Driver ID: ${updatedOrder.driverId}");
+      debugPrint("🎯 Display status will be: ${updatedOrder.getDisplayStatusLabel()}");
     });
   }
 
-  //printer function
   Future<void> _checkPrinterStatus() async {
-    if (_isCheckingPrinter) return;
+    if (_isCheckingPrinter || !mounted) return; // Add mounted check
 
     setState(() {
       _isCheckingPrinter = true;
     });
 
     try {
-      Map<String, bool> connectionStatus = await ThermalPrinterService().testAllConnections();
+      Map<String, bool> connectionStatus = await ThermalPrinterService().checkConnectionStatusOnly();
       bool isConnected = connectionStatus['usb'] == true || connectionStatus['bluetooth'] == true;
 
-      if (mounted) {
+      if (mounted) { // Check mounted before setState
         setState(() {
           _isPrinterConnected = isConnected;
           _isCheckingPrinter = false;
@@ -203,7 +225,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
       }
     } catch (e) {
       print('Error checking printer status: $e');
-      if (mounted) {
+      if (mounted) { // Check mounted before setState
         setState(() {
           _isPrinterConnected = false;
           _isCheckingPrinter = false;
@@ -213,9 +235,19 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
   }
 
   @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _printerStatusTimer?.cancel(); // Add this line
+    _orderStatusSubscription.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   void didUpdateWidget(covariant DynamicOrderListScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.orderType != oldWidget.orderType) {
+      debugPrint("DynamicOrderListScreen: orderType changed from ${oldWidget.orderType} to ${widget.orderType}. Reloading orders.");
 
       // Reset filters based on new order type
       if (widget.orderType.toLowerCase() == 'takeaway') {
@@ -236,14 +268,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
         _selectedOrder = null;
       });
     }
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this); // Add this line
-    _orderStatusSubscription.cancel();
-    _scrollController.dispose();
-    super.dispose();
   }
 
 // Helper method to define status priority for sorting
@@ -277,11 +301,15 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
   }
 
   void _loadOrdersFromProvider() {
+    debugPrint("DynamicOrderListScreen: _loadOrdersFromProvider called for ${widget.orderType}.");
 
     final eposOrdersProvider = Provider.of<EposOrdersProvider>(context, listen: false);
 
     // Get filtered orders from provider based on order type
     List<Order> filteredOrders = _getFilteredOrdersFromProvider(eposOrdersProvider);
+
+    debugPrint("DynamicOrderListScreen: Got ${filteredOrders.length} filtered orders from provider.");
+
     List<Order> tempActive = [];
     List<Order> tempCompleted = [];
 
@@ -309,17 +337,24 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
 
     tempCompleted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
+    debugPrint("DynamicOrderListScreen: Filtered and separated into ${tempActive.length} active and ${tempCompleted.length} completed orders.");
+
     setState(() {
       activeOrders = tempActive;
       completedOrders = tempCompleted;
 
+      debugPrint("DynamicOrderListScreen: setState called. Active orders: ${activeOrders.length}, Completed orders: ${completedOrders.length}.");
+
       // Handle selected order logic
       if (activeOrders.isEmpty && completedOrders.isEmpty) {
         _selectedOrder = null;
+        debugPrint("DynamicOrderListScreen: No orders available, _selectedOrder set to null.");
       } else if (_selectedOrder == null && activeOrders.isNotEmpty) {
         _selectedOrder = activeOrders.first;
+        debugPrint("DynamicOrderListScreen: First active order selected by default: ${_selectedOrder!.orderId}");
       } else if (_selectedOrder == null && completedOrders.isNotEmpty) {
         _selectedOrder = completedOrders.first;
+        debugPrint("DynamicOrderListScreen: No active orders, first completed order selected by default: ${_selectedOrder?.orderId}");
       } else if (_selectedOrder != null) {
         // Check if the currently selected order still exists in the lists
         bool selectedOrderExists = activeOrders.any((o) => o.orderId == _selectedOrder!.orderId) ||
@@ -329,11 +364,14 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
           // Selected order no longer exists, select a new one
           if (activeOrders.isNotEmpty) {
             _selectedOrder = activeOrders.first;
-                 } else if (completedOrders.isNotEmpty) {
+            debugPrint("DynamicOrderListScreen: Previously selected order no longer exists, selected first active: ${_selectedOrder!.orderId}");
+          } else if (completedOrders.isNotEmpty) {
             _selectedOrder = completedOrders.first;
-              } else {
+            debugPrint("DynamicOrderListScreen: Previously selected order no longer exists, selected first completed: ${_selectedOrder!.orderId}");
+          } else {
             _selectedOrder = null;
-             }
+            debugPrint("DynamicOrderListScreen: Previously selected order no longer exists, no orders available");
+          }
         } else {
           // Update the selected order with the latest data from the lists
           Order? updatedSelectedOrder = activeOrders.firstWhere(
@@ -345,10 +383,13 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
           );
           if (updatedSelectedOrder.orderId == _selectedOrder!.orderId) {
             _selectedOrder = updatedSelectedOrder;
+            debugPrint("DynamicOrderListScreen: Selected order updated with latest data: ${_selectedOrder!.orderId}");
           }
         }
       }
     });
+
+    debugPrint("DynamicOrderListScreen: _loadOrdersFromProvider finished.");
   }
 
   // FIXED: Get filtered orders from provider based on screen type
@@ -543,6 +584,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
   }
 
   String _nextStatus(String current) {
+    debugPrint("nextStatus: Current status is '$current'.");
     String newStatus;
     switch (current.toLowerCase()) {
       case 'pending':
@@ -557,6 +599,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
       default:
         newStatus = 'Pending';
     }
+    debugPrint("nextStatus: Returning '$newStatus'.");
     return newStatus;
   }
 
@@ -564,7 +607,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
     // Remove the old optimistic update logic since provider handles it now
 
     // Set flag to prevent automatic reloads during status update
-    _isUpdatingStatus = true;
     _reloadDebounceTimer?.cancel();
 
     String backendStatusToSend;
@@ -609,7 +651,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
       }
     } finally {
       // Reset the updating flag
-      _isUpdatingStatus = false;
     }
   }
 
@@ -646,6 +687,8 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
       'size': null,
       'crust': null,
       'base': null,
+      'drink': null, // NEW: Add drink support
+      'isMeal': false, // NEW: Add meal detection
       'toppings': <String>[],
       'sauceDips': <String>[],
       'baseItemName': description,
@@ -713,7 +756,20 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
     for (var option in optionsList) {
       String lowerOption = option.toLowerCase();
 
-      if (lowerOption.startsWith('size:')) {
+      // NEW: Check for meal option
+      if (lowerOption.contains('make it a meal') || lowerOption.contains('meal')) {
+        options['isMeal'] = true;
+        anyNonDefaultOptionFound = true;
+      }
+      // NEW: Extract drink information
+      else if (lowerOption.startsWith('drink:')) {
+        String drinkValue = option.substring('drink:'.length).trim();
+        if (drinkValue.isNotEmpty) {
+          options['drink'] = drinkValue;
+          anyNonDefaultOptionFound = true;
+        }
+      }
+      else if (lowerOption.startsWith('size:')) {
         String sizeValue = option.substring('size:'.length).trim();
         if (sizeValue.isNotEmpty && sizeValue.toLowerCase() != 'default') {
           options['size'] = sizeValue;
@@ -778,7 +834,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
     options['hasOptions'] = anyNonDefaultOptionFound;
     return options;
   }
-
 // Helper method for EPOS format (parentheses) smart splitting
   List<String> _smartSplitOptions(String optionsString) {
     List<String> result = [];
@@ -834,7 +889,6 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
 
     return result;
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -932,638 +986,688 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
 
         return Scaffold(
           body: SafeArea(
-            child: Row(
+            child: Stack(
               children: [
-                // LEFT PANEL
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    padding: const EdgeInsets.all(16.0),
-                    color: Colors.white,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Header with icon and title
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                Row(
+                  children: [
+                    // LEFT PANEL
+                    Expanded(
+                      flex: 2,
+                      child: Container(
+                        padding: const EdgeInsets.all(16.0),
+                        color: Colors.white,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(17),
-                              decoration: BoxDecoration(
-                                color: Colors.black,
-                                borderRadius: BorderRadius.circular(23),
-                              ),
-                              child: Image.asset(
-                                'assets/images/${_screenImage}',
-                                width: 60,
-                                height: 60,
-                              ),
-                            ),
-                            const SizedBox(width: 20),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 18, vertical: 14),
-                              decoration: BoxDecoration(
-                                color: Colors.black,
-                                borderRadius: BorderRadius.circular(23),
-                              ),
-                              child: Text(
-                                _screenHeading,
-                                style: const TextStyle(
-                                  fontSize: 46,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                            // Header with icon and title
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(17),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black,
+                                    borderRadius: BorderRadius.circular(23),
+                                  ),
+                                  child: Image.asset(
+                                    'assets/images/${_screenImage}',
+                                    width: 60,
+                                    height: 60,
+                                  ),
                                 ),
+                                const SizedBox(width: 20),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 18, vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black,
+                                    borderRadius: BorderRadius.circular(23),
+                                  ),
+                                  child: Text(
+                                    _screenHeading,
+                                    style: const TextStyle(
+                                      fontSize: 46,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+
+                            // Dine In sub-filter buttons
+                            if (_screenHeading == 'Dine In')
+                              Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      _buildDineInSubFilterButton(
+                                        title: 'Take Out',
+                                        filterValue: 'takeout',
+                                        count: activeOrdersCount['takeout'] ?? 0, // Dynamic count
+                                        color: dominantOrderColors['takeout'] ?? const Color(0xFF8cdd69), // Dynamic color
+                                        onTap: () {
+                                          setState(() {
+                                            dineinFilter = 'takeout';
+                                            _loadOrdersFromProvider();
+                                          });
+                                        },
+                                      ),
+                                      _buildDineInSubFilterButton(
+                                        title: 'Dine In',
+                                        filterValue: 'dinein',
+                                        count: activeOrdersCount['dinein'] ?? 0, // Dynamic count
+                                        color: dominantOrderColors['dinein'] ?? const Color(0xFF8cdd69), // Dynamic color
+                                        onTap: () {
+                                          setState(() {
+                                            dineinFilter = 'dinein';
+                                            _loadOrdersFromProvider();
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+
+                            // Orders list
+                            Expanded(
+                              child: allOrdersForDisplay.isEmpty
+                                  ? Center(
+                                child: eposProvider.isLoading
+                                    ? const CircularProgressIndicator()
+                                    : Text(
+                                  _emptyStateMessage,
+                                  style: TextStyle(
+                                      fontSize: 18, color: Colors.grey[600]),
+                                ),
+                              )
+                                  : ListView.builder(
+                                itemCount: allOrdersForDisplay.length,
+                                itemBuilder: (context, index) {
+                                  final order = allOrdersForDisplay[index];
+
+                                  // Handle the divider placeholder
+                                  if (order.orderId == -1) {
+                                    return const Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 10.0, horizontal: 60),
+                                      child: Divider(
+                                        color: Color(0xFFB2B2B2),
+                                        thickness: 2,
+                                      ),
+                                    );
+                                  }
+
+                                  int? serialNumber;
+                                  // Only show serial number for active orders
+                                  if (liveActiveOrders.contains(order)) {
+                                    serialNumber = liveActiveOrders.indexOf(order) + 1;
+                                  }
+
+                                  return GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _selectedOrder = order;
+                                      });
+                                    },
+                                    child: Container(
+                                      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 60),
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.transparent,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          if (serialNumber != null)
+                                            Text(
+                                              '$serialNumber',
+                                              style: const TextStyle(fontSize: 50, fontWeight: FontWeight.bold),
+                                            )
+                                          else
+                                            const SizedBox(width: 0),
+
+                                          SizedBox(width: serialNumber != null ? 15 : 0),
+
+                                          Expanded(
+                                            flex: serialNumber != null ? 3 : 4,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
+                                              decoration: BoxDecoration(
+                                                color: order.statusColor,
+                                                borderRadius: BorderRadius.circular(50),
+                                              ),
+                                              child: Text(
+                                                order.displaySummary,
+                                                style: const TextStyle(fontSize: 29, color: Colors.black),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+
+                                          // Circular Timer - only show for active orders
+                                          if (serialNumber != null) ...[
+                                            CircularTimer(
+                                              startTime: order.createdAt,
+                                              size: 70.0,
+                                              progressColor: Colors.black,
+                                              backgroundColor: Colors.grey,
+                                              strokeWidth: 5.0,
+                                              maxMinutes: 60,
+                                            ),
+                                            const SizedBox(width: 15),
+                                          ],
+
+                                          // Status update button
+                                          GestureDetector(
+                                            onTap: () {
+                                              final isDeliveryRelevantOrder =
+                                                  (order.orderSource.toLowerCase() == 'epos' && order.orderType.toLowerCase() == 'delivery') ||
+                                                      (order.orderSource.toLowerCase() == 'website' && order.orderType.toLowerCase() == 'delivery');
+
+                                              if (isDeliveryRelevantOrder) {
+                                                if (order.status.toLowerCase() == 'yellow' || order.status.toLowerCase() == 'pending') {
+                                                  _updateOrderStatusAndRelist(order, 'Ready');
+                                                } else {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(content: Text("Delivery order status can only be set to 'Ready' from EPOS.")),
+                                                  );
+                                                }
+                                              } else {
+                                                if (order.status.toLowerCase() != 'completed' &&
+                                                    order.status.toLowerCase() != 'blue' &&
+                                                    order.status.toLowerCase() != 'delivered') {
+                                                  final uiFriendlyStatus = _mapFromBackendStatus(order.status);
+                                                  final newStatus = _nextStatus(uiFriendlyStatus);
+                                                  _updateOrderStatusAndRelist(order, newStatus);
+                                                }
+                                              }
+                                            },
+                                            child: Container(
+                                              width: 200,
+                                              height: 80,
+                                              alignment: Alignment.center,
+                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                              decoration: BoxDecoration(
+                                                color: order.statusColor,
+                                                borderRadius: BorderRadius.circular(50),
+                                              ),
+                                              child: Text(
+                                                order.getDisplayStatusLabel(),
+                                                style: const TextStyle(fontSize: 25, color: Colors.black),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 20),
-
-                        // Dine In sub-filter buttons
-                        if (_screenHeading == 'Dine In')
-                          Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  _buildDineInSubFilterButton(
-                                    title: 'Take Out',
-                                    filterValue: 'takeout',
-                                    count: activeOrdersCount['takeout'] ?? 0, // Dynamic count
-                                    color: dominantOrderColors['takeout'] ?? const Color(0xFF8cdd69), // Dynamic color
-                                    onTap: () {
-                                      setState(() {
-                                        dineinFilter = 'takeout';
-                                        _loadOrdersFromProvider();
-                                      });
-                                    },
-                                  ),
-                                  _buildDineInSubFilterButton(
-                                    title: 'Dine In',
-                                    filterValue: 'dinein',
-                                    count: activeOrdersCount['dinein'] ?? 0, // Dynamic count
-                                    color: dominantOrderColors['dinein'] ?? const Color(0xFF8cdd69), // Dynamic color
-                                    onTap: () {
-                                      setState(() {
-                                        dineinFilter = 'dinein';
-                                        _loadOrdersFromProvider();
-                                      });
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-
-                        // Orders list
-                        Expanded(
-                          child: allOrdersForDisplay.isEmpty
-                              ? Center(
-                            child: eposProvider.isLoading
-                                ? const CircularProgressIndicator()
-                                : Text(
-                              _emptyStateMessage,
-                              style: TextStyle(
-                                  fontSize: 18, color: Colors.grey[600]),
-                            ),
-                          )
-                              : ListView.builder(
-                            itemCount: allOrdersForDisplay.length,
-                            itemBuilder: (context, index) {
-                              final order = allOrdersForDisplay[index];
-
-                              // Handle the divider placeholder
-                              if (order.orderId == -1) {
-                                return const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 10.0, horizontal: 60),
-                                  child: Divider(
-                                    color: Color(0xFFB2B2B2),
-                                    thickness: 2,
-                                  ),
-                                );
-                              }
-
-                              int? serialNumber;
-                              // Only show serial number for active orders
-                              if (liveActiveOrders.contains(order)) {
-                                serialNumber = liveActiveOrders.indexOf(order) + 1;
-                              }
-
-                              return GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _selectedOrder = order;
-                                  });
-                                },
-                                child: Container(
-                                  margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 60),
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.transparent,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      if (serialNumber != null)
-                                        Text(
-                                          '$serialNumber',
-                                          style: const TextStyle(fontSize: 50, fontWeight: FontWeight.bold),
-                                        )
-                                      else
-                                        const SizedBox(width: 0),
-
-                                      SizedBox(width: serialNumber != null ? 15 : 0),
-
-                                      Expanded(
-                                        flex: serialNumber != null ? 3 : 4,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
-                                          decoration: BoxDecoration(
-                                            color: order.statusColor,
-                                            borderRadius: BorderRadius.circular(50),
-                                          ),
-                                          child: Text(
-                                            order.displaySummary,
-                                            style: const TextStyle(fontSize: 29, color: Colors.black),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-
-                                      // Circular Timer - only show for active orders
-                                      if (serialNumber != null) ...[
-                                        CircularTimer(
-                                          startTime: order.createdAt,
-                                          size: 70.0,
-                                          progressColor: Colors.black,
-                                          backgroundColor: Colors.grey,
-                                          strokeWidth: 5.0,
-                                          maxMinutes: 60,
-                                        ),
-                                        const SizedBox(width: 15),
-                                      ],
-
-                                      // Status update button
-                                      GestureDetector(
-                                        onTap: () {
-                                          final isDeliveryRelevantOrder =
-                                              (order.orderSource.toLowerCase() == 'epos' && order.orderType.toLowerCase() == 'delivery') ||
-                                                  (order.orderSource.toLowerCase() == 'website' && order.orderType.toLowerCase() == 'delivery');
-
-                                          if (isDeliveryRelevantOrder) {
-                                            if (order.status.toLowerCase() == 'yellow' || order.status.toLowerCase() == 'pending') {
-                                              _updateOrderStatusAndRelist(order, 'Ready');
-                                            } else {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(content: Text("Delivery order status can only be set to 'Ready' from EPOS.")),
-                                              );
-                                            }
-                                          } else {
-                                            if (order.status.toLowerCase() != 'completed' &&
-                                                order.status.toLowerCase() != 'blue' &&
-                                                order.status.toLowerCase() != 'delivered') {
-                                              final uiFriendlyStatus = _mapFromBackendStatus(order.status);
-                                              final newStatus = _nextStatus(uiFriendlyStatus);
-                                              _updateOrderStatusAndRelist(order, newStatus);
-                                            }
-                                          }
-                                        },
-                                        child: Container(
-                                          width: 200,
-                                          height: 80,
-                                          alignment: Alignment.center,
-                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                          decoration: BoxDecoration(
-                                            color: order.statusColor,
-                                            borderRadius: BorderRadius.circular(50),
-                                          ),
-                                          child: Text(
-                                            order.getDisplayStatusLabel(),
-                                            style: const TextStyle(fontSize: 25, color: Colors.black),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Vertical divider
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 20.0),
-                  child: const VerticalDivider(
-                    width: 3,
-                    thickness: 3,
-                    color: Color(0xFFB2B2B2),
-                  ),
-                ),
-
-                // RIGHT PANEL (Order Details)
-                Expanded(
-                  flex: 1,
-                  child: Container(
-                    color: Colors.white,
-                    padding: const EdgeInsets.all(9.0),
-                    child: liveSelectedOrder == null
-                        ? Center(
-                      child: Text(
-                        'Select an order to see details',
-                        style: TextStyle(fontSize: 18, color: Colors.grey[600]),
                       ),
-                    )
-                        : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Order header info
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 5),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    liveSelectedOrder.orderType.toLowerCase() == "delivery" &&
-                                        liveSelectedOrder.postalCode != null &&
-                                        liveSelectedOrder.postalCode!.isNotEmpty
-                                        ? '${liveSelectedOrder.postalCode} '
-                                        : '',
-                                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
-                                  ),
-                                  Text(
-                                    'Order no. ${liveSelectedOrder.orderId}',
-                                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
-                                  ),
-                                ],
-                              ),
-                              if (liveSelectedOrder.orderType.toLowerCase() == "delivery" &&
-                                  liveSelectedOrder.streetAddress != null &&
-                                  liveSelectedOrder.streetAddress!.isNotEmpty)
-                                Text(
-                                  liveSelectedOrder.streetAddress!,
-                                  style: const TextStyle(fontSize: 18),
-                                ),
-                              if (liveSelectedOrder.orderType.toLowerCase() == "delivery" &&
-                                  liveSelectedOrder.city != null &&
-                                  liveSelectedOrder.city!.isNotEmpty)
-                                Text(
-                                  '${liveSelectedOrder.city}, ${liveSelectedOrder.postalCode ?? ''}',
-                                  style: const TextStyle(fontSize: 18),
-                                ),
-                              if (liveSelectedOrder.phoneNumber != null &&
-                                  liveSelectedOrder.phoneNumber!.isNotEmpty)
-                                Text(
-                                  liveSelectedOrder.phoneNumber!,
-                                  style: const TextStyle(fontSize: 18),
-                                ),
-                              Text(
-                                liveSelectedOrder.customerName,
-                                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
-                              ),
-                              if ((liveSelectedOrder.orderType.toLowerCase() == "delivery" ||
-                                  liveSelectedOrder.orderType.toLowerCase() == "takeaway") &&
-                                  liveSelectedOrder.customerEmail != null &&
-                                  liveSelectedOrder.customerEmail!.isNotEmpty)
-                                Text(
-                                  liveSelectedOrder.customerEmail!,
-                                  style: const TextStyle(fontSize: 18),
-                                ),
-                            ],
+                    ),
+
+                    // Vertical divider
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 20.0),
+                      child: const VerticalDivider(
+                        width: 3,
+                        thickness: 3,
+                        color: Color(0xFFB2B2B2),
+                      ),
+                    ),
+
+                    // RIGHT PANEL (Order Details)
+                    Expanded(
+                      flex: 1,
+                      child: Container(
+                        color: Colors.white,
+                        padding: const EdgeInsets.all(9.0),
+                        child: liveSelectedOrder == null
+                            ? Center(
+                          child: Text(
+                            'Select an order to see details',
+                            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
                           ),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Divider
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 55.0),
-                          child: Divider(
-                            height: 0,
-                            thickness: 3,
-                            color: const Color(0xFFB2B2B2),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-
-                        // Items list
-                        Expanded(
-                          child: RawScrollbar(
-                            controller: _scrollController,
-                            thumbVisibility: true,
-                            trackVisibility: false,
-                            thickness: 10.0,
-                            radius: const Radius.circular(30),
-                            interactive: true,
-                            thumbColor: const Color(0xFFF2D9F9),
-                            child: ListView.builder(
-                              controller: _scrollController,
-                              itemCount: liveSelectedOrder.items.length,
-                              itemBuilder: (context, itemIndex) {
-                                final item = liveSelectedOrder?.items[itemIndex];
-
-                                // Extract options from description
-                                Map<String, dynamic> itemOptions = _extractAllOptionsFromDescription(
-                                  item!.description,
-                                  defaultFoodItemToppings: item.foodItem?.defaultToppings,
-                                  defaultFoodItemCheese: item.foodItem?.defaultCheese,
-                                );
-
-                                String? selectedSize = itemOptions['size'];
-                                String? selectedCrust = itemOptions['crust'];
-                                String? selectedBase = itemOptions['base'];
-                                List<String> toppings = itemOptions['toppings'] ?? [];
-                                List<String> sauceDips = itemOptions['sauceDips'] ?? [];
-                                String baseItemName = item.itemName;
-                                bool hasOptions = itemOptions['hasOptions'] ?? false;
-
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 12.0),
-                                  child: Column(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 40),
-                                        child: Row(
-                                          crossAxisAlignment: CrossAxisAlignment.center,
-                                          children: [
-                                            Expanded(
-                                              flex: 6,
-                                              child: Row(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    '${item.quantity}',
-                                                    style: const TextStyle(
-                                                      fontWeight: FontWeight.bold,
-                                                      fontSize: 34,
-                                                      fontFamily: 'Poppins',
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    child: Padding(
-                                                      padding: const EdgeInsets.only(left: 30, right: 10),
-                                                      child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        children: [
-                                                          // Display item options or simple description
-                                                          if (!hasOptions)
-                                                            Text(
-                                                              item.description,
-                                                              style: const TextStyle(
-                                                                fontSize: 15,
-                                                                fontFamily: 'Poppins',
-                                                                color: Colors.black,
-                                                              ),
-                                                              overflow: TextOverflow.ellipsis,
-                                                            ),
-                                                          if (hasOptions) ...[
-                                                            if (selectedSize != null)
-                                                              Text(
-                                                                'Size: $selectedSize',
-                                                                style: const TextStyle(
-                                                                  fontSize: 15,
-                                                                  fontFamily: 'Poppins',
-                                                                  color: Colors.black,
-                                                                ),
-                                                                overflow: TextOverflow.ellipsis,
-                                                              ),
-                                                            if (selectedCrust != null)
-                                                              Text(
-                                                                'Crust: $selectedCrust',
-                                                                style: const TextStyle(
-                                                                  fontSize: 15,
-                                                                  fontFamily: 'Poppins',
-                                                                  color: Colors.black,
-                                                                ),
-                                                                overflow: TextOverflow.ellipsis,
-                                                              ),
-                                                            if (selectedBase != null)
-                                                              Text(
-                                                                'Base: $selectedBase',
-                                                                style: const TextStyle(
-                                                                  fontSize: 15,
-                                                                  fontFamily: 'Poppins',
-                                                                  color: Colors.black,
-                                                                ),
-                                                                overflow: TextOverflow.ellipsis,
-                                                              ),
-                                                            if (toppings.isNotEmpty)
-                                                              Text(
-                                                                'Toppings: ${toppings.join(', ')}',
-                                                                style: const TextStyle(
-                                                                  fontSize: 15,
-                                                                  fontFamily: 'Poppins',
-                                                                  color: Colors.black,
-                                                                ),
-                                                                maxLines: 3,
-                                                                overflow: TextOverflow.ellipsis,
-                                                              ),
-                                                            if (sauceDips.isNotEmpty)
-                                                              Text(
-                                                                'Sauce Dips: ${sauceDips.join(', ')}',
-                                                                style: const TextStyle(
-                                                                  fontSize: 15,
-                                                                  fontFamily: 'Poppins',
-                                                                  color: Colors.black,
-                                                                ),
-                                                                maxLines: 2,
-                                                                overflow: TextOverflow.ellipsis,
-                                                              ),
-                                                          ],
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  )
-                                                ],
-                                              ),
-                                            ),
-
-                                            Container(
-                                              width: 3,
-                                              height: 110,
-                                              margin: const EdgeInsets.symmetric(horizontal: 0),
-                                              decoration: BoxDecoration(
-                                                borderRadius: BorderRadius.circular(30),
-                                                color: const Color(0xFFB2B2B2),
-                                              ),
-                                            ),
-
-                                            Expanded(
-                                              flex: 3,
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.center,
-                                                children: [
-                                                  Container(
-                                                    width: 90,
-                                                    height: 64,
-                                                    decoration: BoxDecoration(
-                                                      borderRadius: BorderRadius.circular(12),
-                                                    ),
-                                                    clipBehavior: Clip.hardEdge,
-                                                    child: Image.asset(
-                                                      _getCategoryIcon(item.itemType),
-                                                      fit: BoxFit.contain,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  Text(
-                                                    baseItemName,
-                                                    textAlign: TextAlign.center,
-                                                    style: const TextStyle(
-                                                      fontSize: 16,
-                                                      fontWeight: FontWeight.normal,
-                                                      fontFamily: 'Poppins',
-                                                    ),
-                                                    maxLines: 2,
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      if (item.comment != null && item.comment!.isNotEmpty)
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 8.0),
-                                          child: Container(
-                                            width: double.infinity,
-                                            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFFDF1C7),
-                                              borderRadius: BorderRadius.circular(8.0),
-                                            ),
-                                            child: Center(
-                                              child: Text(
-                                                'Comment: ${item.comment!}',
-                                                textAlign: TextAlign.center,
-                                                style: const TextStyle(
-                                                  fontSize: 16,
-                                                  color: Colors.black,
-                                                  fontFamily: 'Poppins',
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-
-                        // Bottom divider
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 55.0),
-                          child: Divider(
-                            height: 0,
-                            thickness: 3,
-                            color: const Color(0xFFB2B2B2),
-                          ),
-                        ),
-                        const SizedBox(height: 7),
-
-                        // Total and printer section
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        )
+                            : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(15),
-                              decoration: BoxDecoration(
-                                color: Colors.black,
-                                borderRadius: BorderRadius.circular(15),
-                              ),
+                            // Order header info
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 5),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      const Text(
-                                        'Total',
-                                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-                                      ),
-                                      const SizedBox(width: 110),
                                       Text(
-                                        '${liveSelectedOrder.orderTotalPrice.toStringAsFixed(2)}',
-                                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                                        liveSelectedOrder.orderType.toLowerCase() == "delivery" &&
+                                            liveSelectedOrder.postalCode != null &&
+                                            liveSelectedOrder.postalCode!.isNotEmpty
+                                            ? '${liveSelectedOrder.postalCode} '
+                                            : '',
+                                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
+                                      ),
+                                      Text(
+                                        'Order no. ${liveSelectedOrder.orderId}',
+                                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 10),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text(
-                                        'Change Due',
-                                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-                                      ),
-                                      const SizedBox(width: 40),
-                                      Text(
-                                        '${liveSelectedOrder.changeDue?.toStringAsFixed(2) ?? '0.00'}',
-                                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-                                      ),
-                                    ],
+                                  if (liveSelectedOrder.orderType.toLowerCase() == "delivery" &&
+                                      liveSelectedOrder.streetAddress != null &&
+                                      liveSelectedOrder.streetAddress!.isNotEmpty)
+                                    Text(
+                                      liveSelectedOrder.streetAddress!,
+                                      style: const TextStyle(fontSize: 18),
+                                    ),
+                                  if (liveSelectedOrder.orderType.toLowerCase() == "delivery" &&
+                                      liveSelectedOrder.city != null &&
+                                      liveSelectedOrder.city!.isNotEmpty)
+                                    Text(
+                                      '${liveSelectedOrder.city}, ${liveSelectedOrder.postalCode ?? ''}',
+                                      style: const TextStyle(fontSize: 18),
+                                    ),
+                                  if (liveSelectedOrder.phoneNumber != null &&
+                                      liveSelectedOrder.phoneNumber!.isNotEmpty)
+                                    Text(
+                                      liveSelectedOrder.phoneNumber!,
+                                      style: const TextStyle(fontSize: 18),
+                                    ),
+                                  Text(
+                                    liveSelectedOrder.customerName,
+                                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
                                   ),
+                                  if ((liveSelectedOrder.orderType.toLowerCase() == "delivery" ||
+                                      liveSelectedOrder.orderType.toLowerCase() == "takeaway") &&
+                                      liveSelectedOrder.customerEmail != null &&
+                                      liveSelectedOrder.customerEmail!.isNotEmpty)
+                                    Text(
+                                      liveSelectedOrder.customerEmail!,
+                                      style: const TextStyle(fontSize: 18),
+                                    ),
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 20),
-                            MouseRegion(
-                              cursor: SystemMouseCursors.click,
-                              child: GestureDetector(
-                                onTap: () async {
-                                  // Set the _selectedOrder temporarily for printing
-                                  _selectedOrder = liveSelectedOrder;
-                                  await _handlePrintingOrderReceipt();
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
+                            const SizedBox(height: 20),
+
+                            // Divider
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 55.0),
+                              child: Divider(
+                                height: 0,
+                                thickness: 3,
+                                color: const Color(0xFFB2B2B2),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+
+                            // Items list
+                            Expanded(
+                              child: RawScrollbar(
+                                controller: _scrollController,
+                                thumbVisibility: true,
+                                trackVisibility: false,
+                                thickness: 10.0,
+                                radius: const Radius.circular(30),
+                                interactive: true,
+                                thumbColor: const Color(0xFFF2D9F9),
+                                child: ListView.builder(
+                                  controller: _scrollController,
+                                  itemCount: liveSelectedOrder.items.length,
+                                  itemBuilder: (context, itemIndex) {
+                                    final item = liveSelectedOrder?.items[itemIndex];
+
+                                    // Extract options from description
+                                    Map<String, dynamic> itemOptions = _extractAllOptionsFromDescription(
+                                      item!.description,
+                                      defaultFoodItemToppings: item.foodItem?.defaultToppings,
+                                      defaultFoodItemCheese: item.foodItem?.defaultCheese,
+                                    );
+
+                                    String? selectedSize = itemOptions['size'];
+                                    String? selectedCrust = itemOptions['crust'];
+                                    String? selectedBase = itemOptions['base'];
+                                    String? selectedDrink = itemOptions['drink']; // NEW: Add drink extraction
+                                    bool isMeal = itemOptions['isMeal'] ?? false; // NEW: Add meal detection
+                                    List<String> toppings = itemOptions['toppings'] ?? [];
+                                    List<String> sauceDips = itemOptions['sauceDips'] ?? [];
+                                    String baseItemName = item.itemName;
+                                    bool hasOptions = itemOptions['hasOptions'] ?? false;
+
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 12.0),
+                                      child: Column(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 40),
+                                            child: Row(
+                                              crossAxisAlignment: CrossAxisAlignment.center,
+                                              children: [
+                                                Expanded(
+                                                  flex: 6,
+                                                  child: Row(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        '${item.quantity}',
+                                                        style: const TextStyle(
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 34,
+                                                          fontFamily: 'Poppins',
+                                                        ),
+                                                      ),
+                                                      Expanded(
+                                                        child: Padding(
+                                                          padding: const EdgeInsets.only(left: 30, right: 10),
+                                                          child: Column(
+                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                            children: [
+                                                              // Display item options or simple description
+                                                              if (!hasOptions)
+                                                                Text(
+                                                                  item.description,
+                                                                  style: const TextStyle(
+                                                                    fontSize: 15,
+                                                                    fontFamily: 'Poppins',
+                                                                    color: Colors.grey,
+                                                                    fontStyle: FontStyle.normal,
+                                                                  ),
+                                                                  overflow: TextOverflow.ellipsis,
+                                                                ),
+                                                              if (hasOptions) ...[
+                                                                if (selectedSize != null)
+                                                                  Text(
+                                                                    'Size: $selectedSize',
+                                                                    style: const TextStyle(
+                                                                      fontSize: 15,
+                                                                      fontFamily: 'Poppins',
+                                                                      color: Colors.black,
+                                                                    ),
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                  ),
+                                                                if (selectedCrust != null)
+                                                                  Text(
+                                                                    'Crust: $selectedCrust',
+                                                                    style: const TextStyle(
+                                                                      fontSize: 15,
+                                                                      fontFamily: 'Poppins',
+                                                                      color: Colors.black,
+                                                                    ),
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                  ),
+                                                                if (selectedBase != null)
+                                                                  Text(
+                                                                    'Base: $selectedBase',
+                                                                    style: const TextStyle(
+                                                                      fontSize: 15,
+                                                                      fontFamily: 'Poppins',
+                                                                      color: Colors.black,
+                                                                    ),
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                  ),
+                                                                if (toppings.isNotEmpty)
+                                                                  Text(
+                                                                    'Extra Toppings: ${toppings.join(', ')}',
+                                                                    style: const TextStyle(
+                                                                      fontSize: 15,
+                                                                      fontFamily: 'Poppings',
+                                                                      color: Colors.black,
+                                                                    ),
+                                                                    maxLines: 3,
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                  ),
+                                                                if (sauceDips.isNotEmpty)
+                                                                  Text(
+                                                                    'Sauce Dips: ${sauceDips.join(', ')}',
+                                                                    style: const TextStyle(
+                                                                      fontSize: 15,
+                                                                      fontFamily: 'Poppins',
+                                                                      color: Colors.black,
+                                                                    ),
+                                                                    maxLines: 2,
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                  ),
+
+                                                                // Display meal information - NEW ADDITION
+                                                                if (isMeal && selectedDrink != null) ...[
+                                                                  const Text(
+                                                                    'MEAL',
+                                                                    style: TextStyle(
+                                                                      fontSize: 15,
+                                                                      fontFamily: 'Poppins',
+                                                                      color: Colors.black,
+                                                                      fontWeight: FontWeight.bold,
+                                                                    ),
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                  ),
+                                                                  Text(
+                                                                    'Drink: $selectedDrink',
+                                                                    style: const TextStyle(
+                                                                      fontSize: 15,
+                                                                      fontFamily: 'Poppins',
+                                                                      color: Colors.black,
+                                                                    ),
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                  ),
+                                                                ],
+                                                              ],
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      )
+                                                    ],
+                                                  ),
+                                                ),
+
+                                                Container(
+                                                  width: 3,
+                                                  height: 110,
+                                                  margin: const EdgeInsets.symmetric(horizontal: 0),
+                                                  decoration: BoxDecoration(
+                                                    borderRadius: BorderRadius.circular(30),
+                                                    color: const Color(0xFFB2B2B2),
+                                                  ),
+                                                ),
+
+                                                Expanded(
+                                                  flex: 3,
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                                    children: [
+                                                      Container(
+                                                        width: 90,
+                                                        height: 64,
+                                                        decoration: BoxDecoration(
+                                                          borderRadius: BorderRadius.circular(12),
+                                                        ),
+                                                        clipBehavior: Clip.hardEdge,
+                                                        child: Image.asset(
+                                                          _getCategoryIcon(item.itemType),
+                                                          fit: BoxFit.contain,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      Text(
+                                                        baseItemName,
+                                                        textAlign: TextAlign.center,
+                                                        style: const TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight: FontWeight.normal,
+                                                          fontFamily: 'Poppins',
+                                                        ),
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+
+                                          if (item.comment != null && item.comment!.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 8.0),
+                                              child: Container(
+                                                width: double.infinity,
+                                                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFFDF1C7),
+                                                  borderRadius: BorderRadius.circular(8.0),
+                                                ),
+                                                child: Center(
+                                                  child: Text(
+                                                    'Comment: ${item.comment!}',
+                                                    textAlign: TextAlign.center,
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                      color: Colors.black,
+                                                      fontFamily: 'Poppins',
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+
+                            // Bottom divider
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 55.0),
+                              child: Divider(
+                                height: 0,
+                                thickness: 3,
+                                color: const Color(0xFFB2B2B2),
+                              ),
+                            ),
+                            const SizedBox(height: 7),
+
+                            // Total and printer section
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(15),
                                   decoration: BoxDecoration(
                                     color: Colors.black,
                                     borderRadius: BorderRadius.circular(15),
                                   ),
                                   child: Column(
-                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      ColorFiltered(
-                                        colorFilter: ColorFilter.mode(
-                                          _isPrinterConnected ? Colors.green : Colors.red,
-                                          BlendMode.srcIn,
-                                        ),
-                                        child: Image.asset(
-                                          'assets/images/printer.png',
-                                          width: 58,
-                                          height: 58,
-                                        ),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          const Text(
+                                            'Total',
+                                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                                          ),
+                                          const SizedBox(width: 110),
+                                          Text(
+                                            '£${liveSelectedOrder.orderTotalPrice.toStringAsFixed(2)}',
+                                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(height: 4),
-                                      const Text(
-                                        'Print Receipt',
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          const Text(
+                                            'Change Due',
+                                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                                          ),
+                                          const SizedBox(width: 40),
+                                          Text(
+                                            '£${liveSelectedOrder.changeDue?.toStringAsFixed(2) ?? '0.00'}',
+                                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
                                 ),
-                              ),
+                                const SizedBox(width: 20),
+                                MouseRegion(
+                                  cursor: SystemMouseCursors.click,
+                                  child: GestureDetector(
+                                    onTap: () async {
+                                      // Set the _selectedOrder temporarily for printing
+                                      _selectedOrder = liveSelectedOrder;
+                                      await _handlePrintingOrderReceipt();
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black,
+                                        borderRadius: BorderRadius.circular(15),
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          ColorFiltered(
+                                            colorFilter: ColorFilter.mode(
+                                              _isPrinterConnected ? Colors.green : Colors.red,
+                                              BlendMode.srcIn,
+                                            ),
+                                            child: Image.asset(
+                                              'assets/images/printer.png',
+                                              width: 58,
+                                              height: 58,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          const Text(
+                                            'Print Receipt',
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                // Add printer status indicator - positioned at top left
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _isPrinterConnected ? Colors.green : Colors.red,
+                      boxShadow: [
+                        BoxShadow(
+                          color: (_isPrinterConnected ? Colors.green : Colors.red).withOpacity(0.5),
+                          blurRadius: 4,
+                          spreadRadius: 1,
                         ),
                       ],
                     ),
@@ -1610,13 +1714,13 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
             availability: true,
           ),
           quantity: orderItem.quantity,
-          selectedOptions: null, // OrderItem doesn't have selectedOptions, will use description parsing
+          selectedOptions: null,
           comment: orderItem.comment,
           pricePerUnit: pricePerUnit,
         );
       }).toList();
 
-      // Calculate subtotal (assuming no VAT separation needed based on printer service)
+      // Calculate subtotal
       double subtotal = _selectedOrder!.orderTotalPrice;
 
       // Use the thermal printer service to print
@@ -1629,7 +1733,14 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
         subtotal: subtotal,
         totalCharge: _selectedOrder!.orderTotalPrice,
         changeDue: _selectedOrder!.changeDue ?? 0.0,
-        extraNotes: null, // Add any extra notes if available in your Order model
+        extraNotes: _selectedOrder!.orderExtraNotes,
+        customerName: _selectedOrder!.customerName,
+        customerEmail: _selectedOrder!.customerEmail,
+        phoneNumber: _selectedOrder!.phoneNumber,
+        streetAddress: _selectedOrder!.streetAddress,
+        city: _selectedOrder!.city,
+        postalCode: _selectedOrder!.postalCode,
+        paymentType: _selectedOrder!.paymentType,
         onShowMethodSelection: (availableMethods) {
           // Handle case when no printer is connected
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1666,6 +1777,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen> with Wi
       );
     }
   }
+
   Widget _buildDineInSubFilterButton({
     required String title,
     required String filterValue,

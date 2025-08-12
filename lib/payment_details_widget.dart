@@ -48,6 +48,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
   double _changeDue = 0.0;
   List<double> _presetAmounts = [];
   bool _isCustomAmountDialerOpen = false;
+  Timer? _printerStatusTimer; // Added for periodic printer status checking
 
   double _currentDiscountPercentageForPaymentDetails = 0.0;
 
@@ -69,6 +70,18 @@ class _PaymentWidgetState extends State<PaymentWidget> {
 
     _amountPaidController.addListener(_onAmountPaidChanged);
     _calculatePresetAmounts();
+
+    // Start printer status checking when widget initializes
+    _startPrinterStatusChecking();
+  }
+
+  void _startPrinterStatusChecking() {
+    _checkPrinterStatus();
+
+    // Create a periodic timer and store the reference
+    _printerStatusTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      _checkPrinterStatus();
+    });
   }
 
   // New method to handle the amount returned from the payment dialer.
@@ -90,6 +103,9 @@ class _PaymentWidgetState extends State<PaymentWidget> {
 
   @override
   void dispose() {
+    // Cancel the timer before disposing
+    _printerStatusTimer?.cancel();
+
     _amountPaidController.removeListener(_onAmountPaidChanged);
     _amountPaidController.dispose();
     _amountPaidFocusNode.dispose();
@@ -150,17 +166,17 @@ class _PaymentWidgetState extends State<PaymentWidget> {
   }
 
   Future<void> _checkPrinterStatus() async {
-    if (_isCheckingPrinter) return;
+    if (_isCheckingPrinter || !mounted) return; // Add mounted check
 
     setState(() {
       _isCheckingPrinter = true;
     });
 
     try {
-      Map<String, bool> connectionStatus = await ThermalPrinterService().testAllConnections();
+      Map<String, bool> connectionStatus = await ThermalPrinterService().checkConnectionStatusOnly();
       bool isConnected = connectionStatus['usb'] == true || connectionStatus['bluetooth'] == true;
 
-      if (mounted) {
+      if (mounted) { // Check mounted before setState
         setState(() {
           _isPrinterConnected = isConnected;
           _isCheckingPrinter = false;
@@ -168,7 +184,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
       }
     } catch (e) {
       print('Error checking printer status: $e');
-      if (mounted) {
+      if (mounted) { // Check mounted before setState
         setState(() {
           _isPrinterConnected = false;
           _isCheckingPrinter = false;
@@ -245,7 +261,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
-        'CHANGE   ${changeAmount.toStringAsFixed(2)}',
+        'CHANGE   £${changeAmount.toStringAsFixed(2)}',
         style: const TextStyle(
           color: Colors.white,
           fontSize: 40,
@@ -353,7 +369,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                                         elevation: 2,
                                       ),
                                       child: Text(
-                                        ' ${_presetAmounts[i].toStringAsFixed(2)}',
+                                        ' £${_presetAmounts[i].toStringAsFixed(2)}',
                                         style: const TextStyle(
                                           fontSize: 24,
                                           fontWeight: FontWeight.bold,
@@ -410,7 +426,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
 
 
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16.0), // Example: apply horizontal padding
+                            padding: const EdgeInsets.symmetric(horizontal: 16.0), // apply horizontal padding
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -436,6 +452,10 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                                     decoration: const InputDecoration(
                                       contentPadding: EdgeInsets.symmetric(vertical: 0),
                                       isDense: true,
+                                      prefixText: '£',
+                                      border: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
                                     ),
                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                     inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}$'))],
@@ -475,7 +495,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
                         ),
                         Text(
-                          '${_discountedTotal.toStringAsFixed(2)}',
+                          '£${_discountedTotal.toStringAsFixed(2)}',
                           style: const TextStyle(fontSize: 22),
                         ),
                       ],
@@ -489,7 +509,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
                         ),
                         Text(
-                          '${_changeDue.toStringAsFixed(2)}',
+                          '£${_changeDue.toStringAsFixed(2)}',
                           style: const TextStyle(fontSize: 22),
                         ),
                       ],
@@ -516,9 +536,6 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                                 if (_changeDue > 0) {
                                   _showChangeOverlay(_changeDue);
                                 }
-
-                                await _checkPrinterStatus();
-
                                 final paymentDetails = PaymentDetails(
                                   paymentType: widget.paymentType,
                                   amountReceived: _selectedAmount,
@@ -536,7 +553,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                                 );
                               },
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 22),
+                                padding: const EdgeInsets.symmetric(vertical: 16),
                                 decoration: BoxDecoration(
                                   color: Colors.black,
                                   borderRadius: BorderRadius.circular(8),
@@ -546,7 +563,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Text(
-                                        'Charge    ${_discountedTotal.toStringAsFixed(2)}',
+                                        'Charge    £${_discountedTotal.toStringAsFixed(2)}',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontWeight: FontWeight.bold,
@@ -554,22 +571,13 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                                           fontFamily: 'Poppins',
                                         ),
                                       ),
-                                      const SizedBox(width: 12),
-                                      if (_isCheckingPrinter)
-                                        const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                          ),
-                                        )
-                                      else
-                                        Icon(
-                                          Icons.print,
-                                          color: _isPrinterConnected ? Colors.green : Colors.red,
-                                          size: 24,
-                                        ),
+                                      const SizedBox(width: 10),
+                                      Image.asset(
+                                        'assets/images/printer.png',
+                                        width: 58,
+                                        height: 58,
+                                        color: Colors.white,
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -584,6 +592,27 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                 ),
               ),
             ],
+          ),
+        ),
+
+        // Printer status indicator - positioned at top right corner
+        Positioned(
+          top: 16,
+          right: 16,
+          child: Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _isPrinterConnected ? Colors.green : Colors.red,
+              boxShadow: [
+                BoxShadow(
+                  color: (_isPrinterConnected ? Colors.green : Colors.red).withOpacity(0.5),
+                  blurRadius: 4,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
           ),
         ),
 

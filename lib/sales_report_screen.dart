@@ -1,4 +1,4 @@
-// lib/sales_report_screen.dart
+// lib/sales_report_screen.dart (Complete - Today's Report Only)
 import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -17,205 +17,46 @@ class SalesReportScreen extends StatefulWidget {
 }
 
 class _SalesReportScreenState extends State<SalesReportScreen> {
-  final TextEditingController _pinController = TextEditingController();
   bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    // FIXED: Initialize provider properly after build is complete
+    // Initialize provider after build is complete
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeProvider();
     });
   }
-
 
   Future<void> _initializeProvider() async {
     if (_isInitialized) return;
 
     _isInitialized = true;
     final provider = Provider.of<SalesReportProvider>(context, listen: false);
+    // Set to today's report only
     provider.setCurrentTab(0);
-
     await provider.initialize();
-  }
-
-  @override
-  void dispose() {
-    _pinController.dispose();
-    super.dispose();
-  }
-
-  void _showPinDialog(BuildContext context) {
-    _pinController.clear();
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          width: 300,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Enter PIN',
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _pinController,
-                obscureText: true,
-                keyboardType: TextInputType.number,
-                maxLength: 4,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 8,
-                ),
-                decoration: InputDecoration(
-                  hintText: '••••',
-                  hintStyle: GoogleFonts.poppins(
-                    color: Colors.grey.shade400,
-                    letterSpacing: 8,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Colors.black),
-                  ),
-                  counterText: '',
-                ),
-                onSubmitted: (pin) => _validatePin(context, pin),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => _cancelPin(context),
-                      child: Text(
-                        'Cancel',
-                        style: GoogleFonts.poppins(
-                          color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => _validatePin(context, _pinController.text),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        'Submit',
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _validatePin(BuildContext context, String pin) {
-    if (pin == '2840') {
-      Navigator.of(context).pop();
-      Provider.of<SalesReportProvider>(context, listen: false).validatePin(pin);
-    } else {
-      _showErrorMessage('Invalid PIN');
-      _pinController.clear();
-    }
-  }
-
-  void _cancelPin(BuildContext context) {
-    Navigator.of(context).pop();
-    Provider.of<SalesReportProvider>(context, listen: false).setCurrentTab(0);
-  }
-
-  void _showErrorMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: GoogleFonts.poppins(),
-        ),
-        backgroundColor: Colors.red,
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<SalesReportProvider>(
       builder: (context, provider, child) {
-        // Show PIN dialog when required
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (provider.isPinRequired) {
-            _showPinDialog(context);
-          }
-        });
-
         return Scaffold(
           backgroundColor: Colors.white,
-          body: Stack(
-            children: [
-              SafeArea(
-                child: Column(
-                  children: [
-                    // Add Back Button Header
-                    _buildHeader(),
+          body: SafeArea(
+            child: Column(
+              children: [
+                // Header with back button
+                _buildHeader(),
 
-                    // Tab Navigation
-                    _buildTabNavigation(provider),
-
-                    // Content based on current tab
-                    Expanded(
-                      child: _buildTabContent(provider),
-                    ),
-                  ],
+                // Today's Report Content
+                Expanded(
+                  child: _buildTodaysReport(provider),
                 ),
-              ),
-
-              // Blur overlay when PIN is required
-              if (provider.isPinRequired)
-                Positioned.fill(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                    child: Container(
-                      color: Colors.black.withOpacity(0.3),
-                    ),
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
-          // Remove bottomNavigationBar completely
         );
       },
     );
@@ -243,7 +84,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             ),
           ),
           const SizedBox(width: 16),
-          // Sales Report title
+          // Today's Sales Report title
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -251,96 +92,42 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                 color: Colors.black,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Text(
-                'Sales Report',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.today,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Today's Sales Report",
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
           // Empty space to balance the layout
-          const SizedBox(width: 52), // Same width as back button + padding
+          const SizedBox(width: 52),
         ],
       ),
     );
   }
 
-  Widget _buildTabNavigation(SalesReportProvider provider) {
-    final tabs = [
-      "Today's Report",
-      "Daily Report",
-      "Weekly Report",
-      "Monthly Report",
-      "Drivers Report",
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: tabs.asMap().entries.map((entry) {
-          final index = entry.key;
-          final title = entry.value;
-          final isSelected = provider.currentTabIndex == index;
-
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => provider.setCurrentTab(index),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                decoration: BoxDecoration(
-                  color: isSelected ? Colors.black : Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    color: isSelected ? Colors.white : Colors.black,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildTabContent(SalesReportProvider provider) {
-    if (provider.isPinRequired) {
-      return Container(); // Empty when PIN required
-    }
-
+  Widget _buildTodaysReport(SalesReportProvider provider) {
     if (provider.isLoading) {
       return const Center(
         child: CircularProgressIndicator(),
       );
     }
 
-    switch (provider.currentTabIndex) {
-      case 0:
-        return _buildTodaysReport(provider);
-      case 1:
-        return _buildDailyReport(provider);
-      case 2:
-        return _buildWeeklyReport(provider);
-      case 3:
-        return _buildMonthlyReport(provider);
-      case 4:
-        return _buildDriverReport(provider);
-      default:
-        return Container();
-    }
-  }
-
-  Widget _buildTodaysReport(SalesReportProvider provider) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -364,106 +151,6 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     );
   }
 
-  Widget _buildDailyReport(SalesReportProvider provider) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          // Date selector and action buttons
-          _buildDateSelector(provider),
-          const SizedBox(height: 20),
-
-          // Daily Report Title
-          _buildReportTitle("Daily Report"),
-          const SizedBox(height: 20),
-
-          // Filters
-          _buildFilters(provider),
-          const SizedBox(height: 20),
-
-          // Main Content
-          _buildMainContent(provider),
-          const SizedBox(height: 20),
-
-          // Items section
-          _buildItemsSection(provider),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWeeklyReport(SalesReportProvider provider) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          // Year and Week selector with action buttons
-          _buildWeekSelector(provider),
-          const SizedBox(height: 20),
-
-          // Weekly Report Title
-          _buildReportTitle("Weekly Report"),
-          const SizedBox(height: 20),
-
-          // Filters
-          _buildFilters(provider),
-          const SizedBox(height: 20),
-
-          // Main Content
-          _buildMainContent(provider),
-          const SizedBox(height: 20),
-
-          // Items section
-          _buildItemsSection(provider),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMonthlyReport(SalesReportProvider provider) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          // Year and Month selector with action buttons
-          _buildMonthSelector(provider),
-          const SizedBox(height: 20),
-
-          // Monthly Report Title
-          _buildReportTitle("Monthly Report"),
-          const SizedBox(height: 20),
-
-          // Filters
-          _buildFilters(provider),
-          const SizedBox(height: 20),
-
-          // Main Content
-          _buildMainContent(provider),
-          const SizedBox(height: 20),
-
-          // Items section
-          _buildItemsSection(provider),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDriverReport(SalesReportProvider provider) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          // Date selector for driver report
-          _buildDriverDateSelector(provider),
-          const SizedBox(height: 40),
-
-          // Driver Reports Content
-          _buildDriverReportContent(provider),
-        ],
-      ),
-    );
-  }
-
   Widget _buildReportTitle(String title) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
@@ -480,415 +167,6 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         ),
       ),
     );
-  }
-
-  Widget _buildDateSelector(SalesReportProvider provider) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          'Select Date:',
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-        const SizedBox(width: 10),
-        GestureDetector(
-          onTap: () => _selectDate(context, provider),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade400),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  DateFormat('dd/MM/yyyy').format(provider.selectedDate),
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(width: 5),
-                const Icon(Icons.calendar_today, size: 16),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 15),
-        _buildActionButton('Get Report', () => provider.loadDailyReport()),
-        const SizedBox(width: 10),
-        _buildActionButton(
-          provider.isGeneratingPdf ? 'Generating...' : 'Download PDF',
-          provider.isGeneratingPdf ? null : () => _downloadPdf(context, provider),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildWeekSelector(SalesReportProvider provider) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          'Year:',
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade400),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Text(
-            provider.selectedYear.toString(),
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ),
-        const SizedBox(width: 20),
-        Text(
-          'Week No.:',
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-        const SizedBox(width: 10),
-
-        // Week selector with increment/decrement buttons
-        Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade400),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Decrease week button
-              InkWell(
-                onTap: () {
-                  if (provider.selectedWeek > 1) {
-                    provider.setSelectedWeek(provider.selectedWeek - 1);
-                  } else if (provider.selectedYear > 2020) {
-                    // Go to previous year, last week (52 or 53)
-                    provider.setSelectedYear(provider.selectedYear - 1);
-                    provider.setSelectedWeek(52); // Most years have 52 weeks
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  child: Icon(
-                    Icons.remove,
-                    size: 16,
-                    color: (provider.selectedWeek > 1 || provider.selectedYear > 2020)
-                        ? Colors.black87
-                        : Colors.grey.shade400,
-                  ),
-                ),
-              ),
-
-              // Week number display
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                decoration: BoxDecoration(
-                  border: Border.symmetric(
-                    vertical: BorderSide(color: Colors.grey.shade400),
-                  ),
-                ),
-                child: Text(
-                  provider.selectedWeek.toString(),
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
-
-              // Increase week button
-              InkWell(
-                onTap: () {
-                  final currentYear = DateTime.now().year;
-                  final currentWeek = _getWeekNumber(DateTime.now());
-
-                  if (provider.selectedYear < currentYear) {
-                    // Not current year, can go up to week 52
-                    if (provider.selectedWeek < 52) {
-                      provider.setSelectedWeek(provider.selectedWeek + 1);
-                    } else {
-                      // Go to next year, week 1
-                      provider.setSelectedYear(provider.selectedYear + 1);
-                      provider.setSelectedWeek(1);
-                    }
-                  } else if (provider.selectedYear == currentYear) {
-                    // Current year, can't go beyond current week
-                    if (provider.selectedWeek < currentWeek) {
-                      provider.setSelectedWeek(provider.selectedWeek + 1);
-                    }
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  child: Icon(
-                    Icons.add,
-                    size: 16,
-                    color: _canIncreaseWeek(provider)
-                        ? Colors.black87
-                        : Colors.grey.shade400,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(width: 15),
-        _buildActionButton('Get Report', () => provider.loadWeeklyReport()),
-        const SizedBox(width: 10),
-        _buildActionButton(
-          provider.isGeneratingPdf ? 'Generating...' : 'Download PDF',
-          provider.isGeneratingPdf ? null : () => _downloadPdf(context, provider),
-        ),
-      ],
-    );
-  }
-
-// Helper method to check if week can be increased
-  bool _canIncreaseWeek(SalesReportProvider provider) {
-    final currentYear = DateTime.now().year;
-    final currentWeek = _getWeekNumber(DateTime.now());
-
-    if (provider.selectedYear < currentYear) {
-      return provider.selectedWeek < 52;
-    } else if (provider.selectedYear == currentYear) {
-      return provider.selectedWeek < currentWeek;
-    }
-    return false;
-  }
-
-// Helper method to get week number (same as in provider)
-  static int _getWeekNumber(DateTime date) {
-    int dayOfYear = int.parse(date.difference(DateTime(date.year, 1, 1)).inDays.toString()) + 1;
-    return ((dayOfYear - date.weekday + 10) / 7).floor();
-  }
-  Widget _buildMonthSelector(SalesReportProvider provider) {
-    final months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          'Year:',
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade400),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Text(
-            provider.selectedYear.toString(),
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ),
-        const SizedBox(width: 20),
-        Text(
-          'Month:',
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade400),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<int>(
-              value: provider.selectedMonth,
-              items: months.asMap().entries.map((entry) {
-                return DropdownMenuItem<int>(
-                  value: entry.key + 1,
-                  child: Text(
-                    entry.value,
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                );
-              }).toList(),
-              onChanged: (month) {
-                if (month != null) {
-                  provider.setSelectedMonth(month);
-                }
-              },
-            ),
-          ),
-        ),
-        const SizedBox(width: 15),
-        _buildActionButton('Get Report', () => provider.loadMonthlyReport()),
-        const SizedBox(width: 10),
-        _buildActionButton(
-          provider.isGeneratingPdf ? 'Generating...' : 'Download PDF',
-          provider.isGeneratingPdf ? null : () => _downloadPdf(context, provider),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDriverDateSelector(SalesReportProvider provider) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          'Select Date:',
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-        const SizedBox(width: 10),
-        GestureDetector(
-          onTap: () => _selectDate(context, provider),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade400),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  DateFormat('dd/MM/yyyy').format(provider.selectedDate),
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(width: 5),
-                const Icon(Icons.calendar_today, size: 16),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 15),
-        _buildActionButton('Get Report', () => provider.loadDriverReport()),
-        const SizedBox(width: 10),
-        _buildActionButton(
-          provider.isGeneratingPdf ? 'Generating...' : 'Download PDF',
-          provider.isGeneratingPdf ? null : () => _downloadPdf(context, provider),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _selectDate(BuildContext context, SalesReportProvider provider) async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: provider.selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-    );
-    if (date != null) {
-      provider.setSelectedDate(date);
-    }
-  }
-
-  Widget _buildActionButton(String text, VoidCallback? onPressed) {
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: onPressed != null ? Colors.black : Colors.grey.shade400,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-        ),
-      ),
-      child: Text(
-        text,
-        style: GoogleFonts.poppins(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _downloadPdf(BuildContext context, SalesReportProvider provider) async {
-    try {
-      await provider.generatePdf();
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'PDF generated and shared successfully!',
-              style: GoogleFonts.poppins(),
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to generate PDF: ${e.toString()}',
-              style: GoogleFonts.poppins(),
-            ),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    }
-  }
-
-  // FIXED: Get dynamic filter options from API data
-  List<String> _getSourceOptions(SalesReportProvider provider) {
-    return provider.getAvailableSourceOptions();
-  }
-
-  List<String> _getPaymentOptions(SalesReportProvider provider) {
-    return provider.getAvailablePaymentOptions();
-  }
-
-  List<String> _getOrderTypeOptions(SalesReportProvider provider) {
-    return provider.getAvailableOrderTypeOptions();
   }
 
   Widget _buildFilters(SalesReportProvider provider) {
@@ -930,7 +208,6 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
       List<String> options,
       Function(String) onChanged,
       ) {
-    // Ensure current value is in options, if not reset to 'All'
     final currentValue = options.contains(value) ? value : 'All';
 
     return Column(
@@ -980,8 +257,19 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     );
   }
 
+  List<String> _getSourceOptions(SalesReportProvider provider) {
+    return provider.getAvailableSourceOptions();
+  }
+
+  List<String> _getPaymentOptions(SalesReportProvider provider) {
+    return provider.getAvailablePaymentOptions();
+  }
+
+  List<String> _getOrderTypeOptions(SalesReportProvider provider) {
+    return provider.getAvailableOrderTypeOptions();
+  }
+
   Widget _buildMainContent(SalesReportProvider provider) {
-    // Show loading indicator while data is being fetched
     if (provider.isLoading) {
       return Container(
         height: 300,
@@ -993,7 +281,6 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
 
     final report = provider.getCurrentReport();
 
-    // Show no data message only after loading is complete and no data is available
     if (report == null || report.isEmpty) {
       return Container(
         height: 200,
@@ -1008,7 +295,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                'No data available for this period',
+                'No data available for today',
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   color: Colors.grey.shade600,
@@ -1079,15 +366,14 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             ),
           ),
           const SizedBox(height: 15),
-          _buildSummaryItem('Period:', _getPeriodText(provider, report), Colors.purple),
+          _buildSummaryItem('Date:', DateFormat('dd/MM/yyyy').format(DateTime.now()), Colors.purple),
           _buildSummaryItem('Total Sales Amount:', _getFormattedAmount(report?['total_sales'] ?? report?['total_sales_amount']), Colors.purple),
           if (report?['total_orders_placed'] != null)
             _buildSummaryItem('Total Orders Placed:', report!['total_orders_placed'].toString(), Colors.purple),
           _buildSummaryItem('Sales Growth (vs. Last Week):', _getGrowthText(report), Colors.purple),
-          _buildSummaryItem('Sales Growth (vs. Last Week):', _getGrowthAmount(report), Colors.purple),
+          _buildSummaryItem('Growth Amount:', _getGrowthAmount(report), Colors.purple),
           _buildSummaryItem('Most Sold Item:', _getMostSoldItem(report), Colors.purple),
-          if (provider.currentTabIndex != 4)
-            _buildSummaryItem('Most Sold Category:', _getMostSoldCategory(report), Colors.purple),
+          _buildSummaryItem('Most Sold Category:', _getMostSoldCategory(report), Colors.purple),
           _buildSummaryItem('Most Delivered Area:', _getMostDeliveredArea(report), Colors.purple),
         ],
       ),
@@ -1161,6 +447,119 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     );
   }
 
+  Widget _buildItemsSection(SalesReportProvider provider) {
+    final itemsCount = provider.getItemsCount();
+
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'All Items Sold ($itemsCount items)',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              ElevatedButton(
+                onPressed: provider.toggleShowItems,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                child: Text(
+                  provider.showItems ? 'Hide Items' : 'Show Items',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Show items table when toggled
+        if (provider.showItems) ...[
+          const SizedBox(height: 20),
+          ItemsTableWidget(report: provider.getCurrentReport()),
+        ],
+      ],
+    );
+  }
+
+  // Helper methods for data processing
+  String _getFormattedAmount(dynamic amount) {
+    if (amount == null) return '£0.00';
+    final value = double.tryParse(amount.toString()) ?? 0.0;
+    return '£${value.toStringAsFixed(2)}';
+  }
+
+  String _formatCurrency(dynamic amount) {
+    if (amount == null) return '0.0£';
+    final value = double.tryParse(amount.toString()) ?? 0.0;
+    return '${value.toStringAsFixed(1)}£';
+  }
+
+  String _getGrowthText(Map<String, dynamic>? report) {
+    if (report == null) return 'N/A';
+    final growth = report['sales_growth_percentage'];
+    if (growth == null) return 'N/A';
+    final value = double.tryParse(growth.toString()) ?? 0.0;
+    final isPositive = value >= 0;
+    return '${isPositive ? '+' : ''}${value.toStringAsFixed(2)}%';
+  }
+
+  String _getGrowthAmount(Map<String, dynamic>? report) {
+    if (report == null) return 'N/A';
+    final increase = report['sales_increase'];
+    if (increase == null) return 'N/A';
+    final value = double.tryParse(increase.toString()) ?? 0.0;
+    final isPositive = value >= 0;
+    return '${isPositive ? '+' : ''}${_formatCurrency(increase)}';
+  }
+
+  String _getMostSoldItem(Map<String, dynamic>? report) {
+    if (report == null) return 'N/A';
+    final item = report['most_selling_item'] ?? report['most_sold_item'];
+    if (item == null) return 'N/A';
+    final name = item['item_name']?.toString() ?? 'Unknown';
+    final quantity = item['quantity_sold']?.toString() ?? '0';
+    return '$name ($quantity sold)';
+  }
+
+  String _getMostSoldCategory(Map<String, dynamic>? report) {
+    if (report == null) return 'N/A';
+    final category = report['most_sold_type'];
+    if (category == null) return 'N/A';
+    final type = category['type']?.toString() ?? 'Unknown';
+    final quantity = category['quantity_sold']?.toString() ?? '0';
+    return '$type ($quantity sold)';
+  }
+
+  String _getMostDeliveredArea(Map<String, dynamic>? report) {
+    if (report == null) return 'N/A';
+    final area = report['most_delivered_postal_code'];
+    if (area == null) return 'N/A';
+    final postalCode = area['postal_code']?.toString() ?? 'Unknown';
+    final deliveries = area['delivery_count']?.toString() ?? '0';
+    return '$postalCode ($deliveries deliveries)';
+  }
+
+  // Chart building methods
   Widget _buildGrowthChart(Map<String, dynamic>? report) {
     final growthAmount = report?['sales_increase'] ?? 0.0;
     final isPositive = (growthAmount is num) ? growthAmount >= 0 : true;
@@ -1173,7 +572,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
           child: CustomPaint(
             painter: DonutChartPainter(
               value: isPositive ? 0.7 : 0.3,
-              color: const Color(0xFF40E0D0), // Cyan/Turquoise color
+              color: const Color(0xFF40E0D0),
               backgroundColor: Colors.grey.shade200,
             ),
             child: Center(
@@ -1207,24 +606,21 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     final paymentData = _getPaymentMethodsData(report);
     final paymentTypes = report?['sales_by_payment_type'] as List<dynamic>? ?? [];
 
-    // Get actual payment type names from data
     final paymentLabels = paymentTypes
         .where((payment) => payment is Map && payment['payment_type'] != null)
         .map((payment) => payment['payment_type'].toString().toUpperCase())
         .where((label) => label.isNotEmpty)
         .toList();
 
-    // Use actual labels or defaults
     final labels = paymentLabels.isNotEmpty ? paymentLabels : ['CARD', 'CASH', 'COD'];
 
-    // Generate colors dynamically based on number of payment types
     final colors = <Color>[];
     final baseColors = [
-      const Color(0xFFFF6B6B), // Red
-      const Color(0xFF40E0D0), // Cyan
-      const Color(0xFF6C5CE7), // Purple
-      const Color(0xFF00B894), // Green
-      const Color(0xFFFFD93D), // Yellow
+      const Color(0xFFFF6B6B),
+      const Color(0xFF40E0D0),
+      const Color(0xFF6C5CE7),
+      const Color(0xFF00B894),
+      const Color(0xFFFFD93D),
     ];
 
     for (int i = 0; i < labels.length; i++) {
@@ -1268,15 +664,14 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     final orderTypeData = _getOrderTypesData(report);
     final orderTypes = _getOrderTypeLabels(report);
 
-    // Generate colors dynamically
     const colors = [
-      Color(0xFF6C5CE7), // Purple
-      Color(0xFFA29BFE), // Light purple
-      Color(0xFF74B9FF), // Blue
-      Color(0xFF81ECEC), // Light cyan
-      Color(0xFFFFD93D), // Yellow
-      Color(0xFFFF6B6B), // Red
-      Color(0xFF00B894), // Green
+      Color(0xFF6C5CE7),
+      Color(0xFFA29BFE),
+      Color(0xFF74B9FF),
+      Color(0xFF81ECEC),
+      Color(0xFFFFD93D),
+      Color(0xFFFF6B6B),
+      Color(0xFF00B894),
     ];
 
     return Column(
@@ -1310,14 +705,13 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     final sourceData = _getOrderSourcesData(report);
     final sources = _getSourceLabels(report);
 
-    // Generate colors dynamically
     const colors = [
-      Color(0xFF00B894), // Green
-      Color(0xFF00CEC9), // Teal
-      Color(0xFF74B9FF), // Blue
-      Color(0xFF6C5CE7), // Purple
-      Color(0xFFFF6B6B), // Red
-      Color(0xFFFFD93D), // Yellow
+      Color(0xFF00B894),
+      Color(0xFF00CEC9),
+      Color(0xFF74B9FF),
+      Color(0xFF6C5CE7),
+      Color(0xFFFF6B6B),
+      Color(0xFFFFD93D),
     ];
 
     return Column(
@@ -1378,288 +772,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     );
   }
 
-  Widget _buildItemsSection(SalesReportProvider provider) {
-    final itemsCount = provider.getItemsCount();
-
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'All Items Sold ($itemsCount items)',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-              ElevatedButton(
-                onPressed: provider.toggleShowItems,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                child: Text(
-                  provider.showItems ? 'Hide Items' : 'Show Items',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Show items table when toggled
-        if (provider.showItems) ...[
-          const SizedBox(height: 20),
-          ItemsTableWidget(report: provider.getCurrentReport()),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildDriverReportContent(SalesReportProvider provider) {
-    final report = provider.driverReport;
-
-    if (report == null) {
-      return Center(
-        child: Text(
-          'No driver report data available',
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            color: Colors.grey.shade600,
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        // Driver Delivery Locations
-        _buildDriverTable(
-          'Driver Delivery Locations',
-          ['Driver Name', 'Street Address', 'City', 'County'],
-          report['driver_delivery_locations'] ?? [],
-              (item) => [
-            item['driver_name']?.toString() ?? 'N/A',
-            item['street_address']?.toString() ?? 'N/A',
-            item['city']?.toString() ?? 'N/A',
-            item['county']?.toString() ?? 'N/A',
-          ],
-        ),
-
-        const SizedBox(height: 40),
-
-        // Driver Order Summary
-        _buildDriverTable(
-          'Driver Order Summary',
-          ['Driver Name', 'Total Orders'],
-          report['driver_order_summary'] ?? [],
-              (item) => [
-            item['driver_name']?.toString() ?? 'N/A',
-            item['total_orders']?.toString() ?? '0',
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDriverTable(
-      String title,
-      List<String> headers,
-      List<dynamic> data,
-      List<String> Function(dynamic) rowMapper,
-      ) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(8),
-                topRight: Radius.circular(8),
-              ),
-            ),
-            child: Text(
-              title,
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-          // Headers
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-            ),
-            child: Row(
-              children: headers.map((header) {
-                return Expanded(
-                  child: Text(
-                    header,
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          // Data rows
-          if (data.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'No data available',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-            )
-          else
-            ...data.map((item) {
-              final rowData = rowMapper(item);
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: Colors.grey.shade200),
-                  ),
-                ),
-                child: Row(
-                  children: rowData.map((cellData) {
-                    return Expanded(
-                      child: Text(
-                        cellData,
-                        style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w400,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              );
-            }).toList(),
-        ],
-      ),
-    );
-  }
-
-  // FIXED: Helper methods for data processing based on actual API structure
-  String _getPeriodText(SalesReportProvider provider, Map<String, dynamic>? report) {
-    if (report == null) return 'N/A';
-
-    switch (provider.currentTabIndex) {
-      case 0:
-        return report['date']?.toString() ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
-      case 1:
-        return report['date']?.toString() ?? DateFormat('yyyy-MM-dd').format(provider.selectedDate);
-      case 2:
-        final period = report['period'];
-        if (period != null && period is Map) {
-          return '${period['from']} ~ ${period['to']}';
-        }
-        return 'Week ${provider.selectedWeek}, ${provider.selectedYear}';
-      case 3:
-        final period = report['period'];
-        if (period != null && period is Map) {
-          return '${period['from']} ~ ${period['to']}';
-        }
-        return 'Month ${provider.selectedMonth}, ${provider.selectedYear}';
-      default:
-        return 'N/A';
-    }
-  }
-
-  String _getFormattedAmount(dynamic amount) {
-    if (amount == null) return '£0.00';
-    final value = double.tryParse(amount.toString()) ?? 0.0;
-    return '£${value.toStringAsFixed(2)}';
-  }
-
-  String _formatCurrency(dynamic amount) {
-    if (amount == null) return '0.0£';
-    final value = double.tryParse(amount.toString()) ?? 0.0;
-    return '${value.toStringAsFixed(1)}£';
-  }
-
-  String _getGrowthText(Map<String, dynamic>? report) {
-    if (report == null) return 'N/A';
-    final growth = report['sales_growth_percentage'];
-    if (growth == null) return 'N/A';
-    final value = double.tryParse(growth.toString()) ?? 0.0;
-    final isPositive = value >= 0;
-    return '${isPositive ? '+' : ''}${value.toStringAsFixed(2)}%';
-  }
-
-  String _getGrowthAmount(Map<String, dynamic>? report) {
-    if (report == null) return 'N/A';
-    final increase = report['sales_increase'];
-    if (increase == null) return 'N/A';
-    final value = double.tryParse(increase.toString()) ?? 0.0;
-    final isPositive = value >= 0;
-    return '${isPositive ? '+' : ''}${_formatCurrency(increase)}';
-  }
-
-  String _getMostSoldItem(Map<String, dynamic>? report) {
-    if (report == null) return 'N/A';
-    final item = report['most_selling_item'] ?? report['most_sold_item'];
-    if (item == null) return 'N/A';
-    final name = item['item_name']?.toString() ?? 'Unknown';
-    final quantity = item['quantity_sold']?.toString() ?? '0';
-    return '$name ($quantity sold)';
-  }
-
-  String _getMostSoldCategory(Map<String, dynamic>? report) {
-    if (report == null) return 'N/A';
-    final category = report['most_sold_type'];
-    if (category == null) return 'N/A';
-    final type = category['type']?.toString() ?? 'Unknown';
-    final quantity = category['quantity_sold']?.toString() ?? '0';
-    return '$type ($quantity sold)';
-  }
-
-  String _getMostDeliveredArea(Map<String, dynamic>? report) {
-    if (report == null) return 'N/A';
-    final area = report['most_delivered_postal_code'];
-    if (area == null) return 'N/A';
-    final postalCode = area['postal_code']?.toString() ?? 'Unknown';
-    final deliveries = area['delivery_count']?.toString() ?? '0';
-    return '$postalCode ($deliveries deliveries)';
-  }
-
+  // Data processing methods
   List<double> _getPaymentMethodsData(Map<String, dynamic>? report) {
     if (report == null) return [0.5, 0.5];
 
@@ -1669,7 +782,6 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     final Map<String, double> paymentAmounts = {};
     double totalAmount = 0;
 
-    // Process all payment types
     for (var payment in paymentTypes) {
       if (payment is! Map) continue;
       final type = payment['payment_type']?.toString() ?? '';
@@ -1683,7 +795,6 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
 
     if (totalAmount == 0 || paymentAmounts.isEmpty) return [0.5, 0.5];
 
-    // Convert to list of percentages
     return paymentAmounts.values.map((amount) => amount / totalAmount).toList();
   }
 
@@ -1761,13 +872,13 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
 
   List<Map<String, dynamic>> _getOrderTypeLegend(List<String> labels) {
     const colors = [
-      Color(0xFF6C5CE7), // Purple
-      Color(0xFFA29BFE), // Light purple
-      Color(0xFF74B9FF), // Blue
-      Color(0xFF81ECEC), // Light cyan
-      Color(0xFFFFD93D), // Yellow
-      Color(0xFFFF6B6B), // Red
-      Color(0xFF00B894), // Green
+      Color(0xFF6C5CE7),
+      Color(0xFFA29BFE),
+      Color(0xFF74B9FF),
+      Color(0xFF81ECEC),
+      Color(0xFFFFD93D),
+      Color(0xFFFF6B6B),
+      Color(0xFF00B894),
     ];
 
     return labels.asMap().entries.map((entry) {
@@ -1782,12 +893,12 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
 
   List<Map<String, dynamic>> _getSourceLegend(List<String> labels) {
     const colors = [
-      Color(0xFF00B894), // Green
-      Color(0xFF00CEC9), // Teal
-      Color(0xFF74B9FF), // Blue
-      Color(0xFF6C5CE7), // Purple
-      Color(0xFFFF6B6B), // Red
-      Color(0xFFFFD93D), // Yellow
+      Color(0xFF00B894),
+      Color(0xFF00CEC9),
+      Color(0xFF74B9FF),
+      Color(0xFF6C5CE7),
+      Color(0xFFFF6B6B),
+      Color(0xFFFFD93D),
     ];
 
     return labels.asMap().entries.map((entry) {

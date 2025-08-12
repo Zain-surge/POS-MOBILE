@@ -142,9 +142,7 @@ void main() {
           lazy: false, // Make non-lazy to ensure immediate availability
         ),
       ],
-      child: const MainAppWrapper(
-        child: MyApp(),
-      ),
+      child: const MainAppWrapper(child: MyApp()),
     ),
   );
 }
@@ -231,7 +229,9 @@ class _MyAppState extends State<MyApp> {
 
             if (selectedOrderType == null) {
               print('Error: selectedOrderType is missing for /page4 route.');
-              return MaterialPageRoute(builder: (context) => const Text('Error: Order type not provided.'));
+              return MaterialPageRoute(builder: (context) => const Scaffold(
+                body: Center(child: Text('Error: Order type not provided.')),
+              ));
             }
 
             return MaterialPageRoute(

@@ -314,7 +314,7 @@ class _DialerPageState extends State<DialerPage> {
             ),
             child: Center(
               child: Text(
-                _formatDisplayValue(),
+                '£'+_formatDisplayValue(),
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
@@ -418,7 +418,7 @@ class _DialerPageState extends State<DialerPage> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        '${widget.subtotal.toStringAsFixed(2)}',
+                        '£${widget.subtotal.toStringAsFixed(2)}',
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
@@ -427,7 +427,7 @@ class _DialerPageState extends State<DialerPage> {
                       ),
                       if (widget.mode == DialerMode.discount)
                         Text(
-                          '${_discountAmount.toStringAsFixed(2)}',
+                          '£${_discountAmount.toStringAsFixed(2)}',
                           style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
@@ -436,7 +436,7 @@ class _DialerPageState extends State<DialerPage> {
                         )
                       else
                         Text(
-                          '${(_paymentAmount - widget.subtotal).toStringAsFixed(2)}',
+                          '£${(_paymentAmount - widget.subtotal).toStringAsFixed(2)}',
                           style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,

@@ -1,13 +1,18 @@
+// lib/providers/sales_report_provider.dart (Updated)
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
 import '../services/pdf_service.dart';
+import '../services/thermal_printer_service.dart';
 
 class SalesReportProvider with ChangeNotifier {
   // Current tab index
   int _currentTabIndex = 0;
   int get currentTabIndex => _currentTabIndex;
+  bool _isThermalPrinting = false;
+  bool get isThermalPrinting => _isThermalPrinting;
 
   // Loading states
   bool _isLoading = false;
@@ -16,9 +21,9 @@ class SalesReportProvider with ChangeNotifier {
   bool _isGeneratingPdf = false;
   bool get isGeneratingPdf => _isGeneratingPdf;
 
-  // PIN protection
-  bool _isPinRequired = false;
-  bool get isPinRequired => _isPinRequired;
+  // REMOVED: PIN protection is now handled at screen level
+  // bool _isPinRequired = false;
+  // bool get isPinRequired => _isPinRequired;
 
   // Data storage
   Map<String, dynamic>? _todaysReport;
@@ -77,8 +82,10 @@ class SalesReportProvider with ChangeNotifier {
     print('🚀 Initializing SalesReportProvider...');
     _isInitialized = true;
 
-    // Load today's report immediately
-    await loadTodaysReport();
+    // Load today's report immediately for default tab
+    if (_currentTabIndex == 0) {
+      await loadTodaysReport();
+    }
   }
 
   // Clear error message
@@ -95,28 +102,15 @@ class SalesReportProvider with ChangeNotifier {
     _showItems = false;
     _errorMessage = null;
 
-    // Check if PIN is required (all tabs except Today's Report)
-    if (index != 0) {
-      _isPinRequired = true;
-    } else {
-      _isPinRequired = false;
-      // Load today's report immediately when switching back to tab 0
-      if (_isInitialized) {
-        loadTodaysReport();
-      }
-    }
-
+    // UPDATED: No PIN requirement, direct access to all tabs
     notifyListeners();
-  }
 
-  void validatePin(String pin) {
-    if (pin == '2840') {
-      _isPinRequired = false;
-      _errorMessage = null;
-      notifyListeners();
-
-      // Load appropriate data immediately after PIN validation
-      switch (_currentTabIndex) {
+    // Load appropriate data immediately when switching tabs
+    if (_isInitialized) {
+      switch (index) {
+        case 0:
+          loadTodaysReport();
+          break;
         case 1:
           loadDailyReport();
           break;
@@ -130,11 +124,10 @@ class SalesReportProvider with ChangeNotifier {
           loadDriverReport();
           break;
       }
-    } else {
-      _errorMessage = 'Invalid PIN. Please try again.';
-      notifyListeners();
     }
   }
+
+  // REMOVED: validatePin method as PIN is handled at screen level
 
   void setFilters({String? source, String? payment, String? orderType}) {
     bool needsRefresh = false;
@@ -164,9 +157,10 @@ class SalesReportProvider with ChangeNotifier {
       _refreshCurrentReportWithFilters();
     }
   }
+
   // Method to refresh with filters applied
   Future<void> _refreshCurrentReportWithFilters() async {
-    if (_isPinRequired || _isLoading) return;
+    if (_isLoading) return;
 
     switch (_currentTabIndex) {
       case 0:
@@ -232,7 +226,7 @@ class SalesReportProvider with ChangeNotifier {
     try {
       print('🔄 Loading today\'s report with filters - Source: $_sourceFilter, Payment: $_paymentFilter, OrderType: $_orderTypeFilter');
 
-      // FIXED: Convert filter values for API - match exact case from dropdown
+      // Convert filter values for API - match exact case from dropdown
       final sourceParam = _sourceFilter != 'All' ? _sourceFilter : null;
       final paymentParam = _paymentFilter != 'All' ? _paymentFilter : null;
       final orderTypeParam = _orderTypeFilter != 'All' ? _orderTypeFilter : null;
@@ -266,7 +260,6 @@ class SalesReportProvider with ChangeNotifier {
     try {
       print('🔄 Loading daily report for ${DateFormat('yyyy-MM-dd').format(_selectedDate)} with filters');
 
-      // FIXED: Convert filter values for API - match exact case from dropdown
       final sourceParam = _sourceFilter != 'All' ? _sourceFilter : null;
       final paymentParam = _paymentFilter != 'All' ? _paymentFilter : null;
       final orderTypeParam = _orderTypeFilter != 'All' ? _orderTypeFilter : null;
@@ -300,7 +293,6 @@ class SalesReportProvider with ChangeNotifier {
     try {
       print('🔄 Loading weekly report for Year: $_selectedYear, Week: $_selectedWeek with filters');
 
-      // FIXED: Convert filter values for API - match exact case from dropdown
       final sourceParam = _sourceFilter != 'All' ? _sourceFilter : null;
       final paymentParam = _paymentFilter != 'All' ? _paymentFilter : null;
       final orderTypeParam = _orderTypeFilter != 'All' ? _orderTypeFilter : null;
@@ -335,7 +327,6 @@ class SalesReportProvider with ChangeNotifier {
     try {
       print('🔄 Loading monthly report for Year: $_selectedYear, Month: $_selectedMonth with filters');
 
-      // FIXED: Convert filter values for API - match exact case from dropdown
       final sourceParam = _sourceFilter != 'All' ? _sourceFilter : null;
       final paymentParam = _paymentFilter != 'All' ? _paymentFilter : null;
       final orderTypeParam = _orderTypeFilter != 'All' ? _orderTypeFilter : null;
@@ -420,19 +411,18 @@ class SalesReportProvider with ChangeNotifier {
     }
   }
 
-  // PDF Generation
-  Future<void> generatePdf() async {
+  Future<void> printThermalReport() async {
     final currentReport = getCurrentReport();
     if (currentReport == null) {
-      throw Exception('No report data available for PDF generation. Please load the report first.');
+      throw Exception('No report data available for printing. Please load the report first.');
     }
 
-    if (_isGeneratingPdf) {
-      print('⚠️ PDF generation already in progress');
+    if (_isThermalPrinting) {
+      print('⚠️ Thermal printing already in progress');
       return;
     }
 
-    _isGeneratingPdf = true;
+    _isThermalPrinting = true;
     _errorMessage = null;
     notifyListeners();
 
@@ -443,69 +433,105 @@ class SalesReportProvider with ChangeNotifier {
         'orderType': _orderTypeFilter,
       };
 
+      String? selectedDateString;
+      int? selectedYearValue;
+      int? selectedWeekValue;
+      int? selectedMonthValue;
+
+      // Prepare parameters based on current tab
       switch (_currentTabIndex) {
-        case 0:
-          await PdfService.generateAndShareSalesReport(
-            reportType: "Today's Report",
-            reportData: currentReport,
-            filters: filters,
-          );
+        case 0: // Today's Report
+          selectedDateString = DateFormat('yyyy-MM-dd').format(DateTime.now());
           break;
-        case 1:
-          await PdfService.generateAndShareSalesReport(
-            reportType: 'Daily Report',
-            reportData: currentReport,
-            filters: filters,
-            selectedDate: DateFormat('yyyy-MM-dd').format(_selectedDate),
-          );
+        case 1: // Daily Report
+          selectedDateString = DateFormat('yyyy-MM-dd').format(_selectedDate);
           break;
-        case 2:
-          await PdfService.generateAndShareSalesReport(
-            reportType: 'Weekly Report',
-            reportData: currentReport,
-            filters: filters,
-            selectedYear: _selectedYear,
-            selectedWeek: _selectedWeek,
-          );
+        case 2: // Weekly Report
+          selectedYearValue = _selectedYear;
+          selectedWeekValue = _selectedWeek;
           break;
-        case 3:
-          await PdfService.generateAndShareSalesReport(
-            reportType: 'Monthly Report',
-            reportData: currentReport,
-            filters: filters,
-            selectedYear: _selectedYear,
-            selectedMonth: _selectedMonth,
-          );
+        case 3: // Monthly Report
+          selectedYearValue = _selectedYear;
+          selectedMonthValue = _selectedMonth;
           break;
-        case 4:
-          await PdfService.generateAndShareDriverReport(
-            reportData: currentReport,
-            selectedDate: DateFormat('yyyy-MM-dd').format(_selectedDate),
-          );
+        case 4: // Driver Report
+          selectedDateString = DateFormat('yyyy-MM-dd').format(_selectedDate);
           break;
         default:
-          throw Exception('Invalid report type for PDF generation');
+          throw Exception('Invalid report type for thermal printing');
       }
 
-      print('✅ PDF generated and shared successfully');
+      // Attempt to print the report
+      bool printSuccess = false;
+
+      try {
+        printSuccess = await ThermalPrinterService().printSalesReportWithUserInteraction(
+          reportType: getReportTitle(),
+          reportData: currentReport,
+          filters: filters,
+          selectedDate: selectedDateString,
+          selectedYear: selectedYearValue,
+          selectedWeek: selectedWeekValue,
+          selectedMonth: selectedMonthValue,
+          onShowMethodSelection: (availableMethods) {
+            print('Available printing methods: $availableMethods');
+            if (availableMethods.isEmpty || availableMethods.first == 'No printers available') {
+              _errorMessage = 'No thermal printers detected. Please connect a printer and try again.';
+            } else {
+              _errorMessage = 'Printing failed on available methods: ${availableMethods.join(', ')}';
+            }
+          },
+        );
+      } catch (e) {
+        printSuccess = false;
+
+        // Handle specific error types
+        String errorMessage = e.toString();
+        if (errorMessage.contains('Web platform')) {
+          _errorMessage = 'Thermal printing is not supported in web browsers. Please use the mobile or desktop app.';
+        } else if (errorMessage.contains('No thermal printers detected')) {
+          _errorMessage = 'No thermal printers found. Please ensure your printer is connected and powered on.';
+        } else if (errorMessage.contains('not supported on this platform')) {
+          _errorMessage = 'Thermal printing is not supported on this device platform.';
+        } else if (errorMessage.contains('Failed to establish')) {
+          _errorMessage = 'Could not connect to printer. Please check printer connection and try again.';
+        } else if (errorMessage.contains('not connected')) {
+          _errorMessage = 'Printer connection lost. Please check printer status and try again.';
+        } else {
+          _errorMessage = 'Printing failed: ${errorMessage.replaceAll('Exception: ', '')}';
+        }
+
+        print('❌ Error printing thermal report: $e');
+      }
+
+      if (printSuccess) {
+        print('✅ Thermal report printed successfully');
+        _errorMessage = null; // Clear any previous errors
+      } else {
+        // If no specific error message was set, use a generic one
+        _errorMessage ??= 'Printing failed. Please check printer connection and try again.';
+        throw Exception(_errorMessage!);
+      }
     } catch (e) {
-      _errorMessage = 'Failed to generate PDF: ${e.toString()}';
-      print('❌ Error generating PDF: $e');
+      // This catch handles any exceptions thrown in the try block above
+      _errorMessage ??= 'Failed to print thermal report: ${e.toString().replaceAll('Exception: ', '')}';
+      print('❌ Error in thermal report printing: $e');
       rethrow;
     } finally {
-      _isGeneratingPdf = false;
+      _isThermalPrinting = false;
       notifyListeners();
     }
+  }
+
+  // UPDATED: Data validation helpers
+  bool canPrintThermal() {
+    return hasCurrentReportData() && !_isThermalPrinting && !_isLoading;
   }
 
   // Data validation helpers
   bool hasCurrentReportData() {
     final report = getCurrentReport();
     return report != null && report.isNotEmpty;
-  }
-
-  bool canGeneratePdf() {
-    return hasCurrentReportData() && !_isGeneratingPdf && !_isLoading;
   }
 
   // Get items count for current report
@@ -531,12 +557,10 @@ class SalesReportProvider with ChangeNotifier {
           .toSet()
           .toList();
 
-      // Sort and add to options
       sourceNames.sort();
       options.addAll(sourceNames);
     }
 
-    // If no data available, add common default options
     if (options.length == 1) {
       options.addAll(['website', 'app', 'phone']);
     }
@@ -557,12 +581,10 @@ class SalesReportProvider with ChangeNotifier {
           .toSet()
           .toList();
 
-      // Sort and add to options
       paymentNames.sort();
       options.addAll(paymentNames);
     }
 
-    // If no data available, add common default options
     if (options.length == 1) {
       options.addAll(['cash', 'card']);
     }
@@ -583,12 +605,10 @@ class SalesReportProvider with ChangeNotifier {
           .toSet()
           .toList();
 
-      // Sort and add to options
       orderTypeNames.sort();
       options.addAll(orderTypeNames);
     }
 
-    // If no data available, add common default options
     if (options.length == 1) {
       options.addAll(['delivery', 'pickup', 'dine-in']);
     }
@@ -600,7 +620,6 @@ class SalesReportProvider with ChangeNotifier {
     _currentTabIndex = 0;
     _isLoading = false;
     _isGeneratingPdf = false;
-    _isPinRequired = false;
     _todaysReport = null;
     _dailyReport = null;
     _weeklyReport = null;
@@ -621,8 +640,6 @@ class SalesReportProvider with ChangeNotifier {
 
   // Force refresh current report (useful for pull-to-refresh)
   Future<void> refreshCurrentReport() async {
-    if (_isPinRequired) return;
-
     // Clear current report data to show fresh loading state
     switch (_currentTabIndex) {
       case 0:
