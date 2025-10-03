@@ -1,0 +1,64 @@
+name: epos
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.4.0
+  uuid: ^4.5.1
+  socket_io_client: ^3.1.2
+  cupertino_icons: ^1.0.8
+  screenshot: ^3.0.0
+  flutter_html: ^3.0.0
+  path_provider: ^2.1.5
+  intl: ^0.20.2
+  permission_handler: ^12.0.1
+  print_bluetooth_thermal: ^1.1.0
+  flutter_blue_plus: ^1.35.5
+  provider: ^6.1.5
+  esc_pos_utils_plus: ^2.0.4
+  usb_serial: ^0.5.2
+  pdf: ^3.11.3
+  phone_numbers_parser: ^9.0.3
+  fl_chart: ^1.0.0
+  printing: ^5.14.2
+  google_fonts: ^6.3.0
+  timezone: ^0.10.1
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  connectivity_plus: ^6.1.5
+  audioplayers: ^6.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.13
+  flutter_launcher_icons: ^0.13.1
+
+flutter_icons:
+  android: true
+  image_path: "assets/images/tvpLogo.png"
+
+dependency_overrides:
+  image: ^4.5.4
+  rxdart: ^0.28.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/sounds/
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: fonts/Poppins-Regular.ttf
+        - asset: fonts/Poppins-Bold.ttf
+          weight: 700

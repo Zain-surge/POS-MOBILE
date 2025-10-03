@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<resources>
+    <!-- USB device filters for thermal printers -->
+    
+    <!-- Generic USB-Serial devices (common for thermal printers) -->
+    <usb-device vendor-id="6790" product-id="29645" />  <!-- CH340 chip -->
+    <usb-device vendor-id="1027" product-id="24577" />  <!-- FTDI chip -->
+    <usb-device vendor-id="4292" product-id="60000" />  <!-- CP210x chip -->
+    <usb-device vendor-id="1659" product-id="8963" />   <!-- PL2303 chip -->
+    
+    <!-- Xprinter specific VID/PID combinations -->
+    <usb-device vendor-id="11575" /> <!-- 0x2D37 - OFFICIAL Xprinter VID from USB-IF -->
+    <usb-device vendor-id="1046" />  <!-- 0x0416 - Alternative Xprinter VID -->
+    <usb-device vendor-id="4660" />  <!-- 0x1234 - Alternative Xprinter VID -->
+    <usb-device vendor-id="1317" />  <!-- 0x0525 - Some Xprinter models -->
+    <usb-device vendor-id="10473" /> <!-- 0x28E9 - Additional Xprinter models -->
+    <usb-device vendor-id="26512" /> <!-- 0x6790 - Newer Xprinter models -->
+    <usb-device vendor-id="20892" /> <!-- 0x519C - Xprinter XP series -->
+    
+    <!-- Generic thermal printer brands -->
+    <usb-device vendor-id="1208" />  <!-- Epson -->
+    <usb-device vendor-id="1273" />  <!-- Brother -->
+    <usb-device vendor-id="1110" />  <!-- Star Micronics -->
+    <usb-device vendor-id="8185" />  <!-- Citizen -->
+    <usb-device vendor-id="1049" />  <!-- Bixolon -->
+    
+</resources>
