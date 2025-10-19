@@ -72,9 +72,13 @@ class _PaymentWidgetState extends State<PaymentWidget> {
     super.initState();
     _discountedTotal = widget.subtotal;
     _selectedAmount =
-        widget.paymentType.toLowerCase() == 'card' ? _discountedTotal : 0.0;
+        (widget.paymentType.toLowerCase() == 'card' ||
+                widget.paymentType.toLowerCase() == 'card_through_link')
+            ? _discountedTotal
+            : 0.0;
 
-    if (widget.paymentType.toLowerCase() == 'card') {
+    if (widget.paymentType.toLowerCase() == 'card' ||
+        widget.paymentType.toLowerCase() == 'card_through_link') {
       _isCustomAmountMode = false;
       _amountPaidController.text = _discountedTotal.toStringAsFixed(2);
     } else {
@@ -765,8 +769,11 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                                         return;
                                       }
 
-                                      if (widget.paymentType.toLowerCase() ==
-                                              'card' &&
+                                      if ((widget.paymentType.toLowerCase() ==
+                                                  'card' ||
+                                              widget.paymentType
+                                                      .toLowerCase() ==
+                                                  'card_through_link') &&
                                           (_amountPaidController.text.isEmpty ||
                                               double.tryParse(
                                                     _amountPaidController.text,
@@ -793,6 +800,39 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                                           type: PopupType.failure,
                                         );
                                         return;
+                                      }
+
+                                      // NEW: Validate email for card_through_link payment
+                                      if (widget.paymentType.toLowerCase() ==
+                                          'card_through_link') {
+                                        if (widget.customerDetails == null ||
+                                            widget.customerDetails!.email ==
+                                                null ||
+                                            widget.customerDetails!.email!
+                                                .trim()
+                                                .isEmpty) {
+                                          CustomPopupService.show(
+                                            context,
+                                            'Customer email is required for Card Through Link payment!',
+                                            type: PopupType.failure,
+                                          );
+                                          return;
+                                        }
+
+                                        // Validate email format
+                                        final emailRegex = RegExp(
+                                          r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                                        );
+                                        if (!emailRegex.hasMatch(
+                                          widget.customerDetails!.email!.trim(),
+                                        )) {
+                                          CustomPopupService.show(
+                                            context,
+                                            'Please enter a valid email address!',
+                                            type: PopupType.failure,
+                                          );
+                                          return;
+                                        }
                                       }
 
                                       if (_selectedAmount < _discountedTotal) {

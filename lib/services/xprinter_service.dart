@@ -114,8 +114,6 @@ class XprinterService {
         print('🖨️ XprinterService: Printing receipt...');
       }
 
-      // Note: Encoding fixes are already applied in thermal_printer_service.dart
-      // to avoid double encoding which corrupts special characters like £
       final bool printed = await _channel.invokeMethod('printReceipt', {
         'receiptData': receiptData,
       });

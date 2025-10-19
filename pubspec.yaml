@@ -45,7 +45,7 @@ dev_dependencies:
 
 flutter_icons:
   android: true
-  image_path: "assets/images/tvpLogo.png"
+  image_path: "assets/images/sLogo.png"
 
 dependency_overrides:
   image: ^4.5.4

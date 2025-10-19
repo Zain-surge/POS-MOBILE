@@ -156,21 +156,22 @@ public class XprinterPlugin implements FlutterPlugin, MethodCallHandler {
     /**
      * Comprehensive method to clear all printer memory and stored settings
      * This prevents auto-printing of stored headers, numbers, or logos
+     * Only called once during connection setup
      */
     private void clearPrinterMemory() {
         try {
             if (posPrinter == null) return;
 
-            Log.d(TAG, "Clearing printer memory using SDK initialization...");
+            Log.d(TAG, "Clearing printer memory on connection...");
 
             // Use the SDK's built-in initialization method
             // This properly sends ESC/POS commands without converting them to text
             posPrinter.initializePrinter();
 
-            // Wait for initialization to complete
-            Thread.sleep(200);
+            // Small delay to ensure command is processed
+            Thread.sleep(100);
 
-            Log.d(TAG, "Printer initialized successfully");
+            Log.d(TAG, "Printer memory cleared successfully");
 
         } catch (Exception e) {
             Log.e(TAG, "Error clearing printer memory: " + e.getMessage(), e);
@@ -194,53 +195,6 @@ public class XprinterPlugin implements FlutterPlugin, MethodCallHandler {
         });
     }
 
-    /**
-     * Process receipt text and convert **bold** markers to ESC/POS bold commands
-     */
-    private void processBoldMarkersAndPrint(String receiptData) throws Exception {
-        if (posPrinter == null) return;
-
-        String[] lines = receiptData.split("\n");
-
-        for (String line : lines) {
-            if (line.contains("**")) {
-                // Line contains bold markers - process them
-                StringBuilder processedLine = new StringBuilder();
-                int i = 0;
-                boolean inBold = false;
-
-                while (i < line.length()) {
-                    if (i <= line.length() - 2 && line.substring(i, i + 2).equals("**")) {
-                        // Toggle bold on/off
-                        if (!inBold) {
-                            // Start bold
-                            processedLine.append((char) 0x1B).append((char) 0x45).append((char) 0x01); // ESC E 1
-                            inBold = true;
-                        } else {
-                            // End bold
-                            processedLine.append((char) 0x1B).append((char) 0x45).append((char) 0x00); // ESC E 0
-                            inBold = false;
-                        }
-                        i += 2; // Skip **
-                    } else {
-                        processedLine.append(line.charAt(i));
-                        i++;
-                    }
-                }
-
-                // Ensure bold is turned off at end of line
-                if (inBold) {
-                    processedLine.append((char) 0x1B).append((char) 0x45).append((char) 0x00);
-                }
-
-                posPrinter.printString(processedLine.toString() + "\n");
-            } else {
-                // No bold markers - print as is
-                posPrinter.printString(line + "\n");
-            }
-        }
-    }
-
     private void printReceipt(String receiptData, Result result) {
         executor.execute(() -> {
             try {
@@ -249,37 +203,29 @@ public class XprinterPlugin implements FlutterPlugin, MethodCallHandler {
                     return;
                 }
 
-                Log.d(TAG, "Starting receipt print with proper initialization");
+                long startTime = System.currentTimeMillis();
+                Log.d(TAG, "⏱️ Starting print job...");
 
-                // STEP 1: Initialize printer using SDK method (not string commands)
-                // This prevents control codes from being printed as text
+                // Initialize printer before each print job - required by Xprinter SDK
+                long initStart = System.currentTimeMillis();
                 posPrinter.initializePrinter();
-                Thread.sleep(100);
-                
-                // STEP 2: Process and print receipt with bold formatting
-                processBoldMarkersAndPrint(receiptData);
-                
-                // STEP 3: Feed and cut
-                posPrinter.feedLine(3).cutPaper();
+                long initDuration = System.currentTimeMillis() - initStart;
+                Log.d(TAG, "⏱️ initializePrinter() took " + initDuration + "ms");
 
-                Log.d(TAG, "Receipt printed successfully without auto-header");
+                // Print the receipt
+                long printStart = System.currentTimeMillis();
+                posPrinter.printString(receiptData)
+                         .feedLine(3)
+                         .cutPaper();
+                long printDuration = System.currentTimeMillis() - printStart;
+                Log.d(TAG, "⏱️ printString() took " + printDuration + "ms");
+
+                long totalDuration = System.currentTimeMillis() - startTime;
+                Log.d(TAG, "✅ Receipt printed successfully in " + totalDuration + "ms total");
                 mainHandler.post(() -> result.success(true));
-                
             } catch (Exception e) {
-                Log.e(TAG, "Error printing receipt", e);
-                
-                // Fallback: Try simple print
-                try {
-                    Log.d(TAG, "Attempting fallback print...");
-                    posPrinter.initializePrinter()
-                             .printString(receiptData)
-                             .feedLine(3)
-                             .cutPaper();
-                    mainHandler.post(() -> result.success(true));
-                } catch (Exception fallbackException) {
-                    Log.e(TAG, "Both main and fallback print failed", fallbackException);
-                    mainHandler.post(() -> result.error("PRINT_ERROR", e.getMessage(), null));
-                }
+                Log.e(TAG, "❌ Error printing receipt", e);
+                mainHandler.post(() -> result.error("PRINT_ERROR", e.getMessage(), null));
             }
         });
     }

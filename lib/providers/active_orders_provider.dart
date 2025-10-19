@@ -40,6 +40,11 @@ class ActiveOrdersProvider with ChangeNotifier {
       return false;
     }
 
+    // Don't show cancelled orders
+    if (status == 'cancelled' || status == 'red') {
+      return false;
+    }
+
     bool shouldShow =
         status == 'pending' ||
         status == 'yellow' ||
@@ -62,9 +67,16 @@ class ActiveOrdersProvider with ChangeNotifier {
       return false;
     }
 
-    // For unpaid orders, show them unless they are completed/delivered/declined
+    // For unpaid orders, show them unless they are completed/delivered/declined/cancelled
     bool shouldShow =
-        !['completed', 'delivered', 'declined', 'blue'].contains(status);
+        ![
+          'completed',
+          'delivered',
+          'declined',
+          'blue',
+          'cancelled',
+          'red',
+        ].contains(status);
 
     return shouldShow;
   }

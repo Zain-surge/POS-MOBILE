@@ -82,7 +82,7 @@ class OrderItem {
               ? FoodItem.fromJson(json['food_item'])
               : null,
     );
-    
+
     return parsedItem;
   }
 
@@ -131,6 +131,7 @@ class Order {
   final String orderType;
   String status;
   final DateTime createdAt;
+  final DateTime? updatedAt; // New field to track if order was edited
   final double changeDue;
   final String orderSource;
   final String customerName;
@@ -153,6 +154,7 @@ class Order {
     required this.orderType,
     required this.status,
     required this.createdAt,
+    this.updatedAt, // Optional field
     required this.changeDue,
     required this.orderSource,
     required this.customerName,
@@ -168,6 +170,9 @@ class Order {
     this.driverId,
     this.paidStatus = false,
   });
+
+  // Helper method to check if order was edited
+  bool get isEdited => updatedAt != null;
 
   factory Order.fromJson(Map<String, dynamic> json) {
     // Move helper function inside factory constructor
@@ -219,6 +224,10 @@ class Order {
           json['created_at'] != null
               ? DateTime.tryParse(json['created_at']) ?? UKTimeService.now()
               : UKTimeService.now(),
+      updatedAt:
+          json['updated_at'] != null
+              ? DateTime.tryParse(json['updated_at'])
+              : null, // Parse updated_at if exists
       changeDue: parseDouble(json['change_due'], 'change_due'),
       orderSource: json['order_source'] ?? 'N/A',
       customerName: json['customer_name'] ?? 'N/A',
@@ -241,7 +250,7 @@ class Order {
           json['paid_status'] as bool? ??
           false, // Default to unpaid if not specified, so orders show in active list
     );
-    
+
     return parsedOrder;
   }
 

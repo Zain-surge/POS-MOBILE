@@ -50,20 +50,14 @@ class _CircularTimerState extends State<CircularTimer> {
       // Get current UK time
       final currentUKTime = UKTimeService.now();
 
-      // FIXED: Treat order time as UK local time (ignore the Z suffix)
-      // Database stores UK local time but incorrectly marks it as UTC
-      final orderStartAsUKLocal = DateTime(
-        widget.startTime.year,
-        widget.startTime.month,
-        widget.startTime.day,
-        widget.startTime.hour,
-        widget.startTime.minute,
-        widget.startTime.second,
-        widget.startTime.millisecond,
+      // Convert the provided start time into UK local time so that timers
+      // tick from the actual order creation moment regardless of timezone.
+      final DateTime orderStartInUk = UKTimeService.toUkTime(
+        widget.startTime,
       );
 
-      // Calculate difference using UK local times
-      _elapsed = currentUKTime.difference(orderStartAsUKLocal);
+      // Calculate difference using UK-local timestamps
+      _elapsed = currentUKTime.difference(orderStartInUk);
     });
   }
 

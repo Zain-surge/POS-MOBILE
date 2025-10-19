@@ -696,8 +696,7 @@ class _MainAppWrapperState extends State<MainAppWrapper> {
       if (success) {
         _showPopup('Order ${order.orderId} accepted.', type: PopupType.success);
 
-        // Print receipt
-        await Future.delayed(const Duration(milliseconds: 500));
+        // Print receipt immediately - no delay needed
         await _printOrderReceipt(order);
 
         // Immediate refresh orders

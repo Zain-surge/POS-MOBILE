@@ -217,4 +217,59 @@ class ItemAvailabilityProvider with ChangeNotifier {
       rethrow;
     }
   }
+
+  // Method to update an existing item
+  Future<void> updateItem({
+    required BuildContext context,
+    required int itemId,
+    required String itemName,
+    required String type,
+    required String description,
+    required Map<String, double> priceOptions,
+    required List<String> toppings,
+    required bool website,
+    required bool availability,
+    String? subtype,
+  }) async {
+    try {
+      // Call the API service to update the item
+      final response = await ApiService.updateItem(
+        itemId: itemId,
+        itemName: itemName,
+        type: type,
+        description: description,
+        price: priceOptions, // Send as JSONB field
+        toppings: toppings,
+        website: website,
+        availability: availability,
+        subtype: subtype,
+      );
+
+      print('ItemAvailabilityProvider: Item updated successfully: $response');
+
+      // Refresh the items list to reflect the changes
+      await fetchItems();
+
+      if (context.mounted) {
+        CustomPopupService.show(
+          context,
+          'Item "$itemName" updated successfully!',
+          type: PopupType.success,
+        );
+      }
+    } catch (e) {
+      print('ItemAvailabilityProvider: Failed to update item: $e');
+
+      if (context.mounted) {
+        CustomPopupService.show(
+          context,
+          'Failed to update item: ${e.toString()}',
+          type: PopupType.failure,
+        );
+      }
+
+      // Re-throw the error so the UI can handle it appropriately
+      rethrow;
+    }
+  }
 }

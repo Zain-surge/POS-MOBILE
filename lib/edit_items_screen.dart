@@ -18,14 +18,19 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   bool _showAddItemModal = false;
+  bool _isEditMode = false; // Track if we're in edit mode
+  FoodItem? _editingItem; // Store the item being edited
+  bool _isSubmitting = false; // Track if form is being submitted
 
   // Add item form variables
   final TextEditingController _itemNameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
-  String _addItemSelectedCategory = 'Pizza';
+  String _addItemSelectedCategory = '';
   String? _addItemSelectedSubtype;
   bool _websiteEnabled = false;
   Map<String, double> _priceOptions = {};
+  Map<String, TextEditingController> _priceControllers =
+      {}; // Controllers for price fields
   Set<String> _selectedToppings = {};
 
   // Available toppings from food_item_details_model.dart
@@ -82,6 +87,10 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
     _searchController.dispose();
     _itemNameController.dispose();
     _descriptionController.dispose();
+    // Dispose all price controllers
+    for (var controller in _priceControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -97,41 +106,46 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
   }
 
   String _getCategoryIcon(String categoryName) {
-    switch (categoryName.toUpperCase()) {
-      case 'DEALS':
-        return 'assets/images/deals.png';
-      case 'PIZZA':
-        return 'assets/images/PizzasS.png';
-      case 'SHAWARMAS':
-      case 'SHAWARMA':
-        return 'assets/images/ShawarmaS.png';
-      case 'BURGERS':
-        return 'assets/images/BurgersS.png';
-      case 'CALZONES':
-        return 'assets/images/CalzonesS.png';
-      case 'GARLICBREAD':
-        return 'assets/images/GarlicBreadS.png';
-      case 'WRAPS':
-        return 'assets/images/WrapsS.png';
-      case 'KIDSMEAL':
-        return 'assets/images/KidsMealS.png';
-      case 'SIDES':
-        return 'assets/images/SidesS.png';
-      case 'DRINKS':
-        return 'assets/images/DrinksS.png';
-      case 'MILKSHAKE':
-        return 'assets/images/MilkshakeS.png';
-      case 'DIPS':
-        return 'assets/images/DipsS.png';
-      case 'COFFEE':
-        return 'assets/images/Coffee.png';
-      case 'CAKE':
-      case 'CAKES':
-      case 'DESSERTS':
-        return 'assets/images/Desserts.png';
-      default:
-        return 'assets/images/default.png';
-    }
+    final normalized = categoryName.toUpperCase().replaceAll(
+      RegExp(r'[^A-Z]'),
+      '',
+    );
+
+    const iconMap = {
+      'DEALS': 'assets/images/DealS.png',
+      'PIZZA': 'assets/images/PizzasS.png',
+      'PIZZAS': 'assets/images/PizzasS.png',
+      'CALZONE': 'assets/images/CalzonesS.png',
+      'CALZONES': 'assets/images/CalzonesS.png',
+      'SHAWARMA': 'assets/images/ShawarmaS.png',
+      'SHAWARMAS': 'assets/images/ShawarmaS.png',
+      'BURGER': 'assets/images/BurgersS.png',
+      'BURGERS': 'assets/images/BurgersS.png',
+      'GARLICBREAD': 'assets/images/GarlicBreadS.png',
+      'GARLICBREADS': 'assets/images/GarlicBreadS.png',
+      'WRAP': 'assets/images/WrapsS.png',
+      'WRAPS': 'assets/images/WrapsS.png',
+      'KIDSMEAL': 'assets/images/KidsMealS.png',
+      'KIDSMEALS': 'assets/images/KidsMealS.png',
+      'SIDE': 'assets/images/SidesS.png',
+      'SIDES': 'assets/images/SidesS.png',
+      'SIDEORDERS': 'assets/images/SidesS.png',
+      'MILKSHAKE': 'assets/images/MilkshakeS.png',
+      'MILKSHAKES': 'assets/images/MilkshakeS.png',
+      'COFFEE': 'assets/images/Coffee.png',
+      'COFFEES': 'assets/images/Coffee.png',
+      'DRINK': 'assets/images/DrinksS.png',
+      'DRINKS': 'assets/images/DrinksS.png',
+      'COLDDRINKS': 'assets/images/DrinksS.png',
+      'LASSI': 'assets/images/DrinksS.png',
+      'DIP': 'assets/images/DipsS.png',
+      'DIPS': 'assets/images/DipsS.png',
+      'SAUCE': 'assets/images/DipsS.png',
+      'SAUCES': 'assets/images/DipsS.png',
+      'EXTRAS': 'assets/images/DipsS.png',
+    };
+
+    return iconMap[normalized] ?? 'assets/images/PizzasS.png';
   }
 
   List<FoodItem> _getFilteredItems(List<FoodItem> allItems) {
@@ -639,6 +653,34 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
                                                     ],
                                                   ),
                                                 ),
+                                                // Edit button
+                                                GestureDetector(
+                                                  onTap: () {
+                                                    _openEditModal(item);
+                                                  },
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.all(8),
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          Colors.grey.shade100,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      border: Border.all(
+                                                        color: Colors.black,
+                                                        width: 1,
+                                                      ),
+                                                    ),
+                                                    child: Icon(
+                                                      Icons.edit,
+                                                      color: Colors.black,
+                                                      size: 20,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
                                                 // Availability toggle
                                                 Column(
                                                   children: [
@@ -702,20 +744,63 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
                   color: Colors.black.withOpacity(0.5),
                   child: SafeArea(
                     child: Center(
-                      child: Container(
-                        width: MediaQuery.of(context).size.width * 0.9,
-                        height: MediaQuery.of(context).size.height * 0.8,
-                        constraints: BoxConstraints(maxWidth: 600),
-                        margin: EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 50,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.black, width: 1),
-                        ),
-                        child: _buildAddItemModal(),
+                      child: Stack(
+                        children: [
+                          Container(
+                            width: MediaQuery.of(context).size.width * 0.9,
+                            height: MediaQuery.of(context).size.height * 0.8,
+                            constraints: BoxConstraints(maxWidth: 600),
+                            margin: EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 50,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.black, width: 1),
+                            ),
+                            child: _buildAddItemModal(),
+                          ),
+                          // Loading overlay
+                          if (_isSubmitting)
+                            Positioned.fill(
+                              child: Container(
+                                margin: EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 50,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      CircularProgressIndicator(
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
+                                        strokeWidth: 3,
+                                      ),
+                                      SizedBox(height: 16),
+                                      Text(
+                                        _isEditMode
+                                            ? 'Updating item...'
+                                            : 'Adding item...',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
@@ -778,11 +863,7 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
           const SizedBox(width: 16),
           // Add Item button
           GestureDetector(
-            onTap: () {
-              setState(() {
-                _showAddItemModal = true;
-              });
-            },
+            onTap: _openAddModal,
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -799,6 +880,23 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
 
   Widget _buildAddItemModal() {
     final availableCategories = _getAvailableCategoriesForAddItem();
+    final fallbackCategory =
+        availableCategories.isNotEmpty ? availableCategories.first : '';
+
+    if ((_addItemSelectedCategory.isEmpty && fallbackCategory.isNotEmpty) ||
+        (fallbackCategory.isNotEmpty &&
+            _addItemSelectedCategory != fallbackCategory &&
+            !availableCategories.contains(_addItemSelectedCategory))) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _addItemSelectedCategory = fallbackCategory;
+          _addItemSelectedSubtype = null;
+          _priceOptions.clear();
+          _selectedToppings.clear();
+        });
+      });
+    }
 
     return Column(
       children: [
@@ -812,10 +910,14 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
           ),
           child: Row(
             children: [
-              Icon(Icons.add_circle, color: Colors.black, size: 24),
+              Icon(
+                _isEditMode ? Icons.edit : Icons.add_circle,
+                color: Colors.black,
+                size: 24,
+              ),
               SizedBox(width: 8),
               Text(
-                'Add New Item',
+                _isEditMode ? 'Edit Item' : 'Add New Item',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -827,6 +929,8 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
                 onTap: () {
                   setState(() {
                     _showAddItemModal = false;
+                    _isEditMode = false;
+                    _editingItem = null;
                     _resetAddItemForm();
                   });
                 },
@@ -916,17 +1020,52 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
   void _resetAddItemForm() {
     _itemNameController.clear();
     _descriptionController.clear();
-    _addItemSelectedCategory = 'Pizza';
+    final availableCategories = _getAvailableCategoriesForAddItem();
+    if (availableCategories.isNotEmpty) {
+      _addItemSelectedCategory = availableCategories.first;
+    } else {
+      _addItemSelectedCategory = '';
+    }
     _addItemSelectedSubtype = null;
     _websiteEnabled = false;
     _priceOptions.clear();
     _selectedToppings.clear();
+    // Clear all price controllers
+    for (var controller in _priceControllers.values) {
+      controller.clear();
+    }
+  }
+
+  void _openEditModal(FoodItem item) {
+    setState(() {
+      _isEditMode = true;
+      _editingItem = item;
+      _showAddItemModal = true;
+
+      // Pre-fill form with item data
+      _itemNameController.text = item.name;
+      _descriptionController.text = item.description ?? '';
+      _addItemSelectedCategory = item.category;
+      _addItemSelectedSubtype = item.subType;
+      // Note: FoodItem model doesn't include 'website' field, defaulting to true
+      // The backend stores this but Flutter model doesn't expose it
+      _websiteEnabled = true;
+      _priceOptions = Map<String, double>.from(item.price);
+      _selectedToppings = Set<String>.from(item.defaultToppings ?? []);
+    });
+  }
+
+  void _openAddModal() {
+    setState(() {
+      _isEditMode = false;
+      _editingItem = null;
+      _showAddItemModal = true;
+      _resetAddItemForm();
+    });
   }
 
   bool _shouldShowSubtype() {
-    return _addItemSelectedCategory == 'Pizza' ||
-        _addItemSelectedCategory == 'Shawarma' ||
-        _addItemSelectedCategory == 'Wings';
+    return _getSubtypesForCategory(_addItemSelectedCategory).isNotEmpty;
   }
 
   bool _shouldShowToppings() {
@@ -1017,6 +1156,17 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
   Widget _buildSubtypeSection() {
     List<String> subtypes = _getSubtypesForCategory(_addItemSelectedCategory);
 
+    if (_addItemSelectedSubtype != null &&
+        !subtypes.contains(_addItemSelectedSubtype)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _addItemSelectedSubtype = null;
+          _priceOptions.clear();
+        });
+      });
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1036,7 +1186,10 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
             border: Border.all(color: Colors.black, width: 1),
           ),
           child: DropdownButtonFormField<String>(
-            value: _addItemSelectedSubtype,
+            value:
+                subtypes.contains(_addItemSelectedSubtype)
+                    ? _addItemSelectedSubtype
+                    : null,
             decoration: InputDecoration(
               border: InputBorder.none,
               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1063,22 +1216,27 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
   }
 
   List<String> _getSubtypesForCategory(String category) {
-    switch (category) {
-      case 'Pizza':
-        return [
-          'Pizza',
-          'Pizze speciali',
-          'Pizze le saporite',
-          'BBQ Pizza',
-          'Fish Pizza',
-        ];
-      case 'Shawarma':
-        return ['Donner & Shawarma kebab', 'Shawarma & kebab tray'];
-      case 'Wings':
-        return ['Wings', 'BBQ Wings'];
-      default:
-        return [];
+    if (category.isEmpty) {
+      return [];
     }
+
+    final provider = Provider.of<ItemAvailabilityProvider>(
+      context,
+      listen: false,
+    );
+    final uniqueSubtypes = <String>{};
+
+    for (final item in provider.allItems) {
+      if (item.category == category) {
+        final subtype = item.subType?.trim();
+        if (subtype != null && subtype.isNotEmpty) {
+          uniqueSubtypes.add(subtype);
+        }
+      }
+    }
+
+    final subtypeList = uniqueSubtypes.toList()..sort();
+    return subtypeList;
   }
 
   Widget _buildItemNameSection() {
@@ -1159,6 +1317,34 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
   Widget _buildPriceSection() {
     Map<String, double> defaultPrices = _getDefaultPricesForCategory();
 
+    // Initialize or update controllers for each price option
+    for (var key in defaultPrices.keys) {
+      if (!_priceControllers.containsKey(key)) {
+        // Create new controller
+        _priceControllers[key] = TextEditingController();
+      }
+
+      // Update controller text with existing price
+      // Check both exact match and case-insensitive match for existing prices
+      if (_priceOptions.containsKey(key)) {
+        _priceControllers[key]!.text = _priceOptions[key].toString();
+      } else {
+        // Try case-insensitive match for existing prices
+        final matchingKey = _priceOptions.keys.firstWhere(
+          (existingKey) => existingKey.toLowerCase() == key.toLowerCase(),
+          orElse: () => '',
+        );
+        if (matchingKey.isNotEmpty) {
+          _priceControllers[key]!.text = _priceOptions[matchingKey].toString();
+          // Also update _priceOptions with the correct key
+          _priceOptions[key] = _priceOptions[matchingKey]!;
+        } else {
+          // Clear the controller if no matching price exists
+          _priceControllers[key]!.text = '';
+        }
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1206,6 +1392,7 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
                                 border: Border.all(color: Colors.grey.shade300),
                               ),
                               child: TextField(
+                                controller: _priceControllers[entry.key],
                                 keyboardType: TextInputType.numberWithOptions(
                                   decimal: true,
                                 ),
@@ -1260,9 +1447,16 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
     } else if (_addItemSelectedCategory == 'Burgers') {
       return {"1/2 lb": 5.95, "1/4 lb": 3.99};
     } else if (_addItemSelectedCategory == 'Shawarma') {
-      if (_addItemSelectedSubtype == 'Donner & Shawarma kebab') {
-        return {"Naan": 6.99, "Pitta": 4.99};
-      } else if (_addItemSelectedSubtype == 'Shawarma & kebab tray') {
+      // Case-insensitive comparison for subtype
+      final subtypeLower = _addItemSelectedSubtype?.toLowerCase() ?? '';
+      if (subtypeLower.contains('donner') || subtypeLower.contains('kebab')) {
+        // For "Donner & Shawarma kebab" - check if it's NOT a tray
+        if (!subtypeLower.contains('tray')) {
+          return {"Naan": 6.99, "Pitta": 4.99};
+        }
+      }
+      // For "Shawarma & kebab tray" OR any tray subtype
+      if (subtypeLower.contains('tray')) {
         return {"Large": 5.49, "Small": 4.49};
       }
     }
@@ -1372,6 +1566,8 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
             onTap: () {
               setState(() {
                 _showAddItemModal = false;
+                _isEditMode = false;
+                _editingItem = null;
                 _resetAddItemForm();
               });
             },
@@ -1396,7 +1592,7 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
         SizedBox(width: 16),
         Expanded(
           child: GestureDetector(
-            onTap: _submitAddItem,
+            onTap: _isEditMode ? _submitEditItem : _submitAddItem,
             child: Container(
               padding: EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
@@ -1404,7 +1600,7 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                'Add Item',
+                _isEditMode ? 'Update Item' : 'Add Item',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
@@ -1447,6 +1643,11 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
       return;
     }
 
+    // Show loading
+    setState(() {
+      _isSubmitting = true;
+    });
+
     try {
       final provider = Provider.of<ItemAvailabilityProvider>(
         context,
@@ -1478,7 +1679,10 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
 
       // Close modal and reset form
       setState(() {
+        _isSubmitting = false;
         _showAddItemModal = false;
+        _isEditMode = false;
+        _editingItem = null;
         _resetAddItemForm();
       });
 
@@ -1488,9 +1692,111 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
         type: PopupType.success,
       );
     } catch (e) {
+      setState(() {
+        _isSubmitting = false;
+      });
       CustomPopupService.show(
         context,
         'Failed to add item: $e',
+        type: PopupType.failure,
+      );
+    }
+  }
+
+  void _submitEditItem() async {
+    // Validation
+    if (_itemNameController.text.trim().isEmpty) {
+      CustomPopupService.show(
+        context,
+        'Please enter item name',
+        type: PopupType.failure,
+      );
+      return;
+    }
+
+    if (_shouldShowSubtype() && _addItemSelectedSubtype == null) {
+      CustomPopupService.show(
+        context,
+        'Please select a subtype',
+        type: PopupType.failure,
+      );
+      return;
+    }
+
+    if (_priceOptions.isEmpty) {
+      CustomPopupService.show(
+        context,
+        'Please enter at least one price option',
+        type: PopupType.failure,
+      );
+      return;
+    }
+
+    if (_editingItem == null) {
+      CustomPopupService.show(
+        context,
+        'Error: No item selected for editing',
+        type: PopupType.failure,
+      );
+      return;
+    }
+
+    // Show loading
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      final provider = Provider.of<ItemAvailabilityProvider>(
+        context,
+        listen: false,
+      );
+
+      // Transform price options for single-price items
+      Map<String, double> finalPriceOptions;
+      if (_priceOptions.length == 1 &&
+          _priceOptions.keys.first.toLowerCase() == 'default') {
+        // For single price items, use "default" key
+        finalPriceOptions = {"default": _priceOptions.values.first};
+      } else {
+        // For multi-price items, use as-is
+        finalPriceOptions = _priceOptions;
+      }
+      // Call the provider method to update the item
+      await provider.updateItem(
+        context: context,
+        itemId: _editingItem!.id,
+        itemName: _itemNameController.text.trim(),
+        type: _addItemSelectedCategory, // Category as type
+        description: _descriptionController.text.trim(),
+        priceOptions: finalPriceOptions,
+        toppings: _selectedToppings.toList(),
+        website: _websiteEnabled,
+        availability: _editingItem!.availability,
+        subtype: _addItemSelectedSubtype,
+      );
+
+      // Close modal and reset form
+      setState(() {
+        _isSubmitting = false;
+        _showAddItemModal = false;
+        _isEditMode = false;
+        _editingItem = null;
+        _resetAddItemForm();
+      });
+
+      CustomPopupService.show(
+        context,
+        'Item updated successfully!',
+        type: PopupType.success,
+      );
+    } catch (e) {
+      setState(() {
+        _isSubmitting = false;
+      });
+      CustomPopupService.show(
+        context,
+        'Failed to update item: $e',
         type: PopupType.failure,
       );
     }

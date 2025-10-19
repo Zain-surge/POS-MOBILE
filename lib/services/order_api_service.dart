@@ -19,8 +19,7 @@ class ShopStatusData {
 }
 
 class OrderApiService {
-  static const String _httpProxyUrl = 'https://corsproxy.io/?';
-  static const String _backendBaseUrl = 'https://api.dallasandgioschicken.uk';
+  static const String _backendBaseUrl = 'https://api.surgechain.co.uk';
 
   // Singleton instance for OrderApiService
   static final OrderApiService _instance = OrderApiService._internal();
@@ -201,7 +200,7 @@ class OrderApiService {
   }
 
   static Uri _buildProxyUrl(String path) {
-    return Uri.parse('$_httpProxyUrl$_backendBaseUrl$path');
+    return Uri.parse('$_backendBaseUrl$path');
   }
 
   static Future<List<Order>> fetchTodayOrders() async {

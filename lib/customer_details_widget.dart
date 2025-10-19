@@ -8,9 +8,11 @@ import 'package:epos/services/api_service.dart';
 class CustomerDetailsWidget extends StatefulWidget {
   final double subtotal;
   final String orderType;
-  final Function(CustomerDetails) onCustomerDetailsSubmitted;
+  final Future<void> Function(CustomerDetails) onCustomerDetailsSubmitted;
   final VoidCallback? onBack;
   final CustomerDetails? initialCustomerData;
+  final bool
+  isCardThroughLink; // NEW: Flag to indicate if this is for card through link payment
 
   const CustomerDetailsWidget({
     super.key,
@@ -19,6 +21,8 @@ class CustomerDetailsWidget extends StatefulWidget {
     required this.onCustomerDetailsSubmitted,
     this.onBack,
     this.initialCustomerData,
+    this.isCardThroughLink =
+        false, // Default to false for backward compatibility
   });
 
   @override
@@ -42,6 +46,7 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
   Map<String, dynamic>? _selectedPostcode;
   bool _isLoadingPostcodes = false;
   List<String> _availableStreets = [];
+  bool _isSubmitting = false; // Loading state for Next button
 
   @override
   void initState() {
@@ -261,12 +266,31 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
   // Helper method to check if field is required based on order type
   bool _isFieldRequired(String fieldType) {
     String orderType = widget.orderType.toLowerCase();
+
+    // For card_through_link payment, name, phone, and email are REQUIRED
+    if (widget.isCardThroughLink) {
+      switch (fieldType) {
+        case 'name':
+        case 'phone':
+        case 'email':
+          return true; // Always required for card through link
+        case 'address':
+        case 'houseNumber':
+        case 'city':
+        case 'postal':
+          return orderType == 'delivery'; // Still depends on order type
+        default:
+          return false;
+      }
+    }
+
+    // For other payment types, use existing logic
     switch (fieldType) {
       case 'name':
       case 'phone':
         return orderType == 'delivery';
       case 'email':
-        return false; // Email is now optional for all order types
+        return false; // Email is optional for other payment types
       case 'address':
       case 'houseNumber':
       case 'city':
@@ -692,6 +716,11 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
                               ),
                               keyboardType: TextInputType.emailAddress,
                               validator: (value) {
+                                // Check if email is required (for card_through_link)
+                                if (_isFieldRequired('email') &&
+                                    (value == null || value.isEmpty)) {
+                                  return 'Please enter email address';
+                                }
                                 if (value != null &&
                                     value.isNotEmpty &&
                                     !_emailRegExp.hasMatch(value)) {
@@ -1391,60 +1420,93 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
 
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
-                          if (isCollectionOrTakeaway && !hasDetails) {
-                            CustomPopupService.show(
-                              context,
-                              "Please enter customer details to Continue or use Skip button",
-                              type: PopupType.success,
-                            );
-                            return;
-                          }
+                        onPressed:
+                            _isSubmitting
+                                ? null
+                                : () async {
+                                  if (isCollectionOrTakeaway && !hasDetails) {
+                                    CustomPopupService.show(
+                                      context,
+                                      "Please enter customer details to Continue or use Skip button",
+                                      type: PopupType.success,
+                                    );
+                                    return;
+                                  }
 
-                          if (_formKey.currentState!.validate()) {
-                            final customerDetails = CustomerDetails(
-                              name:
-                                  _nameController.text.trim().isEmpty
-                                      ? 'Walk-in Customer'
-                                      : _nameController.text.trim(),
-                              phoneNumber:
-                                  _phoneController.text.trim().isEmpty
-                                      ? 'N/A'
-                                      : _phoneController.text.trim(),
-                              email:
-                                  _emailController.text.trim().isEmpty
-                                      ? null
-                                      : _emailController.text.trim(),
-                              streetAddress: _getCombinedAddress(),
-                              city:
-                                  _cityController.text.trim().isEmpty
-                                      ? null
-                                      : _cityController.text.trim(),
-                              postalCode:
-                                  _postalCodeController.text.trim().isEmpty
-                                      ? null
-                                      : _postalCodeController.text.trim(),
-                            );
-                            widget.onCustomerDetailsSubmitted(customerDetails);
-                          }
-                        },
+                                  if (_formKey.currentState!.validate()) {
+                                    setState(() {
+                                      _isSubmitting = true;
+                                    });
+
+                                    try {
+                                      final customerDetails = CustomerDetails(
+                                        name:
+                                            _nameController.text.trim().isEmpty
+                                                ? 'Walk-in Customer'
+                                                : _nameController.text.trim(),
+                                        phoneNumber:
+                                            _phoneController.text.trim().isEmpty
+                                                ? 'N/A'
+                                                : _phoneController.text.trim(),
+                                        email:
+                                            _emailController.text.trim().isEmpty
+                                                ? null
+                                                : _emailController.text.trim(),
+                                        streetAddress: _getCombinedAddress(),
+                                        city:
+                                            _cityController.text.trim().isEmpty
+                                                ? null
+                                                : _cityController.text.trim(),
+                                        postalCode:
+                                            _postalCodeController.text
+                                                    .trim()
+                                                    .isEmpty
+                                                ? null
+                                                : _postalCodeController.text
+                                                    .trim(),
+                                      );
+                                      await widget.onCustomerDetailsSubmitted(
+                                        customerDetails,
+                                      );
+                                    } finally {
+                                      if (mounted) {
+                                        setState(() {
+                                          _isSubmitting = false;
+                                        });
+                                      }
+                                    }
+                                  }
+                                },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
+                          backgroundColor:
+                              _isSubmitting ? Colors.grey : Colors.black,
                           foregroundColor: Colors.white.withOpacity(0.3),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(15),
                           ),
                           padding: const EdgeInsets.symmetric(vertical: 20),
                         ),
-                        child: const Text(
-                          'Next',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 22,
-                            fontFamily: 'Poppins',
-                          ),
-                        ),
+                        child:
+                            _isSubmitting
+                                ? const SizedBox(
+                                  height: 22,
+                                  width: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                                : const Text(
+                                  'Next',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 22,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                ),
                       ),
                     ),
                   ],

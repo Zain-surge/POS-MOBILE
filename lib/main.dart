@@ -4,8 +4,8 @@ import 'package:epos/paidpouts_page.dart';
 import 'package:flutter/material.dart';
 import 'package:epos/page3.dart';
 import 'package:epos/page4.dart';
-import 'package:epos/services/api_service.dart';
 import 'package:epos/models/food_item.dart';
+import 'package:epos/models/order.dart' as order_model;
 import 'package:epos/main_app_wrapper.dart';
 import 'package:epos/services/order_api_service.dart';
 import 'package:provider/provider.dart';
@@ -20,6 +20,8 @@ import 'package:epos/providers/paidout_provider.dart';
 import 'package:epos/sales_report_screen.dart';
 import 'package:epos/providers/item_availability_provider.dart';
 import 'package:epos/providers/offline_provider.dart';
+import 'package:epos/providers/food_items_provider.dart';
+import 'package:epos/providers/payment_link_provider.dart';
 import 'package:epos/services/uk_time_service.dart';
 import 'package:epos/services/offline_storage_service.dart';
 import 'package:epos/services/connectivity_service.dart';
@@ -186,6 +188,27 @@ void main() async {
           },
           lazy: false, // Make non-lazy to ensure immediate availability
         ),
+
+        // NEW: FoodItemsProvider - CACHES MENU ITEMS GLOBALLY
+        ChangeNotifierProvider<FoodItemsProvider>(
+          create: (_) {
+            print('🍕 CREATING FoodItemsProvider');
+            final provider = FoodItemsProvider();
+            // Preload food items in background for instant access
+            provider.preloadFoodItems();
+            return provider;
+          },
+          lazy: false, // Make non-lazy to preload menu items early
+        ),
+
+        // NEW: PaymentLinkProvider - HANDLES PAYMENT LINK API CALLS
+        ChangeNotifierProvider<PaymentLinkProvider>(
+          create: (_) {
+            print('💳 CREATING PaymentLinkProvider');
+            return PaymentLinkProvider();
+          },
+          lazy: false, // Make non-lazy for immediate availability
+        ),
       ],
       child: const MainAppWrapper(child: MyApp()),
     ),
@@ -200,140 +223,170 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  List<FoodItem>? foodItems;
-  bool isLoading = true;
-  String? error;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchMenuItems();
-  }
-
-  Future<void> _fetchMenuItems() async {
-    try {
-      print(' Fetching menu items at app startup...');
-      final items = await ApiService.fetchMenuItems();
-      print('✅ Menu items fetched successfully: ${items.length} items');
-
-      setState(() {
-        foodItems = items;
-        isLoading = false;
-      });
-    } catch (e) {
-      print('❌ Error fetching menu items: $e');
-      setState(() {
-        error = e.toString();
-        isLoading = false;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'The Village POS',
-      scaffoldMessengerKey: scaffoldMessengerKey,
-      theme: ThemeData(
-        primarySwatch: Colors.purple,
-        fontFamily: 'Poppins',
-        textTheme: const TextTheme(
-          displayLarge: TextStyle(fontFamily: 'Poppins'),
-          displayMedium: TextStyle(fontFamily: 'Poppins'),
-          displaySmall: TextStyle(fontFamily: 'Poppins'),
-          headlineLarge: TextStyle(fontFamily: 'Poppins'),
-          headlineMedium: TextStyle(fontFamily: 'Poppins'),
-          headlineSmall: TextStyle(fontFamily: 'Poppins'),
-          titleLarge: TextStyle(fontFamily: 'Poppins'),
-          titleMedium: TextStyle(fontFamily: 'Poppins'),
-          titleSmall: TextStyle(fontFamily: 'Poppins'),
-          bodyLarge: TextStyle(fontFamily: 'Poppins'),
-          bodyMedium: TextStyle(fontFamily: 'Poppins'),
-          bodySmall: TextStyle(fontFamily: 'Poppins'),
-          labelLarge: TextStyle(fontFamily: 'Poppins'),
-          labelMedium: TextStyle(fontFamily: 'Poppins'),
-          labelSmall: TextStyle(fontFamily: 'Poppins'),
-        ),
-      ),
-      home: MainAppWrapper(
-        child: isLoading ? _buildLoadingScreen() : _buildHomeScreen(),
-      ),
-      onGenerateRoute: (settings) {
-        switch (settings.name) {
-          case '/':
-            return MaterialPageRoute(
-              builder:
-                  (context) => MainAppWrapper(
-                    child:
-                        isLoading ? _buildLoadingScreen() : _buildHomeScreen(),
-                  ),
-            );
-          case '/service-selection':
-            return MaterialPageRoute(
-              builder:
-                  (context) =>
-                      MainAppWrapper(child: Page3(foodItems: foodItems ?? [])),
-            );
-          case '/page4':
-            final Map<String, String>? args =
-                settings.arguments as Map<String, String>?;
+    // Use Consumer to get food items from the global provider
+    return Consumer<FoodItemsProvider>(
+      builder: (context, foodItemsProvider, child) {
+        final foodItems = foodItemsProvider.foodItems;
+        final isLoading = foodItemsProvider.isLoading;
+        final hasError = foodItemsProvider.hasError;
 
-            final String? initialSelectedServiceImage =
-                args?['initialSelectedServiceImage'];
-            final String? selectedOrderType = args?['selectedOrderType'];
-
-            if (selectedOrderType == null) {
-              print('Error: selectedOrderType is missing for /page4 route.');
-              return MaterialPageRoute(
-                builder:
-                    (context) => const Scaffold(
-                      body: Center(
-                        child: Text('Error: Order type not provided.'),
+        return MaterialApp(
+          title: 'The Village POS',
+          scaffoldMessengerKey: scaffoldMessengerKey,
+          theme: ThemeData(
+            primarySwatch: Colors.purple,
+            fontFamily: 'Poppins',
+            textTheme: const TextTheme(
+              displayLarge: TextStyle(fontFamily: 'Poppins'),
+              displayMedium: TextStyle(fontFamily: 'Poppins'),
+              displaySmall: TextStyle(fontFamily: 'Poppins'),
+              headlineLarge: TextStyle(fontFamily: 'Poppins'),
+              headlineMedium: TextStyle(fontFamily: 'Poppins'),
+              headlineSmall: TextStyle(fontFamily: 'Poppins'),
+              titleLarge: TextStyle(fontFamily: 'Poppins'),
+              titleMedium: TextStyle(fontFamily: 'Poppins'),
+              titleSmall: TextStyle(fontFamily: 'Poppins'),
+              bodyLarge: TextStyle(fontFamily: 'Poppins'),
+              bodyMedium: TextStyle(fontFamily: 'Poppins'),
+              bodySmall: TextStyle(fontFamily: 'Poppins'),
+              labelLarge: TextStyle(fontFamily: 'Poppins'),
+              labelMedium: TextStyle(fontFamily: 'Poppins'),
+              labelSmall: TextStyle(fontFamily: 'Poppins'),
+            ),
+          ),
+          home: MainAppWrapper(
+            child:
+                isLoading
+                    ? _buildLoadingScreen(foodItemsProvider)
+                    : _buildHomeScreen(foodItems, hasError, foodItemsProvider),
+          ),
+          onGenerateRoute: (settings) {
+            switch (settings.name) {
+              case '/':
+                return MaterialPageRoute(
+                  builder:
+                      (context) => MainAppWrapper(
+                        child:
+                            isLoading
+                                ? _buildLoadingScreen(foodItemsProvider)
+                                : _buildHomeScreen(
+                                  foodItems,
+                                  hasError,
+                                  foodItemsProvider,
+                                ),
                       ),
-                    ),
-              );
+                );
+              case '/service-selection':
+                return MaterialPageRoute(
+                  builder:
+                      (context) =>
+                          MainAppWrapper(child: Page3(foodItems: foodItems)),
+                );
+              case '/page4':
+                final Map<String, dynamic>? args =
+                    settings.arguments as Map<String, dynamic>?;
+
+                final String? initialSelectedServiceImage =
+                    args?['initialSelectedServiceImage'] as String?;
+                final String? selectedOrderType =
+                    args?['selectedOrderType'] as String?;
+
+                if (selectedOrderType == null) {
+                  print(
+                    'Error: selectedOrderType is missing for /page4 route.',
+                  );
+                  return MaterialPageRoute(
+                    builder:
+                        (context) => const Scaffold(
+                          body: Center(
+                            child: Text('Error: Order type not provided.'),
+                          ),
+                        ),
+                  );
+                }
+
+                // Get food items from arguments OR from provider
+                final dynamic foodItemsArg = args?['foodItems'];
+                List<FoodItem> resolvedFoodItems = foodItems;
+                if (foodItemsArg is List<FoodItem> && foodItemsArg.isNotEmpty) {
+                  resolvedFoodItems = foodItemsArg;
+                } else if (foodItemsArg is List && foodItemsArg.isNotEmpty) {
+                  resolvedFoodItems =
+                      foodItemsArg.whereType<FoodItem>().toList();
+                }
+
+                final dynamic editModeArg = args?['editMode'];
+                final bool editMode = editModeArg is bool ? editModeArg : false;
+
+                final dynamic orderIdArg = args?['orderId'];
+                int? orderId;
+                if (orderIdArg is int) {
+                  orderId = orderIdArg;
+                } else if (orderIdArg is String) {
+                  orderId = int.tryParse(orderIdArg);
+                }
+
+                order_model.Order? existingOrder;
+                final dynamic existingOrderArg = args?['existingOrder'];
+                if (existingOrderArg is order_model.Order) {
+                  existingOrder = existingOrderArg;
+                }
+
+                return MaterialPageRoute(
+                  builder:
+                      (context) => MainAppWrapper(
+                        child: Page4(
+                          initialSelectedServiceImage:
+                              initialSelectedServiceImage,
+                          foodItems: resolvedFoodItems,
+                          selectedOrderType: selectedOrderType,
+                          editMode: editMode,
+                          orderId: orderId,
+                          existingOrder: existingOrder,
+                        ),
+                      ),
+                );
+
+              // NEW: Sales Report Route
+              case '/sales-report':
+                return MaterialPageRoute(
+                  builder:
+                      (context) =>
+                          const MainAppWrapper(child: SalesReportScreen()),
+                );
+
+              // NEW: Paid Outs Route
+              case '/paidouts':
+                return MaterialPageRoute(
+                  builder:
+                      (context) => const MainAppWrapper(child: PaidOutsPage()),
+                );
+
+              default:
+                return MaterialPageRoute(
+                  builder:
+                      (context) => MainAppWrapper(
+                        child:
+                            isLoading
+                                ? _buildLoadingScreen(foodItemsProvider)
+                                : _buildHomeScreen(
+                                  foodItems,
+                                  hasError,
+                                  foodItemsProvider,
+                                ),
+                      ),
+                );
             }
-
-            return MaterialPageRoute(
-              builder:
-                  (context) => MainAppWrapper(
-                    child: Page4(
-                      initialSelectedServiceImage: initialSelectedServiceImage,
-                      foodItems: foodItems ?? [],
-                      selectedOrderType: selectedOrderType,
-                      // activeOrdersCount is now obtained via Provider in Page4
-                    ),
-                  ),
-            );
-
-          // NEW: Sales Report Route
-          case '/sales-report':
-            return MaterialPageRoute(
-              builder:
-                  (context) => const MainAppWrapper(child: SalesReportScreen()),
-            );
-
-          // NEW: Paid Outs Route
-          case '/paidouts':
-            return MaterialPageRoute(
-              builder: (context) => const MainAppWrapper(child: PaidOutsPage()),
-            );
-
-          default:
-            return MaterialPageRoute(
-              builder:
-                  (context) => MainAppWrapper(
-                    child:
-                        isLoading ? _buildLoadingScreen() : _buildHomeScreen(),
-                  ),
-            );
-        }
+          },
+          debugShowCheckedModeBanner: false,
+        );
       },
-      debugShowCheckedModeBanner: false,
     );
   }
 
-  Widget _buildLoadingScreen() {
+  Widget _buildLoadingScreen(FoodItemsProvider provider) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
@@ -345,19 +398,19 @@ class _MyAppState extends State<MyApp> {
             ),
             const SizedBox(height: 20),
             const Text(
-              'Loading...',
+              'Loading menu items...',
               style: TextStyle(
                 fontSize: 18,
                 fontFamily: 'Poppins',
                 fontWeight: FontWeight.w500,
               ),
             ),
-            if (error != null) ...[
+            if (provider.hasError) ...[
               const SizedBox(height: 20),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40),
                 child: Text(
-                  'Error: $error',
+                  'Error: ${provider.errorMessage}',
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.red,
@@ -369,11 +422,7 @@ class _MyAppState extends State<MyApp> {
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () {
-                  setState(() {
-                    isLoading = true;
-                    error = null;
-                  });
-                  _fetchMenuItems();
+                  provider.fetchFoodItems(forceRefresh: true);
                 },
                 child: const Text('Retry'),
               ),
@@ -384,8 +433,12 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
-  Widget _buildHomeScreen() {
-    if (error != null) {
+  Widget _buildHomeScreen(
+    List<FoodItem> foodItems,
+    bool hasError,
+    FoodItemsProvider provider,
+  ) {
+    if (hasError && foodItems.isEmpty) {
       return Scaffold(
         backgroundColor: Colors.white,
         body: Center(
@@ -406,7 +459,7 @@ class _MyAppState extends State<MyApp> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40),
                 child: Text(
-                  error!,
+                  provider.errorMessage ?? 'Unknown error',
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.grey,
@@ -418,11 +471,7 @@ class _MyAppState extends State<MyApp> {
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () {
-                  setState(() {
-                    isLoading = true;
-                    error = null;
-                  });
-                  _fetchMenuItems();
+                  provider.fetchFoodItems(forceRefresh: true);
                 },
                 child: const Text('Retry'),
               ),
@@ -431,6 +480,9 @@ class _MyAppState extends State<MyApp> {
         ),
       );
     }
-    return Page3(foodItems: foodItems ?? []);
+    return Page3(foodItems: foodItems);
   }
 }
+// I want that in food item model when it is opened show a option add extra at the top 
+// with amount and reason field. And the amount should be added to the total of the item. 
+// you got me?

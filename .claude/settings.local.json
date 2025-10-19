@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter analyze:*)",
+      "Bash(dir \"d:\\POS - Surge\\lib\" /b)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

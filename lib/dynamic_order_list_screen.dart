@@ -7,6 +7,8 @@ import 'dart:async';
 import 'package:provider/provider.dart';
 import 'package:epos/providers/order_counts_provider.dart';
 import 'package:epos/providers/epos_orders_provider.dart';
+import 'package:epos/providers/food_items_provider.dart';
+import 'package:epos/providers/active_orders_provider.dart';
 import 'package:epos/services/thermal_printer_service.dart';
 import 'package:epos/custom_bottom_nav_bar.dart';
 import 'package:epos/circular_timer_widget.dart';
@@ -421,7 +423,9 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
     for (var order in filteredOrders) {
       if (order.status.toLowerCase() == 'blue' ||
           order.status.toLowerCase() == 'completed' ||
-          order.status.toLowerCase() == 'delivered') {
+          order.status.toLowerCase() == 'delivered' ||
+          order.status.toLowerCase() == 'cancelled' ||
+          order.status.toLowerCase() == 'red') {
         tempCompleted.add(order.copyWith());
       } else {
         tempActive.add(order.copyWith());
@@ -756,6 +760,12 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
         (order.orderSource.toLowerCase() == 'website' &&
             order.orderType.toLowerCase() == 'delivery');
 
+    // For cancelled orders, always show "Cancelled"
+    if (order.status.toLowerCase() == 'cancelled' ||
+        order.status.toLowerCase() == 'red') {
+      return 'Cancelled';
+    }
+
     // For completed orders, always show "Completed"
     if (order.status.toLowerCase() == 'blue' ||
         order.status.toLowerCase() == 'completed' ||
@@ -845,7 +855,9 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
         for (var order in filteredOrders) {
           if (order.status.toLowerCase() == 'blue' ||
               order.status.toLowerCase() == 'completed' ||
-              order.status.toLowerCase() == 'delivered') {
+              order.status.toLowerCase() == 'delivered' ||
+              order.status.toLowerCase() == 'cancelled' ||
+              order.status.toLowerCase() == 'red') {
             liveCompletedOrders.add(order);
           } else {
             liveActiveOrders.add(order);
@@ -1131,24 +1143,19 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
                                             String status,
                                             DateTime orderCreatedAt,
                                           ) {
-                                            // Calculate time for THIS specific order - FIXED timezone issue
-                                            DateTime now = UKTimeService.now();
-                                            // FIXED: Treat order time as UK local time (same fix as timer)
-                                            final orderStartAsUKLocal =
-                                                DateTime(
-                                                  orderCreatedAt.year,
-                                                  orderCreatedAt.month,
-                                                  orderCreatedAt.day,
-                                                  orderCreatedAt.hour,
-                                                  orderCreatedAt.minute,
-                                                  orderCreatedAt.second,
-                                                  orderCreatedAt.millisecond,
+                                            // Calculate time for THIS specific order - aligned with CircularTimer
+                                            final DateTime now =
+                                                UKTimeService.now();
+                                            final DateTime orderStart =
+                                                UKTimeService.toUkTime(
+                                                  orderCreatedAt,
                                                 );
-                                            Duration orderAge = now.difference(
-                                              orderStartAsUKLocal,
-                                            );
-                                            int minutesPassed =
-                                                orderAge.inMinutes;
+                                            final Duration orderAge = now
+                                                .difference(orderStart);
+                                            final int minutesPassed =
+                                                orderAge.inMinutes < 0
+                                                    ? 0
+                                                    : orderAge.inMinutes;
 
                                             print(
                                               '🕐 Order ${order.orderId}: ${minutesPassed} minutes elapsed - Color should be ${minutesPassed < 30
@@ -1588,17 +1595,49 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
                                               ),
                                             ),
 
-                                          Text(
-                                            DateFormat(
-                                              'dd/MM/yyyy   HH:mm',
-                                            ).format(
-                                              liveSelectedOrder.createdAt,
-                                            ),
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              color: Colors.grey[600],
-                                              fontWeight: FontWeight.w500,
-                                            ),
+                                          Row(
+                                            children: [
+                                              Text(
+                                                DateFormat(
+                                                  'dd/MM/yyyy   HH:mm',
+                                                ).format(
+                                                  liveSelectedOrder.createdAt,
+                                                ),
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  color: Colors.grey[600],
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                              // Show "Edited" label if order was updated
+                                              if (liveSelectedOrder
+                                                  .isEdited) ...[
+                                                const SizedBox(width: 10),
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.orange,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          4,
+                                                        ),
+                                                  ),
+                                                  child: const Text(
+                                                    'Edited',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
                                           ),
 
                                           // Display order-level extra notes
@@ -1962,79 +2001,80 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
                                     // Total and printer section
                                     Row(
                                       mainAxisAlignment:
-                                          MainAxisAlignment.spaceEvenly,
+                                          MainAxisAlignment.start,
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(15),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black,
-                                            borderRadius: BorderRadius.circular(
-                                              15,
+                                        Flexible(
+                                          child: Container(
+                                            padding: const EdgeInsets.all(15),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black,
+                                              borderRadius:
+                                                  BorderRadius.circular(15),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    const Text(
+                                                      'Total',
+                                                      style: TextStyle(
+                                                        fontSize: 20,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 60),
+                                                    Text(
+                                                      '£${liveSelectedOrder.orderTotalPrice.toStringAsFixed(2)}',
+                                                      style: const TextStyle(
+                                                        fontSize: 18,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 10),
+                                                Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    const Text(
+                                                      'Change Due',
+                                                      style: TextStyle(
+                                                        fontSize: 18,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 20),
+                                                    Text(
+                                                      '£${liveSelectedOrder.changeDue.toStringAsFixed(2)}',
+                                                      style: const TextStyle(
+                                                        fontSize: 18,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  const Text(
-                                                    'Total',
-                                                    style: TextStyle(
-                                                      fontSize: 22,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Colors.white,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 110),
-                                                  Text(
-                                                    '£${liveSelectedOrder.orderTotalPrice.toStringAsFixed(2)}',
-                                                    style: const TextStyle(
-                                                      fontSize: 20,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Colors.white,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 10),
-                                              Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  const Text(
-                                                    'Change Due',
-                                                    style: TextStyle(
-                                                      fontSize: 20,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Colors.white,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 40),
-                                                  Text(
-                                                    '£${liveSelectedOrder.changeDue.toStringAsFixed(2)}',
-                                                    style: const TextStyle(
-                                                      fontSize: 20,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Colors.white,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
                                         ),
-                                        const SizedBox(width: 20),
+                                        const SizedBox(width: 8),
                                         MouseRegion(
                                           cursor: SystemMouseCursors.click,
                                           child: GestureDetector(
@@ -2056,15 +2096,15 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
                                                 children: [
                                                   Image.asset(
                                                     'assets/images/printer.png',
-                                                    width: 58,
-                                                    height: 58,
+                                                    width: 50,
+                                                    height: 50,
                                                     color: Colors.white,
                                                   ),
                                                   const SizedBox(height: 4),
                                                   const Text(
-                                                    'Print Receipt',
+                                                    'Print',
                                                     style: TextStyle(
-                                                      fontSize: 15,
+                                                      fontSize: 13,
                                                       fontWeight:
                                                           FontWeight.bold,
                                                       color: Colors.white,
@@ -2075,6 +2115,98 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
                                             ),
                                           ),
                                         ),
+                                        const SizedBox(width: 8),
+                                        // Cancel button
+                                        MouseRegion(
+                                          cursor: SystemMouseCursors.click,
+                                          child: GestureDetector(
+                                            onTap: () async {
+                                              // Set the _selectedOrder temporarily for cancellation
+                                              _selectedOrder =
+                                                  liveSelectedOrder;
+                                              await _handleCancelOrder();
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: Colors.red[700],
+                                                borderRadius:
+                                                    BorderRadius.circular(15),
+                                              ),
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(
+                                                    Icons.cancel_outlined,
+                                                    size: 50,
+                                                    color: Colors.white,
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  const Text(
+                                                    'Cancel',
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+
+                                        // EDIT button - only show for pending orders
+                                        if (liveSelectedOrder.status
+                                                    .toLowerCase() ==
+                                                'pending' ||
+                                            liveSelectedOrder.status
+                                                    .toLowerCase() ==
+                                                'yellow')
+                                          MouseRegion(
+                                            cursor: SystemMouseCursors.click,
+                                            child: GestureDetector(
+                                              onTap: () async {
+                                                await _handleEditOrder(
+                                                  liveSelectedOrder!,
+                                                );
+                                              },
+                                              child: Container(
+                                                padding: const EdgeInsets.all(
+                                                  8,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.blue[700],
+                                                  borderRadius:
+                                                      BorderRadius.circular(15),
+                                                ),
+                                                child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Image.asset(
+                                                      'assets/images/EDIT.png',
+                                                      width: 50,
+                                                      height: 50,
+                                                      color: Colors.white,
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    const Text(
+                                                      'Edit',
+                                                      style: TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
                                       ],
                                     ),
                                   ],
@@ -2226,6 +2358,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
                 .paidStatus, // Pass the actual paid status from order
         deliveryCharge: deliveryChargeAmount,
         orderDateTime: UKTimeService.now(), // Always use UK time for printing
+        isEdited: _selectedOrder!.isEdited, // Pass if order was edited
         onShowMethodSelection: (availableMethods) {
           CustomPopupService.show(
             context,
@@ -2253,6 +2386,97 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
       CustomPopupService.show(
         context,
         "Error printing receipt",
+        type: PopupType.failure,
+      );
+    }
+  }
+
+  Future<void> _handleCancelOrder() async {
+    if (_selectedOrder == null) {
+      CustomPopupService.show(
+        context,
+        "No order selected for cancellation",
+        type: PopupType.failure,
+      );
+      return;
+    }
+
+    final String normalizedStatus = _selectedOrder!.status.toLowerCase();
+    String? statusMessage;
+    if (normalizedStatus == 'cancelled' || normalizedStatus == 'red') {
+      statusMessage = 'Order ${_selectedOrder!.orderId} is already cancelled.';
+    } else if (normalizedStatus == 'completed' ||
+        normalizedStatus == 'delivered' ||
+        normalizedStatus == 'blue') {
+      statusMessage =
+          'Order ${_selectedOrder!.orderId} has already been completed and cannot be cancelled.';
+    }
+
+    if (statusMessage != null) {
+      CustomPopupService.show(context, statusMessage, type: PopupType.failure);
+      return;
+    }
+
+    // Show confirmation dialog
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Cancel Order'),
+          content: Text(
+            'Are you sure you want to cancel order #${_selectedOrder!.orderId}?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('No'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Yes, Cancel Order'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final success = await OrderApiService.updateOrderStatus(
+        _selectedOrder!.orderId,
+        'red',
+      );
+
+      if (!mounted) return;
+
+      if (success) {
+        CustomPopupService.show(
+          context,
+          'Order ${_selectedOrder!.orderId} has been cancelled',
+          type: PopupType.success,
+        );
+
+        // Refresh orders to show updated status
+        final eposOrdersProvider = Provider.of<EposOrdersProvider>(
+          context,
+          listen: false,
+        );
+        await eposOrdersProvider.refresh();
+      } else {
+        CustomPopupService.show(
+          context,
+          'Failed to cancel order ${_selectedOrder!.orderId}',
+          type: PopupType.failure,
+        );
+      }
+    } catch (e) {
+      print('Error cancelling order: $e');
+      if (!mounted) return;
+      CustomPopupService.show(
+        context,
+        'Error cancelling order',
         type: PopupType.failure,
       );
     }
@@ -2397,5 +2621,84 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
     }
 
     return false;
+  }
+
+  Future<void> _handleEditOrder(Order order) async {
+    try {
+      // Get food items from provider (cached, instant access)
+      final foodItemsProvider = Provider.of<FoodItemsProvider>(
+        context,
+        listen: false,
+      );
+
+      // Get cached food items synchronously (no delay!)
+      List<FoodItem> foodItems = foodItemsProvider.getFoodItemsSync();
+
+      // If cache is empty, show loading and fetch
+      if (foodItems.isEmpty) {
+        // Show loading popup briefly
+        CustomPopupService.show(
+          context,
+          'Loading menu items...',
+          type: PopupType.success,
+          duration: const Duration(milliseconds: 500),
+        );
+
+        // Fetch food items (this should rarely happen as we preload in main.dart)
+        await foodItemsProvider.fetchFoodItems();
+        foodItems = foodItemsProvider.foodItems;
+
+        if (foodItems.isEmpty) {
+          throw Exception('Failed to load menu items');
+        }
+      }
+
+      if (!mounted) return;
+
+      // Navigate to Page4 with edit parameters - INSTANT!
+      final result = await Navigator.pushNamed(
+        context,
+        '/page4',
+        arguments: {
+          'selectedOrderType': order.orderType,
+          'foodItems': foodItems,
+          'editMode': true,
+          'orderId': order.orderId,
+          'existingOrder': order,
+        },
+      );
+
+      // Refresh orders after returning from edit
+      if (result == true && mounted) {
+        final eposOrdersProvider = Provider.of<EposOrdersProvider>(
+          context,
+          listen: false,
+        );
+        final activeOrdersProvider = Provider.of<ActiveOrdersProvider>(
+          context,
+          listen: false,
+        );
+
+        // Refresh both providers to update order lists
+        await eposOrdersProvider.refresh();
+        await activeOrdersProvider.refreshOrders();
+        _loadOrdersFromProvider();
+
+        CustomPopupService.show(
+          context,
+          'Order updated successfully',
+          type: PopupType.success,
+        );
+      }
+    } catch (e) {
+      print('Error opening edit mode: $e');
+      if (mounted) {
+        CustomPopupService.show(
+          context,
+          'Failed to open order for editing',
+          type: PopupType.failure,
+        );
+      }
+    }
   }
 }

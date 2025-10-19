@@ -31,6 +31,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Shop timings
   String _shopOpenTime = "09:00";
   String _shopCloseTime = "21:00";
+  StreamSubscription<BluetoothAdapterState>? _bluetoothStateSubscription;
 
   @override
   void initState() {
@@ -867,12 +868,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       // Check if Bluetooth is enabled
       bool isEnabled = await FlutterBluePlus.isOn;
+      if (!mounted) return;
       setState(() {
         _bluetoothEnabled = isEnabled;
       });
 
       // Listen to Bluetooth state changes
-      FlutterBluePlus.adapterState.listen((BluetoothAdapterState state) {
+      _bluetoothStateSubscription = FlutterBluePlus.adapterState.listen((
+        BluetoothAdapterState state,
+      ) {
+        if (!mounted) return;
         setState(() {
           _bluetoothEnabled = state == BluetoothAdapterState.on;
         });
@@ -902,6 +907,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         // Try to turn on Bluetooth
         try {
           await FlutterBluePlus.turnOn();
+          if (!mounted) return;
           setState(() {
             _bluetoothEnabled = true;
           });
@@ -919,6 +925,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         // Try to turn off Bluetooth
         try {
           await FlutterBluePlus.turnOff();
+          if (!mounted) return;
           setState(() {
             _bluetoothEnabled = false;
           });
@@ -1186,6 +1193,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _bluetoothStateSubscription?.cancel();
+    super.dispose();
   }
 
   @override

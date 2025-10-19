@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'package:epos/services/thermal_printer_service.dart';
+import 'package:epos/services/order_api_service.dart';
 //import 'package:epos/widgets/receipt_preview_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:epos/models/order.dart';
@@ -66,6 +67,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
   bool _isPrinterConnected = false;
   bool _isCheckingPrinter = false;
   Timer? _printerStatusTimer;
+  Timer? _colorUpdateTimer;
   DateTime? _lastPrinterCheck;
   Map<String, bool>? _cachedPrinterStatus;
 
@@ -91,6 +93,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
       }
 
       _startPrinterStatusChecking();
+      _startColorUpdateTimer();
     });
   }
 
@@ -100,6 +103,17 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
     // Check every 2 minutes instead of 30 seconds to reduce printer communication
     _printerStatusTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
       _checkPrinterStatus();
+    });
+  }
+
+  void _startColorUpdateTimer() {
+    _colorUpdateTimer?.cancel();
+    _colorUpdateTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
+      if (mounted) {
+        setState(() {
+          // Trigger rebuild so time-based colors stay aligned with timers
+        });
+      }
     });
   }
 
@@ -152,6 +166,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
   void dispose() {
     // Cancel the timer before disposing
     _printerStatusTimer?.cancel();
+    _colorUpdateTimer?.cancel();
 
     // Use saved provider reference instead of context lookup
     try {
@@ -1295,6 +1310,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
       case 'PIZZA':
         return 'assets/images/PizzasS.png';
       case 'SHAWARMA':
+      case 'SHAWARMAS':
         return 'assets/images/ShawarmaS.png';
       case 'BURGERS':
         return 'assets/images/BurgersS.png';
@@ -1347,6 +1363,12 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
             order.orderType.toLowerCase() == 'delivery') ||
         (order.orderSource.toLowerCase() == 'website' &&
             order.orderType.toLowerCase() == 'delivery');
+
+    // For cancelled orders, always show "Cancelled"
+    if (order.status.toLowerCase() == 'cancelled' ||
+        order.status.toLowerCase() == 'red') {
+      return 'Cancelled';
+    }
 
     // For completed orders, always show "Completed"
     if (order.status.toLowerCase() == 'blue' ||
@@ -1687,24 +1709,18 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                         String status,
                                         DateTime orderCreatedAt,
                                       ) {
-                                        // Calculate time for THIS specific order - FIXED timezone issue
-                                        DateTime now = UKTimeService.now();
-
-                                        // FIXED: Treat order time as UK local time (same fix as timer)
-                                        final orderStartAsUKLocal = DateTime(
-                                          orderCreatedAt.year,
-                                          orderCreatedAt.month,
-                                          orderCreatedAt.day,
-                                          orderCreatedAt.hour,
-                                          orderCreatedAt.minute,
-                                          orderCreatedAt.second,
-                                          orderCreatedAt.millisecond,
-                                        );
-
-                                        Duration orderAge = now.difference(
-                                          orderStartAsUKLocal,
-                                        );
-                                        int minutesPassed = orderAge.inMinutes;
+                                        final DateTime now =
+                                            UKTimeService.now();
+                                        final DateTime orderStart =
+                                            UKTimeService.toUkTime(
+                                              orderCreatedAt,
+                                            );
+                                        final Duration orderAge = now
+                                            .difference(orderStart);
+                                        final int minutesPassed =
+                                            orderAge.inMinutes < 0
+                                                ? 0
+                                                : orderAge.inMinutes;
 
                                         // Completed orders are always grey regardless of time
                                         if (status.toLowerCase() == 'blue' ||
@@ -2571,79 +2587,36 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                     // Total and Change Due Box with Printer Icon
                                     Row(
                                       mainAxisAlignment:
-                                          MainAxisAlignment.spaceEvenly,
+                                          MainAxisAlignment.start,
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Container(
-                                          padding: EdgeInsets.all(
-                                            isLargeScreen ? 40 : 35,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black,
-                                            borderRadius: BorderRadius.circular(
-                                              15,
+                                        Flexible(
+                                          child: Container(
+                                            padding: EdgeInsets.all(
+                                              isLargeScreen ? 40 : 30,
                                             ),
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  Text(
-                                                    'Total',
-                                                    style: TextStyle(
-                                                      fontSize:
-                                                          isLargeScreen
-                                                              ? 22
-                                                              : 20,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Colors.white,
-                                                    ),
-                                                  ),
-                                                  SizedBox(
-                                                    width:
-                                                        isLargeScreen
-                                                            ? 120
-                                                            : 110,
-                                                  ),
-                                                  Text(
-                                                    '£${_selectedOrder!.orderTotalPrice.toStringAsFixed(2)}',
-                                                    style: TextStyle(
-                                                      fontSize:
-                                                          isLargeScreen
-                                                              ? 22
-                                                              : 20,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Colors.white,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              if (_selectedOrder!.changeDue >
-                                                  0) ...[
-                                                SizedBox(
-                                                  height:
-                                                      isLargeScreen ? 12 : 10,
-                                                ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black,
+                                              borderRadius:
+                                                  BorderRadius.circular(15),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
                                                 Row(
                                                   mainAxisAlignment:
                                                       MainAxisAlignment
                                                           .spaceBetween,
                                                   children: [
                                                     Text(
-                                                      'Change Due',
+                                                      'Total',
                                                       style: TextStyle(
                                                         fontSize:
                                                             isLargeScreen
                                                                 ? 22
-                                                                : 20,
+                                                                : 18,
                                                         fontWeight:
                                                             FontWeight.bold,
                                                         color: Colors.white,
@@ -2652,16 +2625,16 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                                     SizedBox(
                                                       width:
                                                           isLargeScreen
-                                                              ? 50
-                                                              : 40,
+                                                              ? 80
+                                                              : 60,
                                                     ),
                                                     Text(
-                                                      '£${_selectedOrder!.changeDue.toStringAsFixed(2)}',
+                                                      '£${_selectedOrder!.orderTotalPrice.toStringAsFixed(2)}',
                                                       style: TextStyle(
                                                         fontSize:
                                                             isLargeScreen
                                                                 ? 22
-                                                                : 20,
+                                                                : 18,
                                                         fontWeight:
                                                             FontWeight.bold,
                                                         color: Colors.white,
@@ -2669,13 +2642,55 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                                     ),
                                                   ],
                                                 ),
+                                                if (_selectedOrder!.changeDue >
+                                                    0) ...[
+                                                  SizedBox(
+                                                    height:
+                                                        isLargeScreen ? 12 : 10,
+                                                  ),
+                                                  Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceBetween,
+                                                    children: [
+                                                      Text(
+                                                        'Change Due',
+                                                        style: TextStyle(
+                                                          fontSize:
+                                                              isLargeScreen
+                                                                  ? 22
+                                                                  : 18,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: Colors.white,
+                                                        ),
+                                                      ),
+                                                      SizedBox(
+                                                        width:
+                                                            isLargeScreen
+                                                                ? 30
+                                                                : 20,
+                                                      ),
+                                                      Text(
+                                                        '£${_selectedOrder!.changeDue.toStringAsFixed(2)}',
+                                                        style: TextStyle(
+                                                          fontSize:
+                                                              isLargeScreen
+                                                                  ? 22
+                                                                  : 18,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: Colors.white,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ],
                                               ],
-                                            ],
+                                            ),
                                           ),
                                         ),
-                                        SizedBox(
-                                          width: isLargeScreen ? 25 : 20,
-                                        ),
+                                        SizedBox(width: isLargeScreen ? 10 : 8),
 
                                         if (_selectedOrderType != 'drivers')
                                           MouseRegion(
@@ -2701,12 +2716,12 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                                       'assets/images/printer.png',
                                                       width:
                                                           isLargeScreen
-                                                              ? 65
-                                                              : 58,
+                                                              ? 55
+                                                              : 50,
                                                       height:
                                                           isLargeScreen
-                                                              ? 65
-                                                              : 58,
+                                                              ? 55
+                                                              : 50,
                                                       color: Colors.white,
                                                     ),
                                                     SizedBox(
@@ -2714,12 +2729,65 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                                           isLargeScreen ? 6 : 4,
                                                     ),
                                                     Text(
-                                                      'Print Receipt',
+                                                      'Print',
                                                       style: TextStyle(
                                                         fontSize:
                                                             isLargeScreen
-                                                                ? 17
-                                                                : 15,
+                                                                ? 15
+                                                                : 13,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+
+                                        SizedBox(width: isLargeScreen ? 10 : 8),
+
+                                        // Cancel button
+                                        if (_selectedOrderType != 'drivers')
+                                          MouseRegion(
+                                            cursor: SystemMouseCursors.click,
+                                            child: GestureDetector(
+                                              onTap: () async {
+                                                await _handleCancelOrder();
+                                              },
+                                              child: Container(
+                                                padding: EdgeInsets.all(
+                                                  isLargeScreen ? 10 : 8,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.red[700],
+                                                  borderRadius:
+                                                      BorderRadius.circular(15),
+                                                ),
+                                                child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.cancel_outlined,
+                                                      size:
+                                                          isLargeScreen
+                                                              ? 55
+                                                              : 50,
+                                                      color: Colors.white,
+                                                    ),
+                                                    SizedBox(
+                                                      height:
+                                                          isLargeScreen ? 6 : 4,
+                                                    ),
+                                                    Text(
+                                                      'Cancel',
+                                                      style: TextStyle(
+                                                        fontSize:
+                                                            isLargeScreen
+                                                                ? 15
+                                                                : 13,
                                                         fontWeight:
                                                             FontWeight.bold,
                                                         color: Colors.white,
@@ -2777,6 +2845,97 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _handleCancelOrder() async {
+    if (_selectedOrder == null) {
+      CustomPopupService.show(
+        context,
+        "No order selected for cancellation",
+        type: PopupType.failure,
+      );
+      return;
+    }
+
+    final String normalizedStatus = _selectedOrder!.status.toLowerCase();
+    String? statusMessage;
+    if (normalizedStatus == 'cancelled' || normalizedStatus == 'red') {
+      statusMessage = 'Order ${_selectedOrder!.orderId} is already cancelled.';
+    } else if (normalizedStatus == 'completed' ||
+        normalizedStatus == 'delivered' ||
+        normalizedStatus == 'blue') {
+      statusMessage =
+          'Order ${_selectedOrder!.orderId} has already been completed and cannot be cancelled.';
+    }
+
+    if (statusMessage != null) {
+      CustomPopupService.show(context, statusMessage, type: PopupType.failure);
+      return;
+    }
+
+    // Show confirmation dialog
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Cancel Order'),
+          content: Text(
+            'Are you sure you want to cancel order #${_selectedOrder!.orderId}?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('No'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Yes, Cancel Order'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final success = await OrderApiService.updateOrderStatus(
+        _selectedOrder!.orderId,
+        'red',
+      );
+
+      if (!mounted) return;
+
+      if (success) {
+        CustomPopupService.show(
+          context,
+          'Order ${_selectedOrder!.orderId} has been cancelled',
+          type: PopupType.success,
+        );
+
+        // Refresh orders to show updated status
+        final orderProvider = Provider.of<OrderProvider>(
+          context,
+          listen: false,
+        );
+        await orderProvider.fetchWebsiteOrders();
+      } else {
+        CustomPopupService.show(
+          context,
+          'Failed to cancel order ${_selectedOrder!.orderId}',
+          type: PopupType.failure,
+        );
+      }
+    } catch (e) {
+      print('Error cancelling order: $e');
+      if (!mounted) return;
+      CustomPopupService.show(
+        context,
+        'Error cancelling order',
+        type: PopupType.failure,
+      );
+    }
   }
 
   // Helper function to determine if delivery charges should apply
