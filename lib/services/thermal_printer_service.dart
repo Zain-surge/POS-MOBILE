@@ -810,11 +810,10 @@ class ThermalPrinterService {
     for (String line in lines) {
       if (line.contains('**') && line.contains('**')) {
         // Handle ONLY the specific bold elements we want
-        if (line.contains('DALLAS AND GIOS CHICKEN') &&
-            line.trim() == '**DALLAS AND GIOS CHICKEN**') {
+        if (line.contains('TVP') && line.trim() == '**TVP**') {
           // Restaurant name - large and bold
           bytes += generator.text(
-            'DALLAS AND GIOS CHICKEN',
+            'TVP',
             styles: const PosStyles(
               align: PosAlign.center,
               height: PosTextSize.size3,
@@ -2335,9 +2334,7 @@ class ThermalPrinterService {
 
     // Use full 80mm paper width (48 characters)
     receipt.writeln('================================================');
-    receipt.writeln(
-      '          **DALLAS AND GIOS CHICKEN**',
-    ); // Bold restaurant name
+    receipt.writeln('                    **TVP**'); // Bold restaurant name
     receipt.writeln('================================================');
     DateTime displayDateTime = orderDateTime ?? UKTimeService.now();
     receipt.writeln(
@@ -2548,7 +2545,7 @@ class ThermalPrinterService {
 
     // Bold restaurant name
     bytes += generator.text(
-      'DALLAS AND GIOS CHICKEN',
+      'TVP',
       styles: const PosStyles(
         align: PosAlign.center,
         height: PosTextSize.size3,
@@ -3368,7 +3365,7 @@ class ThermalPrinterService {
 
     // Header
     bytes += generator.text(
-      'DALLAS AND GIOS CHICKEN',
+      'TVP',
       styles: const PosStyles(
         align: PosAlign.center,
         height: PosTextSize.size3,
