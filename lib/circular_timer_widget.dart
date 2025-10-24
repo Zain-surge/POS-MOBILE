@@ -47,17 +47,26 @@ class _CircularTimerState extends State<CircularTimer> {
 
   void _updateElapsedTime() {
     setState(() {
-      // Get current UK time
-      final currentUKTime = UKTimeService.now();
+      // WORKAROUND: Backend sends UK time with Z suffix (should be UTC but isn't)
+      // So we need to compare UK times, not UTC times
+      final DateTime currentUKTime = UKTimeService.now();
 
-      // Convert the provided start time into UK local time so that timers
-      // tick from the actual order creation moment regardless of timezone.
-      final DateTime orderStartInUk = UKTimeService.toUkTime(
-        widget.startTime,
+      // The backend incorrectly stores UK local time as UTC
+      // So we need to treat widget.startTime as UK time, not UTC
+      // Extract the time components and create a UK DateTime
+      final DateTime startTimeAsUK = DateTime(
+        widget.startTime.year,
+        widget.startTime.month,
+        widget.startTime.day,
+        widget.startTime.hour,
+        widget.startTime.minute,
+        widget.startTime.second,
+        widget.startTime.millisecond,
+        widget.startTime.microsecond,
       );
 
-      // Calculate difference using UK-local timestamps
-      _elapsed = currentUKTime.difference(orderStartInUk);
+      // Calculate difference using UK timestamps
+      _elapsed = currentUKTime.difference(startTimeAsUK);
     });
   }
 

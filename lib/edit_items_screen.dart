@@ -653,6 +653,33 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
                                                     ],
                                                   ),
                                                 ),
+                                                // Delete button
+                                                GestureDetector(
+                                                  onTap: () {
+                                                    _deleteItem(item);
+                                                  },
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.all(8),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.red.shade50,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      border: Border.all(
+                                                        color: Colors.red,
+                                                        width: 1,
+                                                      ),
+                                                    ),
+                                                    child: Icon(
+                                                      Icons.delete,
+                                                      color: Colors.red,
+                                                      size: 20,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
                                                 // Edit button
                                                 GestureDetector(
                                                   onTap: () {
@@ -1151,6 +1178,62 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
         ),
       ],
     );
+  }
+
+  void _deleteItem(FoodItem item) {
+    // Show confirmation dialog
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Delete Item'),
+          content: Text(
+            'Are you sure you want to delete "${item.name}"?\n\nThis action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+              },
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: Colors.grey.shade700),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+                _performDelete(item);
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: Text(
+                'Delete',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _performDelete(FoodItem item) async {
+    print('🗑️ Delete item requested: ${item.name} (ID: ${item.id})');
+
+    try {
+      // Call the provider's delete method
+      final itemProvider = Provider.of<ItemAvailabilityProvider>(
+        context,
+        listen: false,
+      );
+      await itemProvider.deleteItem(context, item.id);
+
+      // Success message is already shown by the provider
+      print('🗑️ Item ${item.name} successfully removed from POS');
+    } catch (e) {
+      print('🗑️ Failed to delete item ${item.name}: $e');
+      // Error message is already shown by the provider
+    }
   }
 
   Widget _buildSubtypeSection() {

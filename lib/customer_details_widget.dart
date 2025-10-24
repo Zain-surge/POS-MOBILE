@@ -1424,7 +1424,24 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
                             _isSubmitting
                                 ? null
                                 : () async {
-                                  if (isCollectionOrTakeaway && !hasDetails) {
+                                  print(
+                                    '🔵 CustomerDetailsWidget: Next button pressed',
+                                  );
+                                  print('🔵 Order type: ${widget.orderType}');
+                                  print(
+                                    '🔵 isCardThroughLink: ${widget.isCardThroughLink}',
+                                  );
+                                  print(
+                                    '🔵 isCollectionOrTakeaway: $isCollectionOrTakeaway',
+                                  );
+                                  print('🔵 hasDetails: $hasDetails');
+
+                                  // Skip the "use Skip button" check for card through link
+                                  // because email is REQUIRED for card through link payments
+                                  if (isCollectionOrTakeaway &&
+                                      !hasDetails &&
+                                      !widget.isCardThroughLink) {
+                                    print('❌ Showing "use Skip button" popup');
                                     CustomPopupService.show(
                                       context,
                                       "Please enter customer details to Continue or use Skip button",
@@ -1433,7 +1450,9 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
                                     return;
                                   }
 
+                                  print('🔵 Validating form...');
                                   if (_formKey.currentState!.validate()) {
+                                    print('✅ Form validation passed!');
                                     setState(() {
                                       _isSubmitting = true;
                                     });
@@ -1465,8 +1484,17 @@ class _CustomerDetailsWidgetState extends State<CustomerDetailsWidget> {
                                                 : _postalCodeController.text
                                                     .trim(),
                                       );
+                                      print(
+                                        '🔵 Customer details created: ${customerDetails.name}, ${customerDetails.email}',
+                                      );
+                                      print(
+                                        '🔵 Calling onCustomerDetailsSubmitted callback...',
+                                      );
                                       await widget.onCustomerDetailsSubmitted(
                                         customerDetails,
+                                      );
+                                      print(
+                                        '✅ onCustomerDetailsSubmitted completed',
                                       );
                                     } finally {
                                       if (mounted) {

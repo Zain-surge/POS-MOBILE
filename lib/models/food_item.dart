@@ -12,6 +12,7 @@ class FoodItem {
   final String? subType;
   final List<String>? sauces;
   final bool availability;
+  final bool pos; // POS visibility flag
 
   FoodItem({
     required this.id,
@@ -25,6 +26,7 @@ class FoodItem {
     this.subType,
     this.sauces,
     required this.availability,
+    this.pos = true, // Default to true for backward compatibility
   });
 
   factory FoodItem.fromJson(Map<String, dynamic> json) {
@@ -64,6 +66,7 @@ class FoodItem {
               .whereType<String>()
               .toList(),
       availability: json['availability'] as bool? ?? true,
+      pos: json['pos'] as bool? ?? true, // Default to true if not provided
     );
   }
 
@@ -87,6 +90,7 @@ class FoodItem {
       if (defaultCheese != null) 'cheese': defaultCheese,
       if (sauces != null) 'sauces': sauces,
       'availability': availability,
+      'pos': pos,
     };
   }
 
@@ -102,6 +106,7 @@ class FoodItem {
     String? subType,
     List<String>? sauces,
     bool? availability,
+    bool? pos,
   }) {
     return FoodItem(
       id: id ?? this.id,
@@ -115,6 +120,7 @@ class FoodItem {
       subType: subType ?? this.subType,
       sauces: sauces ?? this.sauces,
       availability: availability ?? this.availability,
+      pos: pos ?? this.pos,
     );
   }
 }

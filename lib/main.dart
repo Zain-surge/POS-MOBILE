@@ -22,9 +22,11 @@ import 'package:epos/providers/item_availability_provider.dart';
 import 'package:epos/providers/offline_provider.dart';
 import 'package:epos/providers/food_items_provider.dart';
 import 'package:epos/providers/payment_link_provider.dart';
+import 'package:epos/providers/order_history_provider.dart';
 import 'package:epos/services/uk_time_service.dart';
 import 'package:epos/services/offline_storage_service.dart';
 import 'package:epos/services/connectivity_service.dart';
+import 'package:epos/services/thermal_printer_service.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -37,6 +39,9 @@ void main() async {
 
   // Initialize connectivity service
   await ConnectivityService().initialize();
+
+  // Prime thermal printer connections in the background so first print is fast
+  ThermalPrinterService().primeConnectionsInBackground();
 
   UKTimeService.debugTime();
   OrderApiService();
@@ -206,6 +211,15 @@ void main() async {
           create: (_) {
             print('💳 CREATING PaymentLinkProvider');
             return PaymentLinkProvider();
+          },
+          lazy: false, // Make non-lazy for immediate availability
+        ),
+
+        // NEW: OrderHistoryProvider - HANDLES ORDER HISTORY BY DATE
+        ChangeNotifierProvider<OrderHistoryProvider>(
+          create: (_) {
+            print('📜 CREATING OrderHistoryProvider');
+            return OrderHistoryProvider();
           },
           lazy: false, // Make non-lazy for immediate availability
         ),

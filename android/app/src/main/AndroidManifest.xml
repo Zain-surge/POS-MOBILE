@@ -23,7 +23,7 @@
     <uses-feature android:name="android.hardware.usb.accessory" android:required="false" />
 
     <application
-        android:label="Surge POS"
+        android:label="TVP POS"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

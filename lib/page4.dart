@@ -59,6 +59,7 @@ class _Page4State extends State<Page4> {
   String _takeawaySubType = 'takeaway';
   bool isLoading = false;
   bool _isProcessingPayment = false;
+  bool _isSendingPaymentLink = false;
   bool _isEditMode = false;
   int? _editingOrderId;
   order_model.Order? _existingOrder;
@@ -107,6 +108,15 @@ class _Page4State extends State<Page4> {
     'Donner & Shawarma kebab',
     'Shawarma & kebab trays',
   ];
+
+  int _selectedWingsSubcategory = 0;
+  List<String> _wingsSubcategories = [];
+
+  int _selectedDealsSubcategory = 0;
+  List<String> _dealsSubcategories = [];
+
+  int _selectedPizzaSubcategory = 0;
+  List<String> _pizzaSubcategories = [];
 
   bool _showAddItemModal = false;
   void _scrollCategoriesLeft() {
@@ -745,6 +755,9 @@ class _Page4State extends State<Page4> {
 
     foodItems = widget.foodItems;
 
+    // Populate Wings and Deals subcategories from food items
+    _populateSubcategories();
+
     print("Page4 initialized with ${foodItems.length} food items");
     print("Page4 Actual Order Type: $_actualOrderType");
     print("Page4 Cart Items: ${_cartItems.length}");
@@ -1310,6 +1323,54 @@ class _Page4State extends State<Page4> {
     }
   }
 
+  void _populateSubcategories() {
+    // Extract unique subtypes for Wings category
+    final wingsItems = foodItems.where(
+      (item) => item.category.toLowerCase() == 'wings',
+    );
+    final wingsSubtypes =
+        wingsItems
+            .map((item) => item.subType)
+            .where((subType) => subType != null && subType.trim().isNotEmpty)
+            .map((subType) => subType!.trim())
+            .toSet()
+            .toList();
+    wingsSubtypes.sort(); // Sort alphabetically
+    _wingsSubcategories = wingsSubtypes;
+
+    // Extract unique subtypes for Deals category
+    final dealsItems = foodItems.where(
+      (item) => item.category.toLowerCase() == 'deals',
+    );
+    final dealsSubtypes =
+        dealsItems
+            .map((item) => item.subType)
+            .where((subType) => subType != null && subType.trim().isNotEmpty)
+            .map((subType) => subType!.trim())
+            .toSet()
+            .toList();
+    dealsSubtypes.sort(); // Sort alphabetically
+    _dealsSubcategories = dealsSubtypes;
+
+    // Extract unique subtypes for Pizza category
+    final pizzaItems = foodItems.where(
+      (item) => item.category.toLowerCase() == 'pizza',
+    );
+    final pizzaSubtypes =
+        pizzaItems
+            .map((item) => item.subType)
+            .where((subType) => subType != null && subType.trim().isNotEmpty)
+            .map((subType) => subType!.trim())
+            .toSet()
+            .toList();
+    pizzaSubtypes.sort(); // Sort alphabetically
+    _pizzaSubcategories = pizzaSubtypes;
+
+    print("Page4: Wings subcategories: $_wingsSubcategories");
+    print("Page4: Deals subcategories: $_dealsSubcategories");
+    print("Page4: Pizza subcategories: $_pizzaSubcategories");
+  }
+
   void _getLeftPanelDimensions() {
     final RenderBox? renderBox =
         _leftPanelKey.currentContext?.findRenderObject() as RenderBox?;
@@ -1469,7 +1530,8 @@ class _Page4State extends State<Page4> {
   double _calculateCartItemsTotal() {
     double total = 0.0;
     for (var item in _cartItems) {
-      total += item.pricePerUnit * item.quantity;
+      // Use item.totalPrice to include extraAmount (e.g., rush fees)
+      total += item.totalPrice;
     }
     return total;
   }
@@ -2384,183 +2446,246 @@ class _Page4State extends State<Page4> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () {
-          // Dismiss keyboard when tapping outside
-          FocusScope.of(context).unfocus();
-          _searchFocusNode.unfocus();
+      body: Stack(
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              // Dismiss keyboard when tapping outside
+              FocusScope.of(context).unfocus();
+              _searchFocusNode.unfocus();
 
-          // Collapse search bar if expanded
-          if (_isSearchBarExpanded) {
-            setState(() {
-              _isSearchBarExpanded = false;
-              _searchController.clear();
-              _searchQuery = '';
-            });
-          }
-        },
-        child: Column(
-          children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  SafeArea(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          key: _leftPanelKey,
-                          flex: 2,
-                          child: Stack(
-                            children: [
-                              Column(
+              // Collapse search bar if expanded
+              if (_isSearchBarExpanded) {
+                setState(() {
+                  _isSearchBarExpanded = false;
+                  _searchController.clear();
+                  _searchQuery = '';
+                });
+              }
+            },
+            child: Column(
+              children: [
+                Expanded(
+                  child: Stack(
+                    children: [
+                      SafeArea(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              key: _leftPanelKey,
+                              flex: 2,
+                              child: Stack(
                                 children: [
-                                  _buildSearchBar(),
-                                  _buildCategoryTabs(),
-                                  const SizedBox(height: 20),
-                                  Container(
-                                    margin: const EdgeInsets.symmetric(
-                                      horizontal: 40,
-                                    ),
-                                    height: 13,
-                                    width: double.infinity,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF2D9F9),
-                                      borderRadius: BorderRadius.circular(30),
-                                    ),
+                                  Column(
+                                    children: [
+                                      _buildSearchBar(),
+                                      _buildCategoryTabs(),
+                                      const SizedBox(height: 20),
+                                      Container(
+                                        margin: const EdgeInsets.symmetric(
+                                          horizontal: 40,
+                                        ),
+                                        height: 13,
+                                        width: double.infinity,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF2D9F9),
+                                          borderRadius: BorderRadius.circular(
+                                            30,
+                                          ),
+                                        ),
+                                      ),
+                                      _buildShawarmaSubcategoryTabs(),
+                                      Expanded(child: _buildItemGrid()),
+                                    ],
                                   ),
-                                  _buildShawarmaSubcategoryTabs(),
-                                  Expanded(child: _buildItemGrid()),
+
+                                  if (_isModalOpen)
+                                    Positioned.fill(
+                                      child: BackdropFilter(
+                                        filter: ImageFilter.blur(
+                                          sigmaX: 10.0,
+                                          sigmaY: 10.0,
+                                        ),
+                                        child: Container(
+                                          color: Colors.black.withOpacity(0.3),
+                                        ),
+                                      ),
+                                    ),
                                 ],
                               ),
-
-                              if (_isModalOpen)
-                                Positioned.fill(
-                                  child: BackdropFilter(
-                                    filter: ImageFilter.blur(
-                                      sigmaX: 10.0,
-                                      sigmaY: 10.0,
-                                    ),
-                                    child: Container(
-                                      color: Colors.black.withOpacity(0.3),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding:
-                              _isModalOpen
-                                  ? EdgeInsets.zero
-                                  : const EdgeInsets.symmetric(vertical: 20.0),
-                          child: const VerticalDivider(
-                            width: 2.5,
-                            thickness: 2.5,
-                            color: Color(0xFFB2B2B2),
-                          ),
-                        ),
-
-                        Expanded(
-                          flex: 1,
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              children: [
-                                Expanded(child: _buildRightPanelContent()),
-                              ],
                             ),
-                          ),
+                            Padding(
+                              padding:
+                                  _isModalOpen
+                                      ? EdgeInsets.zero
+                                      : const EdgeInsets.symmetric(
+                                        vertical: 20.0,
+                                      ),
+                              child: const VerticalDivider(
+                                width: 2.5,
+                                thickness: 2.5,
+                                color: Color(0xFFB2B2B2),
+                              ),
+                            ),
+
+                            Expanded(
+                              flex: 1,
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  children: [
+                                    Expanded(child: _buildRightPanelContent()),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
 
-                  // FoodItemDetailsModal (positioned over the whole screen but visually over left panel)
-                  if (_isModalOpen &&
-                      _modalFoodItem != null &&
-                      _leftPanelRect != Rect.zero)
-                    Positioned(
-                      left: modalLeftOffset,
-                      top: modalTopOffset,
-                      width: modalActualWidth,
-                      height: modalActualHeight,
-                      child: Consumer<ItemAvailabilityProvider>(
-                        builder: (context, itemProvider, child) {
-                          final List<FoodItem> providerItems =
-                              itemProvider.allItems;
-                          final List<FoodItem> allAvailableItems =
-                              providerItems.isNotEmpty
-                                  ? providerItems
-                                  : (widget.foodItems.isNotEmpty
-                                      ? widget.foodItems
-                                      : foodItems);
+                      // FoodItemDetailsModal (positioned over the whole screen but visually over left panel)
+                      if (_isModalOpen &&
+                          _modalFoodItem != null &&
+                          _leftPanelRect != Rect.zero)
+                        Positioned(
+                          left: modalLeftOffset,
+                          top: modalTopOffset,
+                          width: modalActualWidth,
+                          height: modalActualHeight,
+                          child: Consumer<ItemAvailabilityProvider>(
+                            builder: (context, itemProvider, child) {
+                              final List<FoodItem> providerItems =
+                                  itemProvider.allItems;
+                              final List<FoodItem> allAvailableItems =
+                                  providerItems.isNotEmpty
+                                      ? providerItems
+                                      : (widget.foodItems.isNotEmpty
+                                          ? widget.foodItems
+                                          : foodItems);
 
-                          return FoodItemDetailsModal(
-                            foodItem: _modalFoodItem!,
-                            allFoodItems: allAvailableItems,
-                            onAddToCart: _handleItemAdditionOrUpdate,
-                            onClose: () {
-                              setState(() {
-                                _isModalOpen = false;
-                                _modalFoodItem = null;
-                                _editingCartIndex = null;
-                              });
+                              return FoodItemDetailsModal(
+                                foodItem: _modalFoodItem!,
+                                allFoodItems: allAvailableItems,
+                                onAddToCart: _handleItemAdditionOrUpdate,
+                                onClose: () {
+                                  setState(() {
+                                    _isModalOpen = false;
+                                    _modalFoodItem = null;
+                                    _editingCartIndex = null;
+                                  });
 
-                              // NEW: Save modal state to provider
-                              final stateProvider =
-                                  Provider.of<Page4StateProvider>(
-                                    context,
-                                    listen: false,
+                                  // NEW: Save modal state to provider
+                                  final stateProvider =
+                                      Provider.of<Page4StateProvider>(
+                                        context,
+                                        listen: false,
+                                      );
+                                  stateProvider.updateModalState(
+                                    isOpen: false,
+                                    foodItem: null,
+                                    editingIndex: null,
                                   );
-                              stateProvider.updateModalState(
-                                isOpen: false,
-                                foodItem: null,
-                                editingIndex: null,
+                                },
+                                initialCartItem:
+                                    _editingCartIndex != null &&
+                                            _editingCartIndex! >= 0 &&
+                                            _editingCartIndex! <
+                                                _cartItems.length
+                                        ? _cartItems[_editingCartIndex!]
+                                        : null,
+                                isEditing: _editingCartIndex != null,
                               );
                             },
-                            initialCartItem:
-                                _editingCartIndex != null &&
-                                        _editingCartIndex! >= 0 &&
-                                        _editingCartIndex! < _cartItems.length
-                                    ? _cartItems[_editingCartIndex!]
-                                    : null,
-                            isEditing: _editingCartIndex != null,
-                          );
-                        },
-                      ),
-                    ),
+                          ),
+                        ),
 
-                  // Add Item Modal
-                  if (_showAddItemModal)
-                    Positioned.fill(
-                      child: Container(
-                        color: Colors.black.withOpacity(0.5),
-                        child: Center(
-                          child: SingleChildScrollView(
-                            child: Container(
-                              margin: EdgeInsets.all(20),
-                              constraints: BoxConstraints(
-                                maxWidth: 500,
-                                maxHeight:
-                                    MediaQuery.of(context).size.height * 0.8,
+                      // Add Item Modal
+                      if (_showAddItemModal)
+                        Positioned.fill(
+                          child: Container(
+                            color: Colors.black.withOpacity(0.5),
+                            child: Center(
+                              child: SingleChildScrollView(
+                                child: Container(
+                                  margin: EdgeInsets.all(20),
+                                  constraints: BoxConstraints(
+                                    maxWidth: 500,
+                                    maxHeight:
+                                        MediaQuery.of(context).size.height *
+                                        0.8,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
+                    ],
+                  ),
+                ),
+
+                CustomBottomNavBar(
+                  selectedIndex: -1,
+                  onItemSelected: _onBottomNavItemSelected,
+                  showDivider: true,
+                ),
+              ],
+            ),
+          ),
+
+          // Blur overlay when sending payment link
+          if (_isSendingPaymentLink)
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+                child: Container(
+                  color: Colors.black.withOpacity(0.3),
+                  child: Center(
+                    child: Card(
+                      elevation: 8,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(32.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFFCB6CE6),
+                              ),
+                              strokeWidth: 3,
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              'Sending Payment Link...',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Poppins',
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Please wait while we send the payment link to the customer',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontFamily: 'Poppins',
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                ],
+                  ),
+                ),
               ),
             ),
-
-            CustomBottomNavBar(
-              selectedIndex: -1,
-              onItemSelected: _onBottomNavItemSelected,
-              showDivider: true,
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -2978,7 +3103,7 @@ class _Page4State extends State<Page4> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(left: 50, right: 120),
+            padding: const EdgeInsets.only(left: 50, right: 120, top: 20),
             child: Row(
               children: [
                 // Back Arrow Button
@@ -3208,65 +3333,108 @@ class _Page4State extends State<Page4> {
     if (selectedCategory >= 0 &&
         selectedCategory < categories.length &&
         categories[selectedCategory].name.toLowerCase() == 'shawarmas') {
-      return Container(
-        padding: const EdgeInsets.only(
-          left: 80,
-          right: 80,
-          top: 15,
-          bottom: 15,
-        ),
-        child: Row(
-          children: [
-            for (int i = 0; i < _shawarmaSubcategories.length; i++)
-              Padding(
-                padding: EdgeInsets.only(
-                  right: i < _shawarmaSubcategories.length - 1 ? 20 : 0,
-                ),
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedShawarmaSubcategory = i;
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
+      return _buildSubcategoryTabs(
+        subcategories: _shawarmaSubcategories,
+        selectedIndex: _selectedShawarmaSubcategory,
+        onTap: (index) {
+          setState(() {
+            _selectedShawarmaSubcategory = index;
+          });
+        },
+      );
+    } else if (selectedCategory >= 0 &&
+        selectedCategory < categories.length &&
+        categories[selectedCategory].name.toLowerCase() == 'wings' &&
+        _wingsSubcategories.isNotEmpty) {
+      return _buildSubcategoryTabs(
+        subcategories: _wingsSubcategories,
+        selectedIndex: _selectedWingsSubcategory,
+        onTap: (index) {
+          setState(() {
+            _selectedWingsSubcategory = index;
+          });
+        },
+      );
+    } else if (selectedCategory >= 0 &&
+        selectedCategory < categories.length &&
+        categories[selectedCategory].name.toLowerCase() == 'deals' &&
+        _dealsSubcategories.isNotEmpty) {
+      return _buildSubcategoryTabs(
+        subcategories: _dealsSubcategories,
+        selectedIndex: _selectedDealsSubcategory,
+        onTap: (index) {
+          setState(() {
+            _selectedDealsSubcategory = index;
+          });
+        },
+      );
+    } else if (selectedCategory >= 0 &&
+        selectedCategory < categories.length &&
+        categories[selectedCategory].name.toLowerCase() == 'pizza' &&
+        _pizzaSubcategories.isNotEmpty) {
+      return _buildSubcategoryTabs(
+        subcategories: _pizzaSubcategories,
+        selectedIndex: _selectedPizzaSubcategory,
+        onTap: (index) {
+          setState(() {
+            _selectedPizzaSubcategory = index;
+          });
+        },
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildSubcategoryTabs({
+    required List<String> subcategories,
+    required int selectedIndex,
+    required Function(int) onTap,
+  }) {
+    return Container(
+      padding: const EdgeInsets.only(left: 80, right: 80, top: 15, bottom: 15),
+      child: Row(
+        children: [
+          for (int i = 0; i < subcategories.length; i++)
+            Padding(
+              padding: EdgeInsets.only(
+                right: i < subcategories.length - 1 ? 20 : 0,
+              ),
+              child: GestureDetector(
+                onTap: () => onTap(i),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        selectedIndex == i
+                            ? const Color(0xFFCB6CE6)
+                            : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
                       color:
-                          _selectedShawarmaSubcategory == i
+                          selectedIndex == i
                               ? const Color(0xFFCB6CE6)
-                              : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color:
-                            _selectedShawarmaSubcategory == i
-                                ? const Color(0xFFCB6CE6)
-                                : Colors.grey.shade300,
-                        width: 2,
-                      ),
+                              : Colors.grey.shade300,
+                      width: 2,
                     ),
-                    child: Text(
-                      _shawarmaSubcategories[i],
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontFamily: 'Poppins',
-                        color:
-                            _selectedShawarmaSubcategory == i
-                                ? Colors.white
-                                : Colors.black,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  ),
+                  child: Text(
+                    subcategories[i],
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontFamily: 'Poppins',
+                      color: selectedIndex == i ? Colors.white : Colors.black,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
               ),
-          ],
-        ),
-      );
-    }
-    return const SizedBox.shrink();
+            ),
+        ],
+      ),
+    );
   }
 
   Widget _buildItemGrid() {
@@ -3356,6 +3524,36 @@ class _Page4State extends State<Page4> {
         if (selectedCategoryName.toLowerCase() == 'shawarmas') {
           final selectedSubcategory =
               _shawarmaSubcategories[_selectedShawarmaSubcategory];
+          currentItems = currentItems.where(
+            (item) => item.subType?.trim() == selectedSubcategory.trim(),
+          );
+        }
+
+        // Filter by subcategory for Wings items
+        if (selectedCategoryName.toLowerCase() == 'wings' &&
+            _wingsSubcategories.isNotEmpty) {
+          final selectedSubcategory =
+              _wingsSubcategories[_selectedWingsSubcategory];
+          currentItems = currentItems.where(
+            (item) => item.subType?.trim() == selectedSubcategory.trim(),
+          );
+        }
+
+        // Filter by subcategory for Deals items
+        if (selectedCategoryName.toLowerCase() == 'deals' &&
+            _dealsSubcategories.isNotEmpty) {
+          final selectedSubcategory =
+              _dealsSubcategories[_selectedDealsSubcategory];
+          currentItems = currentItems.where(
+            (item) => item.subType?.trim() == selectedSubcategory.trim(),
+          );
+        }
+
+        // Filter by subcategory for Pizza items
+        if (selectedCategoryName.toLowerCase() == 'pizza' &&
+            _pizzaSubcategories.isNotEmpty) {
+          final selectedSubcategory =
+              _pizzaSubcategories[_selectedPizzaSubcategory];
           currentItems = currentItems.where(
             (item) => item.subType?.trim() == selectedSubcategory.trim(),
           );
@@ -3650,14 +3848,17 @@ class _Page4State extends State<Page4> {
     }
 
     // NEW: Show customer details form for delivery/takeaway/collection when card_through_link is selected
-    // Show only when cart has items AND payment type is selected
+    // Show only when cart has items AND payment type is selected AND email is missing
     if ((_actualOrderType.toLowerCase() == 'delivery' ||
             _actualOrderType.toLowerCase() == 'takeaway' ||
             _actualOrderType.toLowerCase() == 'collection') &&
         _hasProcessedFirstStep &&
         !_showPayment &&
         _selectedPaymentType == 'card_through_link' &&
-        _cartItems.isNotEmpty) {
+        _cartItems.isNotEmpty &&
+        (_customerDetails == null ||
+            _customerDetails!.email == null ||
+            _customerDetails!.email!.trim().isEmpty)) {
       return Column(
         children: [
           // Service highlights row
@@ -3702,13 +3903,16 @@ class _Page4State extends State<Page4> {
     }
 
     // NEW: Show customer details form for dinein/takeout when card_through_link is selected
-    // Show only when cart has items AND payment type is selected
+    // Show only when cart has items AND payment type is selected AND email is missing
     if ((_actualOrderType.toLowerCase() == 'dinein' ||
             _actualOrderType.toLowerCase() == 'takeout') &&
         _hasProcessedFirstStep &&
         !_showPayment &&
         _selectedPaymentType == 'card_through_link' &&
-        _cartItems.isNotEmpty) {
+        _cartItems.isNotEmpty &&
+        (_customerDetails == null ||
+            _customerDetails!.email == null ||
+            _customerDetails!.email!.trim().isEmpty)) {
       return Column(
         children: [
           // Service highlights row
@@ -5070,9 +5274,10 @@ class _Page4State extends State<Page4> {
   /// Calls payment link API immediately when customer details are submitted
   /// Handles differential payment for order updates
   Future<void> _handleCardThroughLinkSubmission(CustomerDetails details) async {
-    // Save customer details
+    // Save customer details and set loading state
     setState(() {
       _customerDetails = details;
+      _isSendingPaymentLink = true;
     });
 
     try {
@@ -5182,9 +5387,13 @@ class _Page4State extends State<Page4> {
 
         setState(() {
           _showPayment = true;
+          _isSendingPaymentLink = false;
         });
       } else {
         // Failed - show error
+        setState(() {
+          _isSendingPaymentLink = false;
+        });
         CustomPopupService.show(
           context,
           'Failed to send payment link: ${paymentLinkProvider.errorMessage}',
@@ -5194,6 +5403,9 @@ class _Page4State extends State<Page4> {
     } catch (e) {
       print('Error in _handleCardThroughLinkSubmission: $e');
       if (mounted) {
+        setState(() {
+          _isSendingPaymentLink = false;
+        });
         CustomPopupService.show(
           context,
           'Error sending payment link: $e',
@@ -5280,8 +5492,9 @@ class _Page4State extends State<Page4> {
               final double pricePerUnit = double.parse(
                 cartItem.pricePerUnit.toStringAsFixed(2),
               );
+              // Use cartItem.totalPrice to include extraAmount (e.g., rush fees)
               final double itemTotalPrice = double.parse(
-                (pricePerUnit * cartItem.quantity).toStringAsFixed(2),
+                cartItem.totalPrice.toStringAsFixed(2),
               );
               return {
                 "item_id": cartItem.foodItem.id,
@@ -5290,6 +5503,8 @@ class _Page4State extends State<Page4> {
                 "price_per_unit": pricePerUnit,
                 "total_price": itemTotalPrice,
                 "comment": cartItem.comment,
+                "extra_amount": cartItem.extraAmount,
+                "extra_reason": cartItem.extraReason,
               };
             }).toList(),
       };
@@ -5805,13 +6020,15 @@ class _Page4State extends State<Page4> {
         return;
       }
 
-      // In new order mode: If customer details already exist and have email, proceed to payment
+      // In new order mode: If customer details already exist and have email, send payment link
       if (_customerDetails != null &&
           _customerDetails!.email != null &&
           _customerDetails!.email!.trim().isNotEmpty) {
-        setState(() {
-          _showPayment = true;
-        });
+        // Customer details exist with email - send payment link API call
+        print(
+          '💳 Customer details exist with email - calling payment link API',
+        );
+        _handleCardThroughLinkSubmission(_customerDetails!);
         return;
       }
 
@@ -5991,6 +6208,8 @@ class _Page4State extends State<Page4> {
                           selectedCategory = index;
                           _searchQuery = '';
                           _selectedShawarmaSubcategory = 0;
+                          _selectedWingsSubcategory = 0;
+                          _selectedDealsSubcategory = 0;
                         });
                       },
                       child: Column(

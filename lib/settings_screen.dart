@@ -9,6 +9,7 @@ import 'package:epos/custom_bottom_nav_bar.dart';
 import 'admin_portal_screen.dart';
 import 'package:epos/services/custom_popup_service.dart';
 import 'edit_items_screen.dart';
+import 'order_history_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final int initialBottomNavItemIndex;
@@ -1122,6 +1123,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildOrderHistoryItem() {
+    return GestureDetector(
+      onTap: _showOrderHistoryScreen,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: Colors.grey.shade300, width: 1),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Order History',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.history,
+                        color: Colors.blue.shade600,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'View Past',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.grey.shade600,
+                    size: 16,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showOrderHistoryScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const OrderHistoryScreen(),
+      ),
+    );
+  }
+
   Widget _buildShopTimingsItem() {
     return GestureDetector(
       onTap: _showTimingsDialog,
@@ -1252,6 +1335,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildOffersItem(),
                     _buildOfflineItemsItem(),
                     _buildTodaysSalesReportItem(), // UPDATED: Only today's report
+                    _buildOrderHistoryItem(), // NEW: Order History
                     _buildAdminPortalItem(), // UPDATED: Admin Portal instead of Driver Settings
                   ],
                 ),

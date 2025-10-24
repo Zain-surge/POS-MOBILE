@@ -46,7 +46,12 @@ class UKTimeService {
       initializeTimeZones();
     }
 
-    final tz.TZDateTime ukDateTime = tz.TZDateTime.from(dateTime, _london);
+    // CRITICAL FIX: Ensure we're working with UTC time first
+    // If the datetime is already in UTC, use it. Otherwise convert to UTC first.
+    final utcDateTime = dateTime.isUtc ? dateTime : dateTime.toUtc();
+
+    // Now convert from UTC to UK time
+    final tz.TZDateTime ukDateTime = tz.TZDateTime.from(utcDateTime, _london);
     return DateTime(
       ukDateTime.year,
       ukDateTime.month,

@@ -8,6 +8,8 @@ class CartItem {
   final List<String>? selectedOptions;
   final String? comment;
   final double pricePerUnit;
+  final double? extraAmount;
+  final String? extraReason;
 
   // Constructor
   CartItem({
@@ -16,6 +18,8 @@ class CartItem {
     this.selectedOptions,
     this.comment,
     required this.pricePerUnit,
+    this.extraAmount,
+    this.extraReason,
   });
 
   // Method to increment quantity
@@ -32,7 +36,11 @@ class CartItem {
     }
   }
 
-  double get totalPrice => pricePerUnit * quantity;
+  double get totalPrice {
+    final basePrice = pricePerUnit * quantity;
+    final extraPrice = (extraAmount ?? 0.0) * quantity;
+    return basePrice + extraPrice;
+  }
 
   // Optional: A string representation of selected options for display
   String get detailsString {

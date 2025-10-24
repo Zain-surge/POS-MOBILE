@@ -1,5 +1,3 @@
-// lib/services/order_api_service.dart
-
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
@@ -19,7 +17,12 @@ class ShopStatusData {
 }
 
 class OrderApiService {
-  static const String _backendBaseUrl = 'https://api.surgechain.co.uk';
+  static const String _backendBaseUrl = 'https://api.thevillagepizzeria.uk';
+
+  // Helper method to build full URLs for HTTP requests
+  static String _buildHttpUrl(String path) {
+    return '$_backendBaseUrl$path';
+  }
 
   // Singleton instance for OrderApiService
   static final OrderApiService _instance = OrderApiService._internal();
@@ -224,6 +227,40 @@ class OrderApiService {
       }
     } catch (e) {
       throw Exception('Error fetching today\'s orders: $e');
+    }
+  }
+
+  // Fetch orders by specific date
+  static Future<List<Order>> fetchOrdersByDate(DateTime date) async {
+    // Format date as YYYY-MM-DD
+    final dateString =
+        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final url = _buildProxyUrl('/orders/by-date');
+
+    try {
+      final response = await http.get(
+        url.replace(queryParameters: {'date': dateString}),
+        headers: BrandInfo.getDefaultHeaders(), // Using brand headers
+      );
+
+      print('📅 Fetching orders for date: $dateString');
+      print('🔍 URL: ${url.replace(queryParameters: {'date': dateString})}');
+
+      if (response.statusCode == 200) {
+        List jsonResponse = json.decode(response.body);
+        List<Order> orders = [];
+        for (var orderJson in jsonResponse) {
+          orders.add(Order.fromJson(orderJson));
+        }
+        print('✅ Fetched ${orders.length} orders for $dateString');
+        return orders;
+      } else {
+        throw Exception(
+          'Failed to load orders for $dateString: ${response.statusCode} ${response.body}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Error fetching orders for $dateString: $e');
     }
   }
 

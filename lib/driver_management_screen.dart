@@ -76,9 +76,7 @@ class _DriverManagementScreenState extends State<DriverManagementScreen> {
               ),
               const SizedBox(height: 20),
               // Content
-              Expanded(
-                child: _buildTabContent(),
-              ),
+              Expanded(child: _buildTabContent()),
             ],
           ),
         ),
@@ -195,7 +193,9 @@ class _AddDriverTabState extends State<AddDriverTab> {
                           if (value == null || value.isEmpty) {
                             return 'Email is required';
                           }
-                          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                          if (!RegExp(
+                            r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                          ).hasMatch(value)) {
                             return 'Invalid email format';
                           }
                           return null;
@@ -250,7 +250,10 @@ class _AddDriverTabState extends State<AddDriverTab> {
                     TextButton(
                       onPressed: _clearForm,
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
                         backgroundColor: Colors.grey.shade600,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -268,28 +271,32 @@ class _AddDriverTabState extends State<AddDriverTab> {
                     ElevatedButton(
                       onPressed: _isLoading ? null : _addDriver,
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
                         backgroundColor: Colors.green,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: _isLoading
-                          ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                          : Text(
-                        'Add Driver',
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      child:
+                          _isLoading
+                              ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : Text(
+                                'Add Driver',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                     ),
                   ],
                 ),
@@ -311,10 +318,7 @@ class _AddDriverTabState extends State<AddDriverTab> {
       controller: controller,
       obscureText: obscureText,
       validator: validator,
-      style: GoogleFonts.poppins(
-        fontSize: 14,
-        color: Colors.black87,
-      ),
+      style: GoogleFonts.poppins(fontSize: 14, color: Colors.black87),
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: GoogleFonts.poppins(
@@ -337,11 +341,11 @@ class _AddDriverTabState extends State<AddDriverTab> {
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: Colors.red),
         ),
-        errorStyle: GoogleFonts.poppins(
-          fontSize: 12,
-          color: Colors.red,
+        errorStyle: GoogleFonts.poppins(fontSize: 12, color: Colors.red),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         filled: true,
         fillColor: Colors.white,
       ),
@@ -369,7 +373,8 @@ class _AddDriverTabState extends State<AddDriverTab> {
         email: _emailController.text,
         username: _usernameController.text,
         password: _passwordController.text,
-        phoneNumber: _phoneController.text.isNotEmpty ? _phoneController.text : null,
+        phoneNumber:
+            _phoneController.text.isNotEmpty ? _phoneController.text : null,
       );
 
       if (mounted) {
@@ -460,10 +465,7 @@ class _DeactivateDriverTabState extends State<DeactivateDriverTab> {
             children: [
               TextField(
                 controller: _usernameController,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: Colors.black87,
-                ),
+                style: GoogleFonts.poppins(fontSize: 14, color: Colors.black87),
                 decoration: InputDecoration(
                   hintText: 'Enter Username',
                   hintStyle: GoogleFonts.poppins(
@@ -482,7 +484,10 @@ class _DeactivateDriverTabState extends State<DeactivateDriverTab> {
                     borderRadius: BorderRadius.circular(8),
                     borderSide: const BorderSide(color: Colors.red),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   filled: true,
                   fillColor: Colors.white,
                 ),
@@ -496,7 +501,10 @@ class _DeactivateDriverTabState extends State<DeactivateDriverTab> {
                       _usernameController.clear();
                     },
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
                       backgroundColor: Colors.grey.shade600,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -512,30 +520,37 @@ class _DeactivateDriverTabState extends State<DeactivateDriverTab> {
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton(
-                    onPressed: _isLoading || !_isButtonEnabled ? null : _deactivateDriver,
+                    onPressed:
+                        _isLoading || !_isButtonEnabled
+                            ? null
+                            : _deactivateDriver,
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
                       backgroundColor: Colors.red,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: _isLoading
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                        : Text(
-                      'Deactivate',
-                      style: GoogleFonts.poppins(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child:
+                        _isLoading
+                            ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                            : Text(
+                              'Deactivate',
+                              style: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                   ),
                 ],
               ),
@@ -636,7 +651,9 @@ class _DriverPortalTabState extends State<DriverPortalTab>
                   onTap: _selectDate,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.grey.shade300),
                       borderRadius: BorderRadius.circular(8),
@@ -666,57 +683,58 @@ class _DriverPortalTabState extends State<DriverPortalTab>
             ),
             const SizedBox(height: 20),
             Expanded(
-              child: provider.isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : provider.error != null
-                  ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Error: ${provider.error}',
-                      style: GoogleFonts.poppins(
-                        color: Colors.red,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => provider.loadOrders(),
-                      child: Text(
-                        'Retry',
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w600,
+              child:
+                  provider.isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : provider.error != null
+                      ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Error: ${provider.error}',
+                              style: GoogleFonts.poppins(
+                                color: Colors.red,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: () => provider.loadOrders(),
+                              child: Text(
+                                'Retry',
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                      : provider.orders.isEmpty
+                      ? Center(
+                        child: Text(
+                          'No orders found for selected date',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      )
+                      : SingleChildScrollView(
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: _buildOrdersGrid(provider.orders),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              )
-                  : provider.orders.isEmpty
-                  ? Center(
-                child: Text(
-                  'No orders found for selected date',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              )
-                  : SingleChildScrollView(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: _buildOrdersGrid(provider.orders),
-                ),
-              ),
             ),
           ],
         );
@@ -756,11 +774,7 @@ class _DriverPortalTabState extends State<DriverPortalTab>
               else
                 const Expanded(child: SizedBox()),
               if (i < 2)
-                Container(
-                  width: 1,
-                  height: 100,
-                  color: Colors.grey.shade300,
-                ),
+                Container(width: 1, height: 100, color: Colors.grey.shade300),
             ],
           ],
         ),
@@ -795,7 +809,6 @@ class _DriverPortalTabState extends State<DriverPortalTab>
   }
 
   void _showOrderDetails(Order order) {
-
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -856,35 +869,30 @@ class _DriverPortalTabState extends State<DriverPortalTab>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Customer Information
-                        _buildDetailSection(
-                          'Customer Information',
-                          [
-                            _buildDetailRow(
-                                'Name', order.customerEmail ?? 'N/A'),
-                            // This now contains customer_name
-                            _buildDetailRow(
-                                'Phone', order.phoneNumber ?? 'N/A'),
-                            _buildDetailRow(
-                                'Address', _buildFullAddress(order)),
-                          ],
-                        ),
+                        _buildDetailSection('Customer Information', [
+                          _buildDetailRow('Name', order.customerEmail ?? 'N/A'),
+                          // This now contains customer_name
+                          _buildDetailRow('Phone', order.phoneNumber ?? 'N/A'),
+                          _buildDetailRow('Address', _buildFullAddress(order)),
+                        ]),
                         const SizedBox(height: 20),
                         // Order Information
-                        _buildDetailSection(
-                          'Order Information',
-                          [
-                            _buildDetailRow('Status', order.statusLabel),
-                            _buildDetailRow('Total', '£${order.orderTotalPrice}'),
-                            _buildDetailRow('Time',
-                                DateFormat('HH:mm - dd/MM/yyyy').format(
-                                    order.createdAt)),
-                          ],
-                        ),
+                        _buildDetailSection('Order Information', [
+                          _buildDetailRow('Status', order.statusLabel),
+                          _buildDetailRow('Total', '£${order.orderTotalPrice}'),
+                          _buildDetailRow(
+                            'Time',
+                            DateFormat(
+                              'HH:mm - dd/MM/yyyy',
+                            ).format(order.createdAt),
+                          ),
+                        ]),
                         const SizedBox(height: 20),
                         // Items
                         _buildDetailSection(
                           'Items',
-                          order.items.map((item) => _buildItemRow(item))
+                          order.items
+                              .map((item) => _buildItemRow(item))
                               .toList(),
                         ),
                       ],
@@ -920,9 +928,7 @@ class _DriverPortalTabState extends State<DriverPortalTab>
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Colors.grey.shade200),
           ),
-          child: Column(
-            children: children,
-          ),
+          child: Column(children: children),
         ),
       ],
     );
@@ -948,10 +954,7 @@ class _DriverPortalTabState extends State<DriverPortalTab>
           Expanded(
             child: Text(
               value,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: Colors.black87,
-              ),
+              style: GoogleFonts.poppins(fontSize: 14, color: Colors.black87),
             ),
           ),
         ],
@@ -1022,8 +1025,8 @@ class _DriverPortalTabState extends State<DriverPortalTab>
 
   String _buildFullAddress(Order order) {
     final parts = <String>[];
-    if (order.streetAddress?.isNotEmpty == true) parts.add(
-        order.streetAddress!);
+    if (order.streetAddress?.isNotEmpty == true)
+      parts.add(order.streetAddress!);
     if (order.city?.isNotEmpty == true) parts.add(order.city!);
     if (order.county?.isNotEmpty == true) parts.add(order.county!);
     if (order.postalCode?.isNotEmpty == true) parts.add(order.postalCode!);

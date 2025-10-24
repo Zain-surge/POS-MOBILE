@@ -51,6 +51,10 @@ class ThermalPrinterService {
   // PERFORMANCE: Cache CapabilityProfile to avoid repeated disk I/O (saves 5-15 seconds per print)
   static CapabilityProfile? _cachedCapabilityProfile;
 
+  // PRIME: Track connection warm-up state
+  bool _hasPrimedConnections = false;
+  bool _isPrimingConnections = false;
+
   // Cash drawer settings
   bool _isDrawerOpeningEnabled = true;
   bool _autoOpenOnCashPayment = true;
@@ -131,6 +135,42 @@ class ThermalPrinterService {
     }
 
     return lines;
+  }
+
+  void primeConnectionsInBackground({
+    Duration timeout = const Duration(seconds: 25),
+  }) {
+    if (kIsWeb) return;
+    if (_hasPrimedConnections || _isPrimingConnections) return;
+
+    _isPrimingConnections = true;
+
+    Future(() async {
+      try {
+        print('dY"� PRIME: Starting background printer warm-up...');
+        final Stopwatch stopwatch = Stopwatch()..start();
+
+        // Pre-load CapabilityProfile to avoid 40-50 second delay on first print
+        print('📋 PRIME: Pre-loading CapabilityProfile...');
+        _cachedCapabilityProfile ??= await CapabilityProfile.load();
+        print('✅ PRIME: CapabilityProfile loaded');
+
+        await testAllConnections().timeout(timeout);
+        stopwatch.stop();
+        print(
+          '�o. PRIME: Printer warm-up completed in ${stopwatch.elapsedMilliseconds} ms',
+        );
+        _hasPrimedConnections = true;
+      } on TimeoutException {
+        print(
+          '�?O PRIME: Printer warm-up timed out after ${timeout.inSeconds} seconds',
+        );
+      } catch (e) {
+        print('�?O PRIME: Printer warm-up failed: $e');
+      } finally {
+        _isPrimingConnections = false;
+      }
+    });
   }
 
   Future<Map<String, bool>> testAllConnections() async {
@@ -763,8 +803,9 @@ class ThermalPrinterService {
       print('🚀 BT: Starting super-fast print job...');
 
       // Convert to optimized ESC/POS with chunked transmission
-      final profile = await CapabilityProfile.load();
-      final generator = Generator(PaperSize.mm80, profile);
+      // PERFORMANCE: Use cached CapabilityProfile to avoid disk I/O (saves 5-15 seconds)
+      _cachedCapabilityProfile ??= await CapabilityProfile.load();
+      final generator = Generator(PaperSize.mm80, _cachedCapabilityProfile!);
       List<int> ticket = await _convertReceiptContentToESCPOS(
         receiptContent,
         generator,
@@ -2334,7 +2375,7 @@ class ThermalPrinterService {
 
     // Use full 80mm paper width (48 characters)
     receipt.writeln('================================================');
-    receipt.writeln('                    **TVP**'); // Bold restaurant name
+    receipt.writeln('                   **TVP**'); // Bold restaurant name
     receipt.writeln('================================================');
     DateTime displayDateTime = orderDateTime ?? UKTimeService.now();
     receipt.writeln(
@@ -3351,10 +3392,11 @@ class ThermalPrinterService {
     int? selectedWeek,
     int? selectedMonth,
   }) async {
-    final profile = await CapabilityProfile.load();
+    // PERFORMANCE: Use cached CapabilityProfile to avoid disk I/O (saves 5-15 seconds)
+    _cachedCapabilityProfile ??= await CapabilityProfile.load();
     final generator = Generator(
       PaperSize.mm80,
-      profile,
+      _cachedCapabilityProfile!,
     ); // 80mm paper width // 80mm paper
     List<int> bytes = [];
 

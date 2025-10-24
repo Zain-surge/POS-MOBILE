@@ -132,9 +132,9 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     "Mint Sauce",
   ];
   final List<String> _allDrinks = [
-    "Coca Cola",
+    "Coke",
     "7Up",
-    "Diet Coca Cola",
+    "Diet Coke",
     "Fanta",
     "Pepsi",
     "Sprite",
@@ -5488,7 +5488,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       // Special handling for combo meal drinks
       if (widget.foodItem.name.toLowerCase() == 'combo meal') {
         final drinkOptions = [
-          'Coca Cola',
+          'Coke',
           'Pepsi',
           '7Up',
           'Fanta',
@@ -5881,7 +5881,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           'Burger': burgerOptions,
           'Calzone': calzoneOptions,
           'Drinks': [
-            'Coca Cola (1.5L)',
+            'Coke (1.5L)',
             'Pepsi (1.5L)',
             '7Up (1.5L)',
             'Fanta (1.5L)',
@@ -5922,7 +5922,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           'Pizza 1': pizzaOffersPizzaOptions,
           'Pizza 2': pizzaOffersPizzaOptions,
           'Pizza 3': pizzaOffersPizzaOptions,
-          'Drink (1.5L)': ['Coca Cola', 'Pepsi', '7Up', 'Fanta', 'Sprite'],
+          'Drink (1.5L)': ['Coke', 'Pepsi', '7Up', 'Fanta', 'Sprite'],
         };
       case 'shawarma deal':
         final shawarmaOptionsForDeal = _getShawarmaOptionsForDeal();
@@ -5932,7 +5932,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           'Shawarma 3': shawarmaOptionsForDeal,
           'Shawarma 4': shawarmaOptionsForDeal,
           'Drink & seasoning': [
-            'Coca Cola (1.5L)',
+            'Coke (1.5L)',
             'Pepsi (1.5L)',
             '7Up (1.5L)',
             'Fanta (1.5L)',

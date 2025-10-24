@@ -1146,10 +1146,22 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
                                             // Calculate time for THIS specific order - aligned with CircularTimer
                                             final DateTime now =
                                                 UKTimeService.now();
+
+                                            // CRITICAL FIX: Use same approach as CircularTimer
+                                            // Backend stores UK local time with Z suffix (incorrectly marked as UTC)
+                                            // Strip timezone and treat as UK local time
                                             final DateTime orderStart =
-                                                UKTimeService.toUkTime(
-                                                  orderCreatedAt,
+                                                DateTime(
+                                                  orderCreatedAt.year,
+                                                  orderCreatedAt.month,
+                                                  orderCreatedAt.day,
+                                                  orderCreatedAt.hour,
+                                                  orderCreatedAt.minute,
+                                                  orderCreatedAt.second,
+                                                  orderCreatedAt.millisecond,
+                                                  orderCreatedAt.microsecond,
                                                 );
+
                                             final Duration orderAge = now
                                                 .difference(orderStart);
                                             final int minutesPassed =
@@ -1164,6 +1176,9 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
                                                   ? "YELLOW"
                                                   : "RED"}',
                                             );
+                                            print(
+                                              '   📅 Now: $now | Order Created: $orderStart | Raw Age: ${orderAge.inSeconds}s',
+                                            );
 
                                             // Completed orders are always grey regardless of time
                                             if (status.toLowerCase() ==
@@ -1172,6 +1187,9 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
                                                     'completed' ||
                                                 status.toLowerCase() ==
                                                     'delivered') {
+                                              print(
+                                                '  ↳ Returning GREY (completed/delivered)',
+                                              );
                                               return HexColor.fromHex('D6D6D6');
                                             }
 
@@ -1179,20 +1197,32 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
                                             if (status.toLowerCase() == 'red' ||
                                                 status.toLowerCase() ==
                                                     'cancelled') {
+                                              print(
+                                                '  ↳ Returning RED (cancelled)',
+                                              );
                                               return Colors.red[100]!;
                                             }
 
                                             // Time-based colors for active orders
                                             if (minutesPassed < 30) {
+                                              print(
+                                                '  ↳ Returning GREEN (0-30 min) - HexColor DEF5D4',
+                                              );
                                               return HexColor.fromHex(
                                                 'DEF5D4',
                                               ); // Green - 0-30 minutes
                                             } else if (minutesPassed >= 30 &&
                                                 minutesPassed < 45) {
+                                              print(
+                                                '  ↳ Returning YELLOW (30-45 min) - HexColor FFF6D4',
+                                              );
                                               return HexColor.fromHex(
                                                 'FFF6D4',
                                               ); // Yellow - 30-45 minutes
                                             } else {
+                                              print(
+                                                '  ↳ Returning RED (45+ min) - HexColor ffcaca',
+                                              );
                                               return HexColor.fromHex(
                                                 'ffcaca',
                                               ); // Red - 45+ minutes

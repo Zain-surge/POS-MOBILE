@@ -1068,7 +1068,6 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
         print('Error parsing created_at date: $e');
         createdAtDateTime = DateTime.now();
       }
-
       // Parse items from orderData - handle different possible item data structures
       List<OrderItem> orderItems = [];
       final itemsData = orderData['items'] as List<dynamic>? ?? [];
@@ -1711,10 +1710,21 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                       ) {
                                         final DateTime now =
                                             UKTimeService.now();
-                                        final DateTime orderStart =
-                                            UKTimeService.toUkTime(
-                                              orderCreatedAt,
-                                            );
+
+                                        // CRITICAL FIX: Use same approach as CircularTimer
+                                        // Backend stores UK local time with Z suffix (incorrectly marked as UTC)
+                                        // Strip timezone and treat as UK local time
+                                        final DateTime orderStart = DateTime(
+                                          orderCreatedAt.year,
+                                          orderCreatedAt.month,
+                                          orderCreatedAt.day,
+                                          orderCreatedAt.hour,
+                                          orderCreatedAt.minute,
+                                          orderCreatedAt.second,
+                                          orderCreatedAt.millisecond,
+                                          orderCreatedAt.microsecond,
+                                        );
+
                                         final Duration orderAge = now
                                             .difference(orderStart);
                                         final int minutesPassed =

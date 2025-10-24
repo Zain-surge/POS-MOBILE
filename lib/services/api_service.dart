@@ -5,11 +5,11 @@ import '../config/brand_info.dart';
 import '../models/paidout_models.dart';
 
 class ApiService {
-  static const String _backend = "https://api.surgechain.co.uk";
+  static const String _apiBase = "https://api.thevillagepizzeria.uk";
 
   // Helper method to build full URLs
   static String _buildUrl(String path) {
-    return '$_backend$path';
+    return '$_apiBase$path';
   }
 
   // Method to mark order as paid
@@ -852,6 +852,32 @@ class ApiService {
     } catch (e) {
       print('Error fetching order: $e');
       return null;
+    }
+  }
+
+  // Method to disable item from POS (sets pos: false)
+  static Future<void> disableItemFromPOS(int itemId) async {
+    final url = Uri.parse(_buildUrl('/item/disable-pos'));
+    try {
+      final response = await http.delete(
+        url,
+        headers: BrandInfo.getDefaultHeaders(),
+        body: json.encode({'item_id': itemId}),
+      );
+
+      if (response.statusCode == 200) {
+        print('Item $itemId disabled from POS successfully');
+      } else {
+        print(
+          'Failed to disable item from POS. Status: ${response.statusCode}, Body: ${response.body}',
+        );
+        throw Exception(
+          'Failed to disable item from POS: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('Error disabling item from POS: $e');
+      rethrow;
     }
   }
 }
