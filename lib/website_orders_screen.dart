@@ -2130,6 +2130,33 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                               fontWeight: FontWeight.normal,
                                             ),
                                           ),
+                                          // UNPAID Indicator
+                                          if (_selectedOrder!.paidStatus ==
+                                              false)
+                                            Container(
+                                              margin: const EdgeInsets.only(
+                                                top: 4,
+                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.red,
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                'UNPAID',
+                                                style: TextStyle(
+                                                  fontSize:
+                                                      isLargeScreen ? 14 : 12,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
                                         ],
                                       ),
 

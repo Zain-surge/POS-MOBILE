@@ -79,6 +79,7 @@ class _Page4State extends State<Page4> {
   final ScrollController _categoryScrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+  late final VoidCallback _searchControllerListener;
   int? _editingCartIndex;
   double _appliedDiscountPercentage = 0.0;
   double _discountAmount = 0.0;
@@ -587,6 +588,132 @@ class _Page4State extends State<Page4> {
         .join(' ');
   }
 
+  String _normalizeCategoryKey(String value) {
+    return value.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
+  }
+
+  List<FoodItem> _getAllAvailableFoodItems() {
+    if (!mounted) return foodItems;
+
+    try {
+      final itemProvider = Provider.of<ItemAvailabilityProvider>(
+        context,
+        listen: false,
+      );
+      if (itemProvider.allItems.isNotEmpty) {
+        return itemProvider.allItems;
+      }
+    } catch (_) {
+      // Provider not available yet; fall back to local state
+    }
+
+    if (widget.foodItems.isNotEmpty) {
+      return widget.foodItems;
+    }
+    return foodItems;
+  }
+
+  bool _matchesSearchQuery(FoodItem item, String lowerCaseQuery) {
+    if (item.name.toLowerCase().contains(lowerCaseQuery)) return true;
+    if (item.description?.toLowerCase().contains(lowerCaseQuery) ?? false) {
+      return true;
+    }
+    if (item.subType?.toLowerCase().contains(lowerCaseQuery) ?? false) {
+      return true;
+    }
+    if (item.category.toLowerCase().contains(lowerCaseQuery)) return true;
+    return false;
+  }
+
+  int? _categoryIndexForItemCategory(String category) {
+    final normalizedItemCategory = _normalizeCategoryKey(category);
+
+    for (var i = 0; i < categories.length; i++) {
+      final normalizedCategoryName = _normalizeCategoryKey(categories[i].name);
+      if (normalizedCategoryName == normalizedItemCategory) {
+        return i;
+      }
+    }
+
+    // No category match found
+    return null;
+  }
+
+  int _findSubcategoryIndex(List<String> subcategories, String target) {
+    final normalizedTarget = target.trim().toLowerCase();
+    return subcategories.indexWhere(
+      (value) => value.trim().toLowerCase() == normalizedTarget,
+    );
+  }
+
+  void _applyCategorySelectionForItem(FoodItem item) {
+    final targetCategoryIndex = _categoryIndexForItemCategory(item.category);
+    if (targetCategoryIndex == null) return;
+
+    selectedCategory = targetCategoryIndex;
+
+    // Reset subcategory selections before applying the relevant one
+    _selectedShawarmaSubcategory = 0;
+    _selectedWingsSubcategory = 0;
+    _selectedDealsSubcategory = 0;
+    _selectedPizzaSubcategory = 0;
+
+    final selectedCategoryName =
+        categories[targetCategoryIndex].name.toLowerCase();
+    final itemSubType = item.subType?.trim();
+    if (itemSubType == null || itemSubType.isEmpty) {
+      return;
+    }
+
+    if (selectedCategoryName == 'shawarmas' &&
+        _shawarmaSubcategories.isNotEmpty) {
+      final index = _findSubcategoryIndex(_shawarmaSubcategories, itemSubType);
+      if (index != -1) {
+        _selectedShawarmaSubcategory = index;
+      }
+    } else if (selectedCategoryName == 'wings' &&
+        _wingsSubcategories.isNotEmpty) {
+      final index = _findSubcategoryIndex(_wingsSubcategories, itemSubType);
+      if (index != -1) {
+        _selectedWingsSubcategory = index;
+      }
+    } else if (selectedCategoryName == 'deals' &&
+        _dealsSubcategories.isNotEmpty) {
+      final index = _findSubcategoryIndex(_dealsSubcategories, itemSubType);
+      if (index != -1) {
+        _selectedDealsSubcategory = index;
+      }
+    } else if (selectedCategoryName == 'pizza' &&
+        _pizzaSubcategories.isNotEmpty) {
+      final index = _findSubcategoryIndex(_pizzaSubcategories, itemSubType);
+      if (index != -1) {
+        _selectedPizzaSubcategory = index;
+      }
+    }
+  }
+
+  void _handleSearchQueryChange(String query) {
+    FoodItem? matchedItem;
+
+    if (query.isNotEmpty) {
+      final lowerCaseQuery = query.toLowerCase();
+      final allItems = _getAllAvailableFoodItems();
+      for (final item in allItems) {
+        if (_matchesSearchQuery(item, lowerCaseQuery)) {
+          matchedItem = item;
+          break;
+        }
+      }
+    }
+
+    setState(() {
+      _searchQuery = query;
+      if (matchedItem != null) {
+        _applyCategorySelectionForItem(matchedItem);
+      }
+    });
+  }
+
   Widget _buildItemDescription(FoodItem item, Color textColor) {
     final description = item.description!;
 
@@ -778,11 +905,12 @@ class _Page4State extends State<Page4> {
       _updateScrollButtonVisibility();
     });
 
-    _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text;
-      });
-    });
+    _searchControllerListener = () {
+      final text = _searchController.text;
+      if (text == _searchQuery) return;
+      _handleSearchQueryChange(text);
+    };
+    _searchController.addListener(_searchControllerListener);
     _searchFocusNode.addListener(() => setState(() {}));
 
     _commentFocusNode.addListener(() {
@@ -1409,7 +1537,7 @@ class _Page4State extends State<Page4> {
 
     _categoryScrollController.removeListener(_updateScrollButtonVisibility);
     _categoryScrollController.dispose();
-    _searchController.removeListener(() => setState(() {}));
+    _searchController.removeListener(_searchControllerListener);
     _searchController.dispose();
     _searchFocusNode.dispose();
     _commentEditingController.dispose();
@@ -1709,11 +1837,10 @@ class _Page4State extends State<Page4> {
             .toList() ??
         [];
 
-    if (options.isEmpty) {
-      return cartItem.foodItem.name;
-    }
-
+    // Start with item name
     final StringBuffer buffer = StringBuffer(cartItem.foodItem.name);
+
+    // Add selected options (which already includes drink and side from food_item_details_model.dart)
     for (final option in options) {
       buffer.writeln();
       buffer.write(option);
@@ -3221,11 +3348,7 @@ class _Page4State extends State<Page4> {
                                   color: Colors.black,
                                   fontSize: 18,
                                 ),
-                                onChanged: (query) {
-                                  setState(() {
-                                    _searchQuery = query;
-                                  });
-                                },
+                                onChanged: _handleSearchQueryChange,
                                 onTap: () {
                                   setState(() {});
                                 },
@@ -3500,83 +3623,97 @@ class _Page4State extends State<Page4> {
 
         final selectedCategoryName = categories[selectedCategory].name;
 
-        String mappedCategoryKey;
-        if (selectedCategoryName.toLowerCase() == 'deals') {
-          mappedCategoryKey = 'Deals';
-        } else if (selectedCategoryName.toLowerCase() == 'calzones') {
-          mappedCategoryKey = 'Calzones';
-        } else if (selectedCategoryName.toLowerCase() == 'shawarmas') {
-          mappedCategoryKey = 'Shawarma';
-        } else if (selectedCategoryName.toLowerCase() == 'kids meal') {
-          mappedCategoryKey = 'KidsMeal';
-        } else if (selectedCategoryName.toLowerCase() == 'garlic bread') {
-          mappedCategoryKey = 'GarlicBread';
-        } else {
-          mappedCategoryKey = selectedCategoryName.toLowerCase();
-        }
-
-        Iterable<FoodItem> currentItems = allFoodItems.where(
-          (item) =>
-              item.category.toLowerCase() == mappedCategoryKey.toLowerCase(),
-        );
-
-        // Filter by subcategory for Shawarma items
-        if (selectedCategoryName.toLowerCase() == 'shawarmas') {
-          final selectedSubcategory =
-              _shawarmaSubcategories[_selectedShawarmaSubcategory];
-          currentItems = currentItems.where(
-            (item) => item.subType?.trim() == selectedSubcategory.trim(),
-          );
-        }
-
-        // Filter by subcategory for Wings items
-        if (selectedCategoryName.toLowerCase() == 'wings' &&
-            _wingsSubcategories.isNotEmpty) {
-          final selectedSubcategory =
-              _wingsSubcategories[_selectedWingsSubcategory];
-          currentItems = currentItems.where(
-            (item) => item.subType?.trim() == selectedSubcategory.trim(),
-          );
-        }
-
-        // Filter by subcategory for Deals items
-        if (selectedCategoryName.toLowerCase() == 'deals' &&
-            _dealsSubcategories.isNotEmpty) {
-          final selectedSubcategory =
-              _dealsSubcategories[_selectedDealsSubcategory];
-          currentItems = currentItems.where(
-            (item) => item.subType?.trim() == selectedSubcategory.trim(),
-          );
-        }
-
-        // Filter by subcategory for Pizza items
-        if (selectedCategoryName.toLowerCase() == 'pizza' &&
-            _pizzaSubcategories.isNotEmpty) {
-          final selectedSubcategory =
-              _pizzaSubcategories[_selectedPizzaSubcategory];
-          currentItems = currentItems.where(
-            (item) => item.subType?.trim() == selectedSubcategory.trim(),
-          );
-        }
-
+        Iterable<FoodItem> currentItems;
         if (_searchQuery.isNotEmpty) {
           final lowerCaseQuery = _searchQuery.toLowerCase();
-          currentItems = currentItems.where((item) {
-            return item.name.toLowerCase().contains(lowerCaseQuery) ||
-                (item.description?.toLowerCase().contains(lowerCaseQuery) ??
-                    false) ||
-                (item.subType?.toLowerCase().contains(lowerCaseQuery) ?? false);
-          });
+          currentItems = allFoodItems.where(
+            (item) => _matchesSearchQuery(item, lowerCaseQuery),
+          );
+        } else {
+          String mappedCategoryKey;
+          if (selectedCategoryName.toLowerCase() == 'deals') {
+            mappedCategoryKey = 'Deals';
+          } else if (selectedCategoryName.toLowerCase() == 'calzones') {
+            mappedCategoryKey = 'Calzones';
+          } else if (selectedCategoryName.toLowerCase() == 'shawarmas') {
+            mappedCategoryKey = 'Shawarma';
+          } else if (selectedCategoryName.toLowerCase() == 'kids meal') {
+            mappedCategoryKey = 'KidsMeal';
+          } else if (selectedCategoryName.toLowerCase() == 'garlic bread') {
+            mappedCategoryKey = 'GarlicBread';
+          } else {
+            mappedCategoryKey = selectedCategoryName.toLowerCase();
+          }
+
+          currentItems = allFoodItems.where(
+            (item) =>
+                item.category.toLowerCase() == mappedCategoryKey.toLowerCase(),
+          );
+
+          // Filter by subcategory for Shawarma items
+          if (selectedCategoryName.toLowerCase() == 'shawarmas') {
+            final selectedSubcategory =
+                _shawarmaSubcategories[_selectedShawarmaSubcategory];
+            currentItems = currentItems.where(
+              (item) => item.subType?.trim() == selectedSubcategory.trim(),
+            );
+          }
+
+          // Filter by subcategory for Wings items
+          if (selectedCategoryName.toLowerCase() == 'wings' &&
+              _wingsSubcategories.isNotEmpty) {
+            final selectedSubcategory =
+                _wingsSubcategories[_selectedWingsSubcategory];
+            currentItems = currentItems.where(
+              (item) => item.subType?.trim() == selectedSubcategory.trim(),
+            );
+          }
+
+          // Filter by subcategory for Deals items
+          if (selectedCategoryName.toLowerCase() == 'deals' &&
+              _dealsSubcategories.isNotEmpty) {
+            final selectedSubcategory =
+                _dealsSubcategories[_selectedDealsSubcategory];
+            currentItems = currentItems.where(
+              (item) => item.subType?.trim() == selectedSubcategory.trim(),
+            );
+          }
+
+          // Filter by subcategory for Pizza items
+          if (selectedCategoryName.toLowerCase() == 'pizza' &&
+              _pizzaSubcategories.isNotEmpty) {
+            final selectedSubcategory =
+                _pizzaSubcategories[_selectedPizzaSubcategory];
+            currentItems = currentItems.where(
+              (item) => item.subType?.trim() == selectedSubcategory.trim(),
+            );
+          }
         }
 
         final filteredItems = currentItems.toList();
 
+        // Sort items to put "Create Your Own" items at the top
+        filteredItems.sort((a, b) {
+          final aIsCreateYourOwn = a.name.toLowerCase().contains(
+            'create your own',
+          );
+          final bIsCreateYourOwn = b.name.toLowerCase().contains(
+            'create your own',
+          );
+
+          if (aIsCreateYourOwn && !bIsCreateYourOwn) {
+            return -1; // a comes first
+          } else if (!aIsCreateYourOwn && bIsCreateYourOwn) {
+            return 1; // b comes first
+          } else {
+            return 0; // maintain existing order
+          }
+        });
+
         if (filteredItems.isEmpty) {
           if (_searchQuery.isNotEmpty) {
             return Center(
-              child: Text(
-                'No items found matching "$_searchQuery" in this category.',
-              ),
+              child: Text('No items found matching "$_searchQuery".'),
             );
           } else {
             return const Center(
@@ -5489,6 +5626,7 @@ class _Page4State extends State<Page4> {
         "items":
             _cartItems.map((cartItem) {
               final String description = _buildDescriptionForCartItem(cartItem);
+
               final double pricePerUnit = double.parse(
                 cartItem.pricePerUnit.toStringAsFixed(2),
               );

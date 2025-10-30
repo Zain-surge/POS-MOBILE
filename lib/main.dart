@@ -223,6 +223,13 @@ void main() async {
           },
           lazy: false, // Make non-lazy for immediate availability
         ),
+        ChangeNotifierProvider<OrderHistoryProvider>(
+          create: (_) {
+            print('📜 CREATING OrderHistoryProvider');
+            return OrderHistoryProvider();
+          },
+          lazy: false, // Make non-lazy for immediate availability
+        ),
       ],
       child: const MainAppWrapper(child: MyApp()),
     ),

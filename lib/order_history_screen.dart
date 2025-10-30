@@ -200,6 +200,259 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
+  Widget _buildFilters(OrderHistoryProvider provider) {
+    final paidFilter = provider.paidStatusFilter;
+    final sourceOptions = provider.availableOrderSourceOptions;
+    final paymentOptions = provider.availablePaymentTypeOptions;
+    final orderTypeOptions = provider.availableOrderTypeOptions;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                'Payment Status',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children:
+                        PaidStatusFilter.values
+                            .map(
+                              (filter) => Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: _buildChoiceChip(
+                                  label: _paidStatusLabel(filter),
+                                  isSelected: paidFilter == filter,
+                                  onSelected:
+                                      () =>
+                                          provider.setPaidStatusFilter(filter),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (sourceOptions.isNotEmpty ||
+              paymentOptions.isNotEmpty ||
+              orderTypeOptions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildDropdownSection(
+              sourceOptions: sourceOptions,
+              paymentOptions: paymentOptions,
+              orderTypeOptions: orderTypeOptions,
+              provider: provider,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChoiceChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onSelected,
+  }) {
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.white : Colors.black,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      selected: isSelected,
+      onSelected: (selected) {
+        if (!selected) return;
+        onSelected();
+      },
+      visualDensity: VisualDensity.compact,
+      selectedColor: Colors.black,
+      backgroundColor: Colors.grey.shade200,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: isSelected ? Colors.black : Colors.transparent),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    );
+  }
+
+  Widget _buildDropdown({
+    required String label,
+    required String? value,
+    required List<FilterOption> options,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return DropdownButtonFormField<String?>(
+      value: value,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(
+          fontSize: 13,
+          color: Colors.grey.shade700,
+          fontWeight: FontWeight.w500,
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.black),
+        ),
+      ),
+      icon: const Icon(Icons.arrow_drop_down),
+      items: [
+        const DropdownMenuItem<String?>(value: null, child: Text('All')),
+        ...options.map(
+          (option) => DropdownMenuItem<String?>(
+            value: option.value,
+            child: Text(option.label),
+          ),
+        ),
+      ],
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildDropdownSection({
+    required List<FilterOption> sourceOptions,
+    required List<FilterOption> paymentOptions,
+    required List<FilterOption> orderTypeOptions,
+    required OrderHistoryProvider provider,
+  }) {
+    final dropdownBuilders = <Widget Function()>[];
+
+    void addDropdown({
+      required String label,
+      required String? value,
+      required List<FilterOption> options,
+      required ValueChanged<String?> onChanged,
+    }) {
+      dropdownBuilders.add(
+        () => _buildDropdown(
+          label: label,
+          value: value,
+          options: options,
+          onChanged: onChanged,
+        ),
+      );
+    }
+
+    if (sourceOptions.isNotEmpty) {
+      addDropdown(
+        label: 'Order Source',
+        value: provider.orderSourceFilter,
+        options: sourceOptions,
+        onChanged: provider.setOrderSourceFilter,
+      );
+    }
+
+    if (paymentOptions.isNotEmpty) {
+      addDropdown(
+        label: 'Payment Type',
+        value: provider.paymentTypeFilter,
+        options: paymentOptions,
+        onChanged: provider.setPaymentTypeFilter,
+      );
+    }
+
+    if (orderTypeOptions.isNotEmpty) {
+      addDropdown(
+        label: 'Order Type',
+        value: provider.orderTypeFilter,
+        options: orderTypeOptions,
+        onChanged: provider.setOrderTypeFilter,
+      );
+    }
+
+    if (dropdownBuilders.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 700;
+        if (isCompact) {
+          return Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children:
+                dropdownBuilders
+                    .map(
+                      (builder) => ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minWidth: 180,
+                          maxWidth:
+                              constraints.maxWidth < 260
+                                  ? constraints.maxWidth
+                                  : 260,
+                        ),
+                        child: builder(),
+                      ),
+                    )
+                    .toList(),
+          );
+        }
+
+        final children = <Widget>[];
+        for (var i = 0; i < dropdownBuilders.length; i++) {
+          children.add(
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: i == dropdownBuilders.length - 1 ? 0 : 12,
+                ),
+                child: dropdownBuilders[i](),
+              ),
+            ),
+          );
+        }
+
+        return Row(children: children);
+      },
+    );
+  }
+
+  String _paidStatusLabel(PaidStatusFilter filter) {
+    switch (filter) {
+      case PaidStatusFilter.all:
+        return 'All';
+      case PaidStatusFilter.paid:
+        return 'Paid';
+      case PaidStatusFilter.unpaid:
+        return 'Unpaid';
+    }
+  }
+
   Widget _buildOrdersList(List<Order> orders) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -260,13 +513,39 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                         ],
                       ),
                     ),
-                    Text(
-                      _formatOrderTime(order.createdAt),
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _formatOrderTime(order.createdAt),
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (order.isEdited) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'Edited',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
@@ -349,12 +628,37 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                               ),
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              _formatOrderDate(order.createdAt),
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                              ),
+                            Row(
+                              children: [
+                                Text(
+                                  _formatOrderDate(order.createdAt),
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                if (order.isEdited) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      'Edited',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
                         ),
@@ -654,14 +958,31 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                     );
                   }
 
-                  if (provider.orders.isEmpty) {
-                    return _buildEmptyState(
+                  final hasAnyOrders = provider.totalOrdersCount > 0;
+                  final hasFilteredOrders = provider.orders.isNotEmpty;
+
+                  final Widget content;
+                  if (!hasAnyOrders) {
+                    content = _buildEmptyState(
                       'No orders found for ${_formatOrderDate(provider.selectedDate!)}',
                       Icons.inbox,
                     );
+                  } else if (!hasFilteredOrders) {
+                    content = _buildEmptyState(
+                      'No orders match the selected filters',
+                      Icons.filter_list,
+                    );
+                  } else {
+                    content = _buildOrdersList(provider.orders);
                   }
 
-                  return _buildOrdersList(provider.orders);
+                  return Column(
+                    children: [
+                      _buildFilters(provider),
+                      const SizedBox(height: 12),
+                      Expanded(child: content),
+                    ],
+                  );
                 },
               ),
             ),

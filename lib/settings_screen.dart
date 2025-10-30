@@ -1199,9 +1199,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showOrderHistoryScreen() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const OrderHistoryScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const OrderHistoryScreen()),
     );
   }
 

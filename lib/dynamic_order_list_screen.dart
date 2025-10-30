@@ -1558,6 +1558,36 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
                                                   fontWeight: FontWeight.normal,
                                                 ),
                                               ),
+                                              // UNPAID Indicator
+                                              if (liveSelectedOrder
+                                                      .paidStatus ==
+                                                  false)
+                                                Container(
+                                                  margin: const EdgeInsets.only(
+                                                    top: 4,
+                                                  ),
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.red,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          4,
+                                                        ),
+                                                  ),
+                                                  child: const Text(
+                                                    'UNPAID',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                ),
                                             ],
                                           ),
                                           if (liveSelectedOrder.orderType
