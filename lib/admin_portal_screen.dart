@@ -13,6 +13,7 @@ import '../widgets/live_updating_pill.dart';
 import '../widgets/items_table_widget.dart';
 import '../widgets/paidouts_table_widget.dart';
 import '../widgets/postal_codes_table_widget.dart';
+import 'package:epos/config/security_config.dart';
 import 'package:epos/services/uk_time_service.dart';
 import 'package:epos/services/custom_popup_service.dart';
 
@@ -162,7 +163,7 @@ class _AdminPortalScreenState extends State<AdminPortalScreen> {
   }
 
   void _validatePin(String pin) {
-    if (pin == '2840') {
+    if (pin == SecurityConfig.adminPin) {
       Navigator.of(context).pop();
       setState(() {
         _isPinValidated = true;

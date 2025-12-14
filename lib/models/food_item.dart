@@ -4,7 +4,9 @@ class FoodItem {
   final int id;
   final String name;
   final String category;
-  final Map<String, double> price;
+  final Map<String, double> price; // Website/online price
+  final Map<String, double>?
+  posPrice; // POS-specific price (used in POS system)
   final String image;
   final List<String>? defaultToppings;
   final List<String>? defaultCheese;
@@ -19,6 +21,7 @@ class FoodItem {
     required this.name,
     required this.category,
     required this.price,
+    this.posPrice, // Optional POS-specific pricing
     required this.image,
     this.defaultToppings,
     this.defaultCheese,
@@ -28,6 +31,9 @@ class FoodItem {
     required this.availability,
     this.pos = true, // Default to true for backward compatibility
   });
+
+  // Helper to get the price to use in POS (prefers posPrice, falls back to price)
+  Map<String, double> get effectivePosPrice => posPrice ?? price;
 
   factory FoodItem.fromJson(Map<String, dynamic> json) {
     // Converting price string to double
@@ -39,11 +45,24 @@ class FoodItem {
       priceMap[key] = double.tryParse(value.toString()) ?? 0.0;
     });
 
+    // Converting pos_price string to double (if exists)
+    Map<String, double>? posPriceMap;
+    if (json['pos_price'] != null) {
+      final Map<String, dynamic> rawPosPrice = Map<String, dynamic>.from(
+        json['pos_price'],
+      );
+      posPriceMap = {};
+      rawPosPrice.forEach((key, value) {
+        posPriceMap![key] = double.tryParse(value.toString()) ?? 0.0;
+      });
+    }
+
     return FoodItem(
       id: (json['id'] ?? json['item_id']) as int,
       name: (json['title'] as String?) ?? (json['item_name'] as String?) ?? '',
       category: (json['type'] as String?) ?? (json['Type'] as String?) ?? '',
       price: priceMap,
+      posPrice: posPriceMap, // Parse POS-specific price
       image: (json['image'] as String?) ?? '',
       description: json['description'] as String?,
       subType: json['subType'] as String?,
@@ -78,11 +97,21 @@ class FoodItem {
       priceStrings[key] = value.toString();
     });
 
+    // Convert pos_price map to string values if it exists
+    Map<String, String>? posPriceStrings;
+    if (posPrice != null) {
+      posPriceStrings = {};
+      posPrice!.forEach((key, value) {
+        posPriceStrings![key] = value.toString();
+      });
+    }
+
     return {
       'id': id,
       'title': name,
       'Type': category,
       'price': priceStrings,
+      if (posPriceStrings != null) 'pos_price': posPriceStrings,
       'image': image,
       if (description != null) 'description': description,
       if (subType != null) 'subType': subType,
@@ -99,6 +128,7 @@ class FoodItem {
     String? name,
     String? category,
     Map<String, double>? price,
+    Map<String, double>? posPrice,
     String? image,
     List<String>? defaultToppings,
     List<String>? defaultCheese,
@@ -113,6 +143,7 @@ class FoodItem {
       name: name ?? this.name,
       category: category ?? this.category,
       price: price ?? this.price,
+      posPrice: posPrice ?? this.posPrice,
       image: image ?? this.image,
       defaultToppings: defaultToppings ?? this.defaultToppings,
       defaultCheese: defaultCheese ?? this.defaultCheese,

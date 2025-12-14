@@ -1,4 +1,4 @@
-// lib/services/thermal_printer_service.dart
+﻿// lib/services/thermal_printer_service.dart
 import 'package:flutter/services.dart';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +12,7 @@ import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'package:epos/services/uk_time_service.dart';
 import 'package:epos/services/xprinter_service.dart';
+import 'package:epos/services/order_price_tracking_service.dart';
 
 class ThermalPrinterService {
   static final ThermalPrinterService _instance =
@@ -35,6 +36,7 @@ class ThermalPrinterService {
   List<BluetoothInfo> _cachedThermalDevices = [];
   List<UsbDevice> _cachedUsbDevices = [];
   DateTime? _lastCacheUpdate;
+  String? _lastXprinterDevicePath;
 
   // Connection timeout settings
   static const Duration QUICK_TIMEOUT = Duration(seconds: 2);
@@ -47,6 +49,10 @@ class ThermalPrinterService {
 
   // OPTIMIZED: Pre-generated receipt cache
   final Map<String, List<int>> _receiptCache = {};
+
+  // RECENT CONNECTION SNAPSHOT
+  final Map<String, bool> _recentConnectionSnapshot = {};
+  String? _lastSuccessfulMethod;
 
   // PERFORMANCE: Cache CapabilityProfile to avoid repeated disk I/O (saves 5-15 seconds per print)
   static CapabilityProfile? _cachedCapabilityProfile;
@@ -135,6 +141,74 @@ class ThermalPrinterService {
     }
 
     return lines;
+  }
+
+  Future<void> primeConnectionsSync({
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    if (kIsWeb) return;
+    if (_hasPrimedConnections) return;
+    if (_isPrimingConnections) return;
+
+    _isPrimingConnections = true;
+
+    try {
+      print('dY"� PRIME: Performing quick printer warm-up...');
+
+      try {
+        _cachedCapabilityProfile ??= await CapabilityProfile.load();
+      } catch (e) {
+        print('dY"� PRIME: CapabilityProfile preload failed: $e');
+      }
+
+      final snapshot = <String, bool>{};
+
+      final usbLikely =
+          _persistentUsbPort != null ||
+          (_useXprinterSDK &&
+              Platform.isAndroid &&
+              _xprinterService.isConnected);
+      final bluetoothLikely = _isBluetoothConnected;
+
+      snapshot['usb'] = usbLikely;
+      snapshot['bluetooth'] = bluetoothLikely;
+
+      if (!usbLikely && !bluetoothLikely) {
+        try {
+          final status = await checkConnectionStatusOnly().timeout(
+            timeout,
+            onTimeout: () {
+              print('dY"� PRIME: Connection status check timed out');
+              return {'usb': false, 'bluetooth': false};
+            },
+          );
+
+          snapshot
+            ..clear()
+            ..addAll(status);
+        } catch (e) {
+          print('dY"� PRIME: Lightweight status check failed: $e');
+        }
+      }
+
+      _recentConnectionSnapshot
+        ..clear()
+        ..addAll(snapshot);
+
+      final preferred = snapshot.entries.firstWhere(
+        (entry) => entry.value,
+        orElse: () => const MapEntry<String, bool>('usb', false),
+      );
+      _lastSuccessfulMethod =
+          preferred.value
+              ? (preferred.key == 'usb' ? 'USB' : 'Thermal Bluetooth')
+              : null;
+
+      _hasPrimedConnections = true;
+      print('dY"� PRIME: Warm-up snapshot -> $_recentConnectionSnapshot');
+    } finally {
+      _isPrimingConnections = false;
+    }
   }
 
   void primeConnectionsInBackground({
@@ -293,16 +367,32 @@ class ThermalPrinterService {
         }
 
         print('🎯 Trying Xprinter SDK for USB connection...');
+
+        // First, try the last successful path if we have one
+        if (_lastXprinterDevicePath != null &&
+            _lastXprinterDevicePath!.isNotEmpty) {
+          final connected = await _xprinterService.connectUsb(
+            _lastXprinterDevicePath!,
+          );
+          if (connected) {
+            print('✅ Xprinter SDK USB connection successful (cached path)');
+            return true;
+          }
+        }
+
         final devices = await _xprinterService.getUsbDevices();
 
         if (devices.isNotEmpty) {
-          // Try to connect to the first available device
+          // Try to connect to the first available device using devicePath if present
           final firstDevice = devices.first;
-          final devicePath = firstDevice['deviceName'] as String?;
+          final devicePath =
+              (firstDevice['devicePath'] ?? firstDevice['deviceName'])
+                  as String?;
 
-          if (devicePath != null) {
+          if (devicePath != null && devicePath.isNotEmpty) {
             bool connected = await _xprinterService.connectUsb(devicePath);
             if (connected) {
+              _lastXprinterDevicePath = devicePath;
               print('✅ Xprinter SDK USB connection successful');
               return true;
             }
@@ -382,12 +472,6 @@ class ThermalPrinterService {
         try {
           bool isConnected = await PrintBluetoothThermal.connectionStatus;
           if (isConnected) {
-            // Send a quick test command
-            await PrintBluetoothThermal.writeBytes([
-              0x1B,
-              0x40,
-            ]); // ESC @ (initialize)
-            await Future.delayed(Duration(milliseconds: 100));
             return true;
           }
         } catch (e) {
@@ -421,11 +505,14 @@ class ThermalPrinterService {
     String? postalCode,
     String? paymentType,
     bool? paidStatus,
-    int? orderId,
+    int? orderId, // Internal use only (for API calls)
+    String? orderNumber, // Display to user on receipt
     double? deliveryCharge,
     DateTime? orderDateTime,
     Function(List<String> availableMethods)? onShowMethodSelection,
     bool isEdited = false, // New parameter to indicate if order was edited
+    double? discountPercentage, // Discount percentage
+    double? discountAmount, // Discount amount
   }) async {
     if (kIsWeb && !ENABLE_DRAWER_TEST_MODE) {
       print('🚫 Web platform - printer not supported');
@@ -470,10 +557,13 @@ class ThermalPrinterService {
       paymentType: paymentType,
       paidStatus: paidStatus,
       orderId: orderId,
+      orderNumber: orderNumber,
       deliveryCharge: deliveryCharge,
       isXprinterUSB:
           _useXprinterSDK && Platform.isAndroid && _xprinterService.isConnected,
       isEdited: isEdited,
+      discountPercentage: discountPercentage,
+      discountAmount: discountAmount,
     );
 
     Future<String> receiptContentFuture = Future.value(
@@ -503,43 +593,13 @@ class ThermalPrinterService {
       ),
     );
 
-    // Test connections in parallel
-    Future<Map<String, bool>> connectionTestFuture;
-    if (_persistentUsbPort != null ||
-        _isBluetoothConnected ||
-        (_useXprinterSDK &&
-            Platform.isAndroid &&
-            _xprinterService.isConnected)) {
-      connectionTestFuture = Future.value({
-        'usb':
-            _persistentUsbPort != null ||
-            (_useXprinterSDK &&
-                Platform.isAndroid &&
-                _xprinterService.isConnected),
-        'bluetooth': _isBluetoothConnected,
-      });
-    } else {
-      connectionTestFuture = testAllConnections();
-    }
-
-    // Wait for all preparations to complete
-    List<dynamic> results = await Future.wait([
-      connectionTestFuture,
-      receiptDataFuture,
-      receiptContentFuture,
-    ]);
-
-    Map<String, bool> connectionStatus = results[0];
-    List<int> receiptData = results[1];
-    String receiptContent = results[2];
+    List<int> receiptData = await receiptDataFuture;
+    String receiptContent = await receiptContentFuture;
 
     // Cache the generated receipt data
     _receiptCache[receiptKey] = receiptData;
 
-    List<String> availableMethods = [];
-    if (connectionStatus['usb'] == true) availableMethods.add('USB');
-    if (connectionStatus['bluetooth'] == true)
-      availableMethods.add('Thermal Bluetooth');
+    final List<String> availableMethods = _getPreferredPrintMethods();
 
     if (availableMethods.isEmpty) {
       print('❌ No printer connections available');
@@ -561,6 +621,8 @@ class ThermalPrinterService {
         receiptData: receiptData,
         receiptContent: receiptContent,
       );
+
+      _recordConnectionResult(method, success);
 
       if (success) {
         print('✅ $method printing successful');
@@ -617,26 +679,53 @@ class ThermalPrinterService {
       return SIMULATE_PRINTER_SUCCESS;
     }
 
-    // Try Xprinter SDK first if enabled and connected
-    if (_useXprinterSDK && Platform.isAndroid && _xprinterService.isConnected) {
+    // Try Xprinter SDK first; connect if needed
+    if (_useXprinterSDK && Platform.isAndroid) {
       try {
-        print('🎯 Using Xprinter SDK for USB printing...');
+        if (!_xprinterService.isConnected) {
+          // Attempt to reconnect using last known path or first available device
+          // Try cached path first
+          if (_lastXprinterDevicePath != null &&
+              _lastXprinterDevicePath!.isNotEmpty) {
+            await _xprinterService.connectUsb(_lastXprinterDevicePath!);
+          }
 
-        // Convert ESC/POS bytes to String for XPrinter SDK
-        String receiptString = String.fromCharCodes(receiptData);
-        bool success = await _xprinterService.printReceipt(receiptString);
-
-        if (success) {
-          print('✅ Xprinter SDK USB printing successful');
-          return true;
+          // If still not connected, scan and connect to first device
+          if (!_xprinterService.isConnected) {
+            final devices = await _xprinterService.getUsbDevices();
+            if (devices.isNotEmpty) {
+              final firstDevice = devices.first;
+              final devicePath =
+                  (firstDevice['devicePath'] ?? firstDevice['deviceName'])
+                      as String?;
+              if (devicePath != null && devicePath.isNotEmpty) {
+                bool connected = await _xprinterService.connectUsb(devicePath);
+                if (connected) {
+                  _lastXprinterDevicePath = devicePath;
+                }
+              }
+            }
+          }
         }
 
-        // Don't fallback to legacy - Xprinter SDK is the primary method
-        print('❌ Xprinter SDK printing failed - check printer connection');
-        return false;
+        if (_xprinterService.isConnected) {
+          print('🎯 Using Xprinter SDK for USB printing...');
+
+          String receiptString = String.fromCharCodes(receiptData);
+          bool success = await _xprinterService.printReceipt(receiptString);
+
+          if (success) {
+            print('✅ Xprinter SDK USB printing successful');
+            return true;
+          }
+
+          // Fall back to legacy if SDK print failed
+          print('❌ Xprinter SDK printing failed, trying legacy USB');
+        } else {
+          print('⚠️ Xprinter SDK not connected, trying legacy USB');
+        }
       } catch (e) {
-        print('❌ Xprinter SDK error: $e');
-        return false;
+        print('❌ Xprinter SDK error, falling back to legacy USB: $e');
       }
     }
 
@@ -992,9 +1081,12 @@ class ThermalPrinterService {
     String? paymentType,
     bool? paidStatus,
     int? orderId,
+    String? orderNumber,
     double? deliveryCharge,
     DateTime? orderDateTime,
     bool isEdited = false,
+    double? discountPercentage,
+    double? discountAmount,
   }) async {
     try {
       // Test receipt content generation
@@ -1047,6 +1139,8 @@ class ThermalPrinterService {
             Platform.isAndroid &&
             _xprinterService.isConnected,
         isEdited: isEdited,
+        discountPercentage: discountPercentage,
+        discountAmount: discountAmount,
       );
 
       print('✅ Receipt generation validation successful');
@@ -1408,19 +1502,22 @@ class ThermalPrinterService {
           await Future.delayed(Duration(milliseconds: 100));
         }
 
-        print('✅ BT DEBUGGING: Initialization completed');
+        print('BT DEBUGGING: Initialization completed');
 
-        // Test communication
-        print('📱 BT DEBUGGING: Testing communication...');
-        List<int> testData = ('BT Test OK\n').codeUnits + [0x1B, 0x4A, 0x01];
-        await PrintBluetoothThermal.writeBytes(testData);
+        // Verify connection without sending any printable data to avoid ghost prints
+        bool stillConnected = await PrintBluetoothThermal.connectionStatus;
+        if (stillConnected) {
+          print('BT DEBUGGING: Bluetooth connection fully established!');
+          print('   - Device: ${printer.name}');
+          print('   - MAC: ${printer.macAdress}');
+          return true;
+        }
 
-        print('🎉 BT DEBUGGING: Bluetooth connection fully established!');
-        print('   - Device: ${printer.name}');
-        print('   - MAC: ${printer.macAdress}');
-        print('   - Printer should have printed "BT Test OK"');
-
-        return true;
+        print('BT DEBUGGING: Connection dropped after init sequence');
+        await PrintBluetoothThermal.disconnect;
+        _isBluetoothConnected = false;
+        _connectedBluetoothDevice = null;
+        return false;
       } catch (e) {
         print('❌ BT DEBUGGING: Initialization failed: $e');
         _isBluetoothConnected = false;
@@ -1499,9 +1596,7 @@ class ThermalPrinterService {
               print('❌ Bluetooth auto-recovery failed');
             }
           } else {
-            // Send heartbeat to ensure connection is truly active
-            await PrintBluetoothThermal.writeBytes([0x1B, 0x40]);
-            print('🔧 Bluetooth connection health: OK');
+            print('Bluetooth connection health: OK');
           }
         } catch (e) {
           print('🔧 Bluetooth connection health: FAILED - $e');
@@ -1545,9 +1640,12 @@ class ThermalPrinterService {
     String? paymentType,
     bool? paidStatus,
     int? orderId,
+    String? orderNumber,
     double? deliveryCharge,
     DateTime? orderDateTime,
     bool isEdited = false,
+    double? discountPercentage,
+    double? discountAmount,
   }) async {
     if (kIsWeb) return false;
 
@@ -1575,10 +1673,13 @@ class ThermalPrinterService {
       paymentType: paymentType,
       paidStatus: paidStatus,
       orderId: orderId,
+      orderNumber: orderNumber,
       deliveryCharge: deliveryCharge,
       isXprinterUSB:
           _useXprinterSDK && Platform.isAndroid && _xprinterService.isConnected,
       isEdited: isEdited,
+      discountPercentage: discountPercentage,
+      discountAmount: discountAmount,
     );
 
     String receiptContent = _generateReceiptContent(
@@ -1598,6 +1699,7 @@ class ThermalPrinterService {
       paymentType: paymentType,
       paidStatus: paidStatus,
       orderId: orderId,
+      orderNumber: orderNumber,
       deliveryCharge: deliveryCharge,
       orderDateTime: orderDateTime,
       isXprinterUSB:
@@ -1615,6 +1717,67 @@ class ThermalPrinterService {
   bool _isCacheExpired() {
     if (_lastCacheUpdate == null) return true;
     return UKTimeService.now().difference(_lastCacheUpdate!) > CACHE_VALIDITY;
+  }
+
+  List<String> _getPreferredPrintMethods() {
+    final ordered = <String>[];
+    final seen = <String>{};
+
+    void add(String method) {
+      if (seen.add(method)) {
+        ordered.add(method);
+      }
+    }
+
+    if (_lastSuccessfulMethod != null) {
+      add(_lastSuccessfulMethod!);
+    }
+
+    final bool usbLikely =
+        _persistentUsbPort != null ||
+        (_useXprinterSDK &&
+            Platform.isAndroid &&
+            _xprinterService.isConnected) ||
+        (_recentConnectionSnapshot['usb'] ?? false);
+
+    final bool bluetoothLikely =
+        _isBluetoothConnected ||
+        (_recentConnectionSnapshot['bluetooth'] ?? false);
+
+    if (usbLikely) {
+      add('USB');
+    }
+    if (bluetoothLikely) {
+      add('Thermal Bluetooth');
+    }
+
+    if (ordered.isEmpty) {
+      add('USB');
+      add('Thermal Bluetooth');
+    }
+
+    return ordered;
+  }
+
+  void _recordConnectionResult(String method, bool success) {
+    final key = _methodToSnapshotKey(method);
+    if (key == null) return;
+
+    _recentConnectionSnapshot[key] = success;
+    if (success) {
+      _lastSuccessfulMethod = method;
+    }
+  }
+
+  String? _methodToSnapshotKey(String method) {
+    switch (method) {
+      case 'USB':
+        return 'usb';
+      case 'Thermal Bluetooth':
+        return 'bluetooth';
+      default:
+        return null;
+    }
   }
 
   Future<void> _closeUsbConnection() async {
@@ -2367,22 +2530,26 @@ class ThermalPrinterService {
     String? paymentType,
     bool? paidStatus,
     int? orderId,
+    String? orderNumber,
     double? deliveryCharge,
     DateTime? orderDateTime,
     bool isXprinterUSB = false,
   }) {
     StringBuffer receipt = StringBuffer();
+    final bool isPaidOrder = paidStatus == true;
 
     // Use full 80mm paper width (48 characters)
     receipt.writeln('================================================');
-    receipt.writeln('                   **TVP**'); // Bold restaurant name
+    receipt.writeln('                    **TVP**'); // Bold restaurant name
     receipt.writeln('================================================');
     DateTime displayDateTime = orderDateTime ?? UKTimeService.now();
     receipt.writeln(
       'Date: ${DateFormat('dd/MM/yyyy HH:mm').format(displayDateTime)}',
     );
-    if (orderId != null) {
-      receipt.writeln('**Order #: $orderId**'); // Bold order number
+    // Show order_number to user (fallback to orderId if not available)
+    final displayNumber = orderNumber ?? orderId?.toString();
+    if (displayNumber != null) {
+      receipt.writeln('**Order #: $displayNumber**'); // Bold order number
     }
     receipt.writeln(
       '**Order Type: ${orderType.toUpperCase()}**',
@@ -2392,24 +2559,24 @@ class ThermalPrinterService {
 
     // Customer Details Section
     if (!_shouldExcludeField(customerName)) {
-      receipt.writeln('CUSTOMER DETAILS:');
+      receipt.writeln('**CUSTOMER DETAILS:**');
       receipt.writeln('------------------------------------------------');
-      receipt.writeln('Name: $customerName');
+      receipt.writeln('**Name: $customerName**');
 
       if (!_shouldExcludeField(phoneNumber)) {
-        receipt.writeln('Phone: $phoneNumber');
+        receipt.writeln('**Phone: $phoneNumber**');
       }
 
       // Address details for delivery orders
       if (orderType.toLowerCase() == 'delivery') {
         if (!_shouldExcludeField(streetAddress)) {
-          receipt.writeln('Address: $streetAddress');
+          receipt.writeln('**Address: $streetAddress**');
         }
         if (!_shouldExcludeField(city)) {
-          receipt.writeln('City: $city');
+          receipt.writeln('**City: $city**');
         }
         if (!_shouldExcludeField(postalCode)) {
-          receipt.writeln('Postcode: $postalCode');
+          receipt.writeln('**Postcode: $postalCode**');
         }
       }
 
@@ -2426,7 +2593,7 @@ class ThermalPrinterService {
       double itemTotal = itemPricePerUnit * item.quantity;
 
       // Format item line with name and price on same line
-      String itemName = '${item.quantity}x **${item.foodItem.name}**';
+      String itemName = '**${item.quantity}x ${item.foodItem.name}**';
       String itemPrice = '${itemTotal.toStringAsFixed(2)}';
 
       // Calculate padding to align price to the right (48 char width)
@@ -2506,6 +2673,34 @@ class ThermalPrinterService {
 
     receipt.writeln('================================================');
 
+    // Show price change if order was edited and is PAID
+    final bool shouldPrintPriceChange = isPaidOrder && orderId != null;
+    if (shouldPrintPriceChange) {
+      final priceChange = OrderPriceTrackingService().getPriceChange(orderId);
+      if (priceChange != null) {
+        receipt.writeln();
+        receipt.writeln('**ORDER UPDATED:**');
+        receipt.writeln('------------------------------------------------');
+
+        // Previous amount
+        String prevLabel = 'Previous Amount:';
+        String prevAmount =
+            'GBP ${priceChange.previousPrice.toStringAsFixed(2)}';
+        int prevPadding = 48 - prevLabel.length - prevAmount.length;
+        if (prevPadding < 1) prevPadding = 1;
+        receipt.writeln('$prevLabel${' ' * prevPadding}$prevAmount');
+
+        // Updated amount
+        String updLabel = 'Updated Amount:';
+        String updAmount = 'GBP ${priceChange.newPrice.toStringAsFixed(2)}';
+        int updPadding = 48 - updLabel.length - updAmount.length;
+        if (updPadding < 1) updPadding = 1;
+        receipt.writeln('$updLabel${' ' * updPadding}$updAmount');
+
+        receipt.writeln('================================================');
+      }
+    }
+
     // Payment Status Section
     receipt.writeln();
     receipt.writeln('PAYMENT STATUS:');
@@ -2518,10 +2713,10 @@ class ThermalPrinterService {
     }
 
     // Simple payment status logic: only use paid_status
-    String paymentStatus = (paidStatus == true) ? 'PAID' : 'UNPAID';
+    String paymentStatus = isPaidOrder ? 'PAID' : 'UNPAID';
 
     // Show payment details based on payment type and status
-    if (paidStatus == true) {
+    if (isPaidOrder) {
       if (paymentType != null &&
           paymentType.toLowerCase() == 'cash' &&
           changeDue > 0) {
@@ -2566,10 +2761,13 @@ class ThermalPrinterService {
     String? postalCode,
     String? paymentType,
     bool? paidStatus,
-    int? orderId,
+    int? orderId, // Internal use only
+    String? orderNumber, // Display to user on receipt
     double? deliveryCharge,
     bool isXprinterUSB = false,
     bool isEdited = false, // New parameter to indicate if order was edited
+    double? discountPercentage, // Discount percentage
+    double? discountAmount, // Discount amount
   }) async {
     // PERFORMANCE: Cache CapabilityProfile to avoid repeated disk I/O (saves 5-15 seconds per print)
     _cachedCapabilityProfile ??= await CapabilityProfile.load();
@@ -2604,10 +2802,11 @@ class ThermalPrinterService {
       'Date: ${DateFormat('dd/MM/yyyy HH:mm').format(UKTimeService.now())}',
     );
 
-    // Bold order number
-    if (orderId != null) {
+    // Bold order number - show order_number to user (fallback to orderId)
+    final displayNumber = orderNumber ?? orderId?.toString();
+    if (displayNumber != null) {
       bytes += generator.text(
-        'Order #: $orderId',
+        'Order #: $displayNumber',
         styles: const PosStyles(
           height: PosTextSize.size2,
           width: PosTextSize.size1,
@@ -2634,6 +2833,7 @@ class ThermalPrinterService {
         styles: const PosStyles(
           height: PosTextSize.size3,
           width: PosTextSize.size2,
+          bold: true,
         ),
       );
       bytes += generator.text(
@@ -2644,6 +2844,7 @@ class ThermalPrinterService {
         styles: const PosStyles(
           height: PosTextSize.size2,
           width: PosTextSize.size1,
+          bold: true,
         ),
       );
 
@@ -2653,6 +2854,7 @@ class ThermalPrinterService {
           styles: const PosStyles(
             height: PosTextSize.size2,
             width: PosTextSize.size1,
+            bold: true,
           ),
         );
       }
@@ -2665,6 +2867,7 @@ class ThermalPrinterService {
             styles: const PosStyles(
               height: PosTextSize.size2,
               width: PosTextSize.size1,
+              bold: true,
             ),
           );
         }
@@ -2674,6 +2877,7 @@ class ThermalPrinterService {
             styles: const PosStyles(
               height: PosTextSize.size2,
               width: PosTextSize.size1,
+              bold: true,
             ),
           );
         }
@@ -2683,6 +2887,7 @@ class ThermalPrinterService {
             styles: const PosStyles(
               height: PosTextSize.size2,
               width: PosTextSize.size1,
+              bold: true,
             ),
           );
         }
@@ -2729,7 +2934,7 @@ class ThermalPrinterService {
 
       bytes += generator.text(
         formattedLine,
-        styles: const PosStyles(bold: true),
+        styles: const PosStyles(bold: true, height: PosTextSize.size2),
       );
 
       if (item.selectedOptions != null && item.selectedOptions!.isNotEmpty) {
@@ -2785,6 +2990,26 @@ class ThermalPrinterService {
         ),
         PosColumn(
           text: deliveryChargeText,
+          width: 4,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]);
+    }
+
+    // Show discount if present
+    if (discountPercentage != null && discountPercentage > 0) {
+      String discountText =
+          isXprinterUSB
+              ? '${discountAmount?.toStringAsFixed(2) ?? "0.00"}'
+              : '${discountAmount?.toStringAsFixed(2) ?? "0.00"}';
+      bytes += generator.row([
+        PosColumn(
+          text: 'Discount (${discountPercentage.toStringAsFixed(1)}%):',
+          width: 8,
+          styles: const PosStyles(align: PosAlign.left),
+        ),
+        PosColumn(
+          text: '- $discountText',
           width: 4,
           styles: const PosStyles(align: PosAlign.right),
         ),
@@ -2965,9 +3190,6 @@ class ThermalPrinterService {
     print('🖨️ Starting sales report print job...');
 
     try {
-      // Test connections in parallel with report generation
-      Future<Map<String, bool>> connectionTestFuture = testAllConnections();
-
       Future<List<int>> reportDataFuture = _generateSalesReportESCPOS(
         reportType: reportType,
         reportData: reportData,
@@ -2990,21 +3212,10 @@ class ThermalPrinterService {
         ),
       );
 
-      // Wait for all preparations to complete
-      List<dynamic> results = await Future.wait([
-        connectionTestFuture,
-        reportDataFuture,
-        reportContentFuture,
-      ]);
+      List<int> thermalReportData = await reportDataFuture;
+      String reportContent = await reportContentFuture;
 
-      Map<String, bool> connectionStatus = results[0];
-      List<int> thermalReportData = results[1];
-      String reportContent = results[2];
-
-      List<String> availableMethods = [];
-      if (connectionStatus['usb'] == true) availableMethods.add('USB');
-      if (connectionStatus['bluetooth'] == true)
-        availableMethods.add('Thermal Bluetooth');
+      final List<String> availableMethods = _getPreferredPrintMethods();
 
       if (availableMethods.isEmpty) {
         print('❌ No printer connections available');
@@ -3039,6 +3250,8 @@ class ThermalPrinterService {
             reportContent: reportContent,
           );
 
+          _recordConnectionResult(method, success);
+
           if (success) {
             print('✅ $method sales report printing successful');
             printSuccess = true;
@@ -3049,6 +3262,7 @@ class ThermalPrinterService {
         } catch (e) {
           lastError = '$method printing failed: ${e.toString()}';
           print('❌ $method error: $e');
+          _recordConnectionResult(method, false);
         }
       }
 

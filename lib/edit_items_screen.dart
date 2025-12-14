@@ -28,9 +28,12 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
   String _addItemSelectedCategory = '';
   String? _addItemSelectedSubtype;
   bool _websiteEnabled = false;
-  Map<String, double> _priceOptions = {};
-  Map<String, TextEditingController> _priceControllers =
-      {}; // Controllers for price fields
+  Map<String, double> _websitePriceOptions = {};
+  final Map<String, TextEditingController> _websitePriceControllers =
+      {}; // Controllers for website price fields
+  Map<String, double> _posPriceOptions = {};
+  final Map<String, TextEditingController> _posPriceControllers =
+      {}; // Controllers for POS price fields
   Set<String> _selectedToppings = {};
 
   // Available toppings from food_item_details_model.dart
@@ -88,7 +91,10 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
     _itemNameController.dispose();
     _descriptionController.dispose();
     // Dispose all price controllers
-    for (var controller in _priceControllers.values) {
+    for (var controller in _websitePriceControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _posPriceControllers.values) {
       controller.dispose();
     }
     super.dispose();
@@ -919,8 +925,15 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
         setState(() {
           _addItemSelectedCategory = fallbackCategory;
           _addItemSelectedSubtype = null;
-          _priceOptions.clear();
+          _websitePriceOptions.clear();
+          _posPriceOptions.clear();
           _selectedToppings.clear();
+          for (var controller in _websitePriceControllers.values) {
+            controller.clear();
+          }
+          for (var controller in _posPriceControllers.values) {
+            controller.clear();
+          }
         });
       });
     }
@@ -1000,7 +1013,31 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
                 SizedBox(height: 16),
 
                 // Price options
-                _buildPriceSection(),
+                _buildPriceSection(
+                  title: 'Website Price Options *',
+                  priceOptions: _websitePriceOptions,
+                  controllers: _websitePriceControllers,
+                  onChanged: (key, price) {
+                    if (price != null) {
+                      _websitePriceOptions[key] = price;
+                    } else {
+                      _websitePriceOptions.remove(key);
+                    }
+                  },
+                ),
+                SizedBox(height: 16),
+                _buildPriceSection(
+                  title: 'POS Price Options *',
+                  priceOptions: _posPriceOptions,
+                  controllers: _posPriceControllers,
+                  onChanged: (key, price) {
+                    if (price != null) {
+                      _posPriceOptions[key] = price;
+                    } else {
+                      _posPriceOptions.remove(key);
+                    }
+                  },
+                ),
                 SizedBox(height: 16),
 
                 // Toppings (conditional)
@@ -1055,10 +1092,14 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
     }
     _addItemSelectedSubtype = null;
     _websiteEnabled = false;
-    _priceOptions.clear();
+    _websitePriceOptions.clear();
+    _posPriceOptions.clear();
     _selectedToppings.clear();
     // Clear all price controllers
-    for (var controller in _priceControllers.values) {
+    for (var controller in _websitePriceControllers.values) {
+      controller.clear();
+    }
+    for (var controller in _posPriceControllers.values) {
       controller.clear();
     }
   }
@@ -1077,7 +1118,8 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
       // Note: FoodItem model doesn't include 'website' field, defaulting to true
       // The backend stores this but Flutter model doesn't expose it
       _websiteEnabled = true;
-      _priceOptions = Map<String, double>.from(item.price);
+      _websitePriceOptions = Map<String, double>.from(item.price);
+      _posPriceOptions = Map<String, double>.from(item.posPrice ?? item.price);
       _selectedToppings = Set<String>.from(item.defaultToppings ?? []);
     });
   }
@@ -1169,8 +1211,15 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
                   _addItemSelectedCategory = newValue;
                   _addItemSelectedSubtype =
                       null; // Reset subtype when category changes
-                  _priceOptions.clear(); // Reset price options
+                  _websitePriceOptions.clear(); // Reset price options
+                  _posPriceOptions.clear();
                   _selectedToppings.clear(); // Reset toppings
+                  for (var controller in _websitePriceControllers.values) {
+                    controller.clear();
+                  }
+                  for (var controller in _posPriceControllers.values) {
+                    controller.clear();
+                  }
                 });
               }
             },
@@ -1245,7 +1294,14 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
         if (!mounted) return;
         setState(() {
           _addItemSelectedSubtype = null;
-          _priceOptions.clear();
+          _websitePriceOptions.clear();
+          _posPriceOptions.clear();
+          for (var controller in _websitePriceControllers.values) {
+            controller.clear();
+          }
+          for (var controller in _posPriceControllers.values) {
+            controller.clear();
+          }
         });
       });
     }
@@ -1288,8 +1344,15 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
             onChanged: (String? newValue) {
               setState(() {
                 _addItemSelectedSubtype = newValue;
-                _priceOptions
+                _websitePriceOptions
                     .clear(); // Reset price options when subtype changes
+                _posPriceOptions.clear();
+                for (var controller in _websitePriceControllers.values) {
+                  controller.clear();
+                }
+                for (var controller in _posPriceControllers.values) {
+                  controller.clear();
+                }
               });
             },
           ),
@@ -1397,33 +1460,32 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
     );
   }
 
-  Widget _buildPriceSection() {
+  Widget _buildPriceSection({
+    required String title,
+    required Map<String, double> priceOptions,
+    required Map<String, TextEditingController> controllers,
+    required void Function(String key, double? value) onChanged,
+  }) {
     Map<String, double> defaultPrices = _getDefaultPricesForCategory();
 
     // Initialize or update controllers for each price option
     for (var key in defaultPrices.keys) {
-      if (!_priceControllers.containsKey(key)) {
-        // Create new controller
-        _priceControllers[key] = TextEditingController();
-      }
+      controllers.putIfAbsent(key, () => TextEditingController());
 
       // Update controller text with existing price
-      // Check both exact match and case-insensitive match for existing prices
-      if (_priceOptions.containsKey(key)) {
-        _priceControllers[key]!.text = _priceOptions[key].toString();
+      if (priceOptions.containsKey(key)) {
+        controllers[key]!.text = priceOptions[key].toString();
       } else {
         // Try case-insensitive match for existing prices
-        final matchingKey = _priceOptions.keys.firstWhere(
+        final matchingKey = priceOptions.keys.firstWhere(
           (existingKey) => existingKey.toLowerCase() == key.toLowerCase(),
           orElse: () => '',
         );
         if (matchingKey.isNotEmpty) {
-          _priceControllers[key]!.text = _priceOptions[matchingKey].toString();
-          // Also update _priceOptions with the correct key
-          _priceOptions[key] = _priceOptions[matchingKey]!;
+          controllers[key]!.text = priceOptions[matchingKey].toString();
+          priceOptions[key] = priceOptions[matchingKey]!;
         } else {
-          // Clear the controller if no matching price exists
-          _priceControllers[key]!.text = '';
+          controllers[key]!.text = '';
         }
       }
     }
@@ -1432,7 +1494,7 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Price Options *',
+          title,
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -1475,7 +1537,7 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
                                 border: Border.all(color: Colors.grey.shade300),
                               ),
                               child: TextField(
-                                controller: _priceControllers[entry.key],
+                                controller: controllers[entry.key],
                                 keyboardType: TextInputType.numberWithOptions(
                                   decimal: true,
                                 ),
@@ -1498,11 +1560,7 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
                                 ),
                                 onChanged: (value) {
                                   double? price = double.tryParse(value);
-                                  if (price != null) {
-                                    _priceOptions[entry.key] = price;
-                                  } else {
-                                    _priceOptions.remove(entry.key);
-                                  }
+                                  onChanged(entry.key, price);
                                 },
                               ),
                             ),
@@ -1530,20 +1588,25 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
     } else if (_addItemSelectedCategory == 'Burgers') {
       return {"1/2 lb": 5.95, "1/4 lb": 3.99};
     } else if (_addItemSelectedCategory == 'Shawarma') {
-      // Case-insensitive comparison for subtype
       final subtypeLower = _addItemSelectedSubtype?.toLowerCase() ?? '';
       if (subtypeLower.contains('donner') || subtypeLower.contains('kebab')) {
-        // For "Donner & Shawarma kebab" - check if it's NOT a tray
         if (!subtypeLower.contains('tray')) {
           return {"Naan": 6.99, "Pitta": 4.99};
         }
       }
-      // For "Shawarma & kebab tray" OR any tray subtype
       if (subtypeLower.contains('tray')) {
         return {"Large": 5.49, "Small": 4.49};
       }
     }
-    return {"default": 0.0}; // For other categories - single price as "default"
+    return {"default": 0.0};
+  }
+
+  Map<String, double> _normalizePriceOptions(Map<String, double> source) {
+    if (source.isEmpty) return {};
+    if (source.length == 1 && source.keys.first.toLowerCase() == 'default') {
+      return {'default': source.values.first};
+    }
+    return Map<String, double>.from(source);
   }
 
   Widget _buildToppingsSection() {
@@ -1717,7 +1780,7 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
       return;
     }
 
-    if (_priceOptions.isEmpty) {
+    if (_websitePriceOptions.isEmpty) {
       CustomPopupService.show(
         context,
         'Please enter at least one price option',
@@ -1737,16 +1800,12 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
         listen: false,
       );
 
-      // Transform price options for single-price items
-      Map<String, double> finalPriceOptions;
-      if (_priceOptions.length == 1 &&
-          _priceOptions.keys.first.toLowerCase() == 'default') {
-        // For single price items, use "default" key
-        finalPriceOptions = {"default": _priceOptions.values.first};
-      } else {
-        // For multi-price items, use as-is
-        finalPriceOptions = _priceOptions;
-      }
+      final Map<String, double> finalWebsitePriceOptions =
+          _normalizePriceOptions(_websitePriceOptions);
+      final Map<String, double> finalPosPriceOptions =
+          _posPriceOptions.isEmpty
+              ? Map<String, double>.from(finalWebsitePriceOptions)
+              : _normalizePriceOptions(_posPriceOptions);
 
       // Call the provider method to add the item
       await provider.addItem(
@@ -1754,7 +1813,8 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
         itemName: _itemNameController.text.trim(),
         type: _addItemSelectedCategory, // Category as type
         description: _descriptionController.text.trim(),
-        priceOptions: finalPriceOptions,
+        priceOptions: finalWebsitePriceOptions,
+        posPriceOptions: finalPosPriceOptions,
         toppings: _selectedToppings.toList(),
         website: _websiteEnabled,
         subtype: _addItemSelectedSubtype, // Pass subtype if selected
@@ -1806,7 +1866,7 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
       return;
     }
 
-    if (_priceOptions.isEmpty) {
+    if (_websitePriceOptions.isEmpty) {
       CustomPopupService.show(
         context,
         'Please enter at least one price option',
@@ -1835,16 +1895,12 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
         listen: false,
       );
 
-      // Transform price options for single-price items
-      Map<String, double> finalPriceOptions;
-      if (_priceOptions.length == 1 &&
-          _priceOptions.keys.first.toLowerCase() == 'default') {
-        // For single price items, use "default" key
-        finalPriceOptions = {"default": _priceOptions.values.first};
-      } else {
-        // For multi-price items, use as-is
-        finalPriceOptions = _priceOptions;
-      }
+      final Map<String, double> finalWebsitePriceOptions =
+          _normalizePriceOptions(_websitePriceOptions);
+      final Map<String, double> finalPosPriceOptions =
+          _posPriceOptions.isEmpty
+              ? Map<String, double>.from(finalWebsitePriceOptions)
+              : _normalizePriceOptions(_posPriceOptions);
       // Call the provider method to update the item
       await provider.updateItem(
         context: context,
@@ -1852,7 +1908,8 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
         itemName: _itemNameController.text.trim(),
         type: _addItemSelectedCategory, // Category as type
         description: _descriptionController.text.trim(),
-        priceOptions: finalPriceOptions,
+        priceOptions: finalWebsitePriceOptions,
+        posPriceOptions: finalPosPriceOptions,
         toppings: _selectedToppings.toList(),
         website: _websiteEnabled,
         availability: _editingItem!.availability,

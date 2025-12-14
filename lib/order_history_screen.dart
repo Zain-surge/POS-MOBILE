@@ -485,7 +485,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                       child: Row(
                         children: [
                           Text(
-                            'Order #${order.orderId}',
+                            'Order #${order.displayOrderNumber}',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
@@ -620,7 +620,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Order #${order.orderId}',
+                              'Order #${order.displayOrderNumber}',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 20,
@@ -722,6 +722,39 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                             return _buildItemCard(item, index);
                           }).toList(),
                           const SizedBox(height: 20),
+                          // Show discount if present
+                          if (order.discountPercentage != null &&
+                              order.discountPercentage! > 0) ...[
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Discount (${order.discountPercentage!.toStringAsFixed(1)}%)',
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    '- £${(order.discountAmount ?? 0).toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF90EE90),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           // Total
                           Container(
                             padding: const EdgeInsets.all(16),

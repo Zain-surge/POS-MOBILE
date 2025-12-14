@@ -40,7 +40,7 @@ class CartPersistenceService {
                     'food_item_id': item.foodItem.id,
                     'food_item_name': item.foodItem.name,
                     'food_item_category': item.foodItem.category,
-                    'food_item_price': item.foodItem.price,
+                    'food_item_price': item.foodItem.effectivePosPrice,
                     'food_item_image': item.foodItem.image,
                     'food_item_availability': item.foodItem.availability,
                     'quantity': item.quantity,

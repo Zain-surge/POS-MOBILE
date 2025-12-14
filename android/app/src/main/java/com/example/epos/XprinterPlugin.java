@@ -92,13 +92,42 @@ public class XprinterPlugin implements FlutterPlugin, MethodCallHandler {
         executor.execute(() -> {
             try {
                 List<String> devicePaths = POSConnect.getUsbDevices(context);
-                
-                List<Map<String, Object>> devices = new ArrayList<>();
                 UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
-                
+
+                // Build a quick lookup map of UsbDevice by device name (which is the path)
+                Map<String, UsbDevice> usbDeviceMap = new HashMap<>();
                 if (usbManager != null) {
                     for (UsbDevice device : usbManager.getDeviceList().values()) {
+                        usbDeviceMap.put(device.getDeviceName(), device);
+                    }
+                }
+
+                List<Map<String, Object>> devices = new ArrayList<>();
+
+                // Primary: return the POSConnect device paths with detailed metadata when available
+                if (devicePaths != null && !devicePaths.isEmpty()) {
+                    for (String path : devicePaths) {
                         Map<String, Object> deviceInfo = new HashMap<>();
+                        deviceInfo.put("devicePath", path);
+
+                        UsbDevice usbDevice = usbDeviceMap.get(path);
+                        if (usbDevice != null) {
+                            deviceInfo.put("deviceName", usbDevice.getDeviceName());
+                            deviceInfo.put("vendorId", usbDevice.getVendorId());
+                            deviceInfo.put("productId", usbDevice.getProductId());
+                            deviceInfo.put("manufacturerName", usbDevice.getManufacturerName());
+                            deviceInfo.put("productName", usbDevice.getProductName());
+                        }
+
+                        devices.add(deviceInfo);
+                    }
+                }
+
+                // Fallback: if POSConnect returned nothing, still return the raw UsbManager list
+                if (devices.isEmpty() && usbManager != null) {
+                    for (UsbDevice device : usbManager.getDeviceList().values()) {
+                        Map<String, Object> deviceInfo = new HashMap<>();
+                        deviceInfo.put("devicePath", device.getDeviceName());
                         deviceInfo.put("deviceName", device.getDeviceName());
                         deviceInfo.put("vendorId", device.getVendorId());
                         deviceInfo.put("productId", device.getProductId());

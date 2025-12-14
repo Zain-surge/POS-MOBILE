@@ -293,7 +293,7 @@ class OfflineFoodItem extends HiveObject {
       id: foodItem.id,
       name: foodItem.name,
       category: foodItem.category,
-      price: Map<String, double>.from(foodItem.price),
+      price: Map<String, double>.from(foodItem.effectivePosPrice),
       image: foodItem.image,
       defaultToppings: foodItem.defaultToppings?.cast<String>().toList(),
       defaultCheese: foodItem.defaultCheese?.cast<String>().toList(),

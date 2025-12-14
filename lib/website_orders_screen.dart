@@ -437,7 +437,11 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
         paidStatus:
             _selectedOrder!
                 .paidStatus, // Pass the actual paid status from order
+        orderId: _selectedOrder!.orderId,
+        orderNumber: _selectedOrder!.displayOrderNumber,
         orderDateTime: UKTimeService.now(), // Always use UK time for printing
+        discountPercentage: _selectedOrder!.discountPercentage,
+        discountAmount: _selectedOrder!.discountAmount,
         onShowMethodSelection: (availableMethods) {
           CustomPopupService.show(
             context,
@@ -1811,7 +1815,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                                 ),
                                                 alignment: Alignment.center,
                                                 child: Text(
-                                                  '#${order.orderId}',
+                                                  '#${order.displayOrderNumber}',
                                                   style: const TextStyle(
                                                     fontSize: 16,
                                                     fontWeight: FontWeight.bold,
@@ -1916,7 +1920,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                                       if (mounted) {
                                                         CustomPopupService.show(
                                                           context,
-                                                          'Order ${order.orderId} is already ${order.statusLabel}.',
+                                                          'Order ${order.displayOrderNumber} is already ${order.statusLabel}.',
                                                           //type: PopupType.failure,
                                                         );
                                                       }
@@ -1991,7 +1995,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                                       if (mounted) {
                                                         CustomPopupService.show(
                                                           context,
-                                                          'Order ${order.orderId} status updated to ${nextIntendedStatus.toUpperCase()}.',
+                                                          'Order ${order.displayOrderNumber} status updated to ${nextIntendedStatus.toUpperCase()}.',
                                                           type:
                                                               PopupType.success,
                                                         );
@@ -2000,14 +2004,14 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                                       if (mounted) {
                                                         CustomPopupService.show(
                                                           context,
-                                                          'Order ${order.orderId} status updated to ${nextIntendedStatus.toUpperCase()}.',
+                                                          'Order ${order.displayOrderNumber} status updated to ${nextIntendedStatus.toUpperCase()}.',
                                                           type:
                                                               PopupType.success,
                                                         );
 
                                                         CustomPopupService.show(
                                                           context,
-                                                          'Failed to update status for order ${order.orderId}. Please try again.',
+                                                          'Failed to update status for order ${order.displayOrderNumber}. Please try again.',
                                                           type:
                                                               PopupType.failure,
                                                         );
@@ -2124,7 +2128,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                           ),
                                           // Display Order Number
                                           Text(
-                                            'Order no. ${_selectedOrder!.orderId}',
+                                            'Order no. ${_selectedOrder!.displayOrderNumber}',
                                             style: TextStyle(
                                               fontSize: isLargeScreen ? 19 : 17,
                                               fontWeight: FontWeight.normal,
@@ -2642,6 +2646,57 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
+                                                // Show discount if present
+                                                if (_selectedOrder!
+                                                            .discountPercentage !=
+                                                        null &&
+                                                    _selectedOrder!
+                                                            .discountPercentage! >
+                                                        0) ...[
+                                                  Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceBetween,
+                                                    children: [
+                                                      Text(
+                                                        'Discount (${_selectedOrder!.discountPercentage!.toStringAsFixed(1)}%)',
+                                                        style: TextStyle(
+                                                          fontSize:
+                                                              isLargeScreen
+                                                                  ? 20
+                                                                  : 16,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: Colors.white70,
+                                                        ),
+                                                      ),
+                                                      SizedBox(
+                                                        width:
+                                                            isLargeScreen
+                                                                ? 80
+                                                                : 60,
+                                                      ),
+                                                      Text(
+                                                        '- £${(_selectedOrder!.discountAmount ?? 0).toStringAsFixed(2)}',
+                                                        style: TextStyle(
+                                                          fontSize:
+                                                              isLargeScreen
+                                                                  ? 20
+                                                                  : 16,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: Color(
+                                                            0xFF90EE90,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  SizedBox(
+                                                    height:
+                                                        isLargeScreen ? 12 : 10,
+                                                  ),
+                                                ],
                                                 Row(
                                                   mainAxisAlignment:
                                                       MainAxisAlignment
@@ -2897,12 +2952,13 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
     final String normalizedStatus = _selectedOrder!.status.toLowerCase();
     String? statusMessage;
     if (normalizedStatus == 'cancelled' || normalizedStatus == 'red') {
-      statusMessage = 'Order ${_selectedOrder!.orderId} is already cancelled.';
+      statusMessage =
+          'Order ${_selectedOrder!.displayOrderNumber} is already cancelled.';
     } else if (normalizedStatus == 'completed' ||
         normalizedStatus == 'delivered' ||
         normalizedStatus == 'blue') {
       statusMessage =
-          'Order ${_selectedOrder!.orderId} has already been completed and cannot be cancelled.';
+          'Order ${_selectedOrder!.displayOrderNumber} has already been completed and cannot be cancelled.';
     }
 
     if (statusMessage != null) {
@@ -2917,7 +2973,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
         return AlertDialog(
           title: const Text('Cancel Order'),
           content: Text(
-            'Are you sure you want to cancel order #${_selectedOrder!.orderId}?',
+            'Are you sure you want to cancel order #${_selectedOrder!.displayOrderNumber}?',
           ),
           actions: [
             TextButton(
@@ -2947,7 +3003,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
       if (success) {
         CustomPopupService.show(
           context,
-          'Order ${_selectedOrder!.orderId} has been cancelled',
+          'Order ${_selectedOrder!.displayOrderNumber} has been cancelled',
           type: PopupType.success,
         );
 
@@ -2960,7 +3016,7 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
       } else {
         CustomPopupService.show(
           context,
-          'Failed to cancel order ${_selectedOrder!.orderId}',
+          'Failed to cancel order ${_selectedOrder!.displayOrderNumber}',
           type: PopupType.failure,
         );
       }

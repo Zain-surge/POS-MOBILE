@@ -175,6 +175,7 @@ class ItemAvailabilityProvider with ChangeNotifier {
     required String type,
     required String description,
     required Map<String, double> priceOptions,
+    required Map<String, double> posPriceOptions,
     required List<String> toppings,
     required bool website,
     String? subtype,
@@ -186,6 +187,7 @@ class ItemAvailabilityProvider with ChangeNotifier {
         type: type,
         description: description,
         price: priceOptions, // Send as JSONB field
+        posPrice: posPriceOptions,
         toppings: toppings,
         website: website,
         subtype: subtype,
@@ -227,6 +229,7 @@ class ItemAvailabilityProvider with ChangeNotifier {
     required String type,
     required String description,
     required Map<String, double> priceOptions,
+    required Map<String, double> posPriceOptions,
     required List<String> toppings,
     required bool website,
     required bool availability,
@@ -240,6 +243,7 @@ class ItemAvailabilityProvider with ChangeNotifier {
         type: type,
         description: description,
         price: priceOptions, // Send as JSONB field
+        posPrice: posPriceOptions,
         toppings: toppings,
         website: website,
         availability: availability,

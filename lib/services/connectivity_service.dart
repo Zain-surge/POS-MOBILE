@@ -214,9 +214,13 @@ class ConnectivityService {
 
       // Use the existing ApiService.createOrderFromMap method
       // This ensures the order goes through the same validation and processing
-      print('📤 Calling ApiService.createOrderFromMap...');
-      final orderId = await ApiService.createOrderFromMap(orderData);
-      print('📤 API call completed, received orderId: $orderId');
+      print('dY"\x0f Calling ApiService.createOrderFromMap...');
+      final orderResponse = await ApiService.createOrderFromMap(orderData);
+      final orderId = orderResponse.orderId ?? '';
+      final orderNumber = orderResponse.orderNumber;
+      print(
+        'dY"\x0f API call completed, received orderId: $orderId, orderNumber: ${orderNumber ?? "N/A"}',
+      );
 
       if (orderId.isNotEmpty) {
         // Extract numeric ID if possible, otherwise use 0 as placeholder
@@ -232,8 +236,11 @@ class ConnectivityService {
           order.localId,
           numericOrderId,
         );
+        final orderNumberLog =
+            orderNumber != null ? ' (Order #: ' + orderNumber + ')' : '';
         print(
-          '✅ Offline order ${order.transactionId} processed successfully with ID: $orderId',
+          '?o. Offline order ${order.transactionId} processed successfully with ID: $orderId' +
+              orderNumberLog,
         );
       } else {
         throw Exception('API returned empty order ID');

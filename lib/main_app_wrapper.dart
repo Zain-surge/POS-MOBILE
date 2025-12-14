@@ -662,8 +662,12 @@ class _MainAppWrapperState extends State<MainAppWrapper> {
         postalCode: order.postalCode,
         paymentType: order.paymentType,
         paidStatus: order.paidStatus, // FIXED: Add missing paidStatus parameter
+        orderId: order.orderId,
+        orderNumber: order.displayOrderNumber,
         deliveryCharge: deliveryChargeAmount,
         orderDateTime: UKTimeService.now(), // Always use UK time for printing
+        discountPercentage: order.discountPercentage,
+        discountAmount: order.discountAmount,
         onShowMethodSelection: (availableMethods) {
           _showPopup(
             "Available printing methods: ${availableMethods.join(', ')}",
@@ -674,8 +678,8 @@ class _MainAppWrapperState extends State<MainAppWrapper> {
 
       _showPopup(
         success
-            ? 'Receipt printed for order ${order.orderId}'
-            : 'Failed to print receipt for order ${order.orderId}',
+            ? 'Receipt printed for order ${order.displayOrderNumber}'
+            : 'Failed to print receipt for order ${order.displayOrderNumber}',
         type: success ? PopupType.success : PopupType.failure,
       );
     } catch (e) {
@@ -694,9 +698,13 @@ class _MainAppWrapperState extends State<MainAppWrapper> {
       );
 
       if (success) {
-        _showPopup('Order ${order.orderId} accepted.', type: PopupType.success);
+        _showPopup(
+          'Order ${order.displayOrderNumber} accepted.',
+          type: PopupType.success,
+        );
 
-        // Print receipt immediately - no delay needed
+        // Print receipt
+        await Future.delayed(const Duration(milliseconds: 500));
         await _printOrderReceipt(order);
 
         // Immediate refresh orders
@@ -711,14 +719,14 @@ class _MainAppWrapperState extends State<MainAppWrapper> {
         }
       } else {
         _showPopup(
-          'Failed to accept order ${order.orderId}',
+          'Failed to accept order ${order.displayOrderNumber}',
           type: PopupType.failure,
         );
       }
     } catch (e) {
       print('MainAppWrapper: Error accepting order: $e');
       _showPopup(
-        'Error accepting order ${order.orderId}',
+        'Error accepting order ${order.displayOrderNumber}',
         type: PopupType.failure,
       );
     }
@@ -735,8 +743,8 @@ class _MainAppWrapperState extends State<MainAppWrapper> {
 
       _showPopup(
         success
-            ? 'Order ${order.orderId} declined.'
-            : 'Failed to decline order ${order.orderId}',
+            ? 'Order ${order.displayOrderNumber} declined.'
+            : 'Failed to decline order ${order.displayOrderNumber}',
         type: success ? PopupType.success : PopupType.failure,
       );
 
@@ -750,7 +758,7 @@ class _MainAppWrapperState extends State<MainAppWrapper> {
     } catch (e) {
       print('MainAppWrapper: Error declining order: $e');
       _showPopup(
-        'Error declining order ${order.orderId}',
+        'Error declining order ${order.displayOrderNumber}',
         type: PopupType.failure,
       );
     }

@@ -169,7 +169,7 @@ class _NewOrderNotificationWidgetState
               ),
               child: Center(
                 child: Text(
-                  'Order ${widget.order.orderId}',
+                  'Order ${widget.order.displayOrderNumber}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 24,
@@ -261,6 +261,45 @@ class _NewOrderNotificationWidgetState
                     // --- Horizontal Separator Line ---
                     const Divider(color: Colors.black, thickness: 1),
                     const SizedBox(height: 15),
+
+                    // --- Discount Section (if present) ---
+                    if (widget.order.discountPercentage != null &&
+                        widget.order.discountPercentage! > 0) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 8.0,
+                          horizontal: 10.0,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFCB6CE6).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Discount (${widget.order.discountPercentage!.toStringAsFixed(1)}%)',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                            Text(
+                              '- £${(widget.order.discountAmount ?? 0).toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF4CAF50),
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
 
                     // --- Total Section ---
                     Container(

@@ -668,8 +668,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       _isInSizeSelectionMode = false;
       _sizeHasBeenSelected =
           _selectedSize != null ||
-          (widget.foodItem.price.keys.length == 1 &&
-              widget.foodItem.price.isNotEmpty);
+          (widget.foodItem.effectivePosPrice.keys.length == 1 &&
+              widget.foodItem.effectivePosPrice.isNotEmpty);
     } else {
       bool requiresSizeSelection =
           ([
@@ -682,15 +682,15 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
                 'Wings',
                 'Deals',
               ].contains(widget.foodItem.category) &&
-              widget.foodItem.price.keys.length > 1);
+              widget.foodItem.effectivePosPrice.keys.length > 1);
 
       if (requiresSizeSelection) {
         _isInSizeSelectionMode = true;
         _selectedSize = null;
       } else {
-        if (widget.foodItem.price.keys.length == 1 &&
-            widget.foodItem.price.isNotEmpty) {
-          _selectedSize = widget.foodItem.price.keys.first;
+        if (widget.foodItem.effectivePosPrice.keys.length == 1 &&
+            widget.foodItem.effectivePosPrice.isNotEmpty) {
+          _selectedSize = widget.foodItem.effectivePosPrice.keys.first;
           _sizeHasBeenSelected = true;
         }
         _isInSizeSelectionMode = false;
@@ -1544,7 +1544,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
 
   double _calculatePricePerUnit() {
     debugPrint("--- Calculating Price for ${widget.foodItem.name} ---");
-    debugPrint("Food Item Price Map: ${widget.foodItem.price}");
+    debugPrint("Food Item Price Map: ${widget.foodItem.effectivePosPrice}");
     debugPrint("Selected Size: $_selectedSize");
     debugPrint("Selected Base: $_selectedBase");
     debugPrint("Selected Crust: $_selectedCrust");
@@ -1554,11 +1554,11 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     double price = 0.0;
 
     if (_selectedSize != null &&
-        widget.foodItem.price.containsKey(_selectedSize)) {
-      price = widget.foodItem.price[_selectedSize] ?? 0.0;
-    } else if (widget.foodItem.price.keys.length == 1 &&
-        widget.foodItem.price.isNotEmpty) {
-      price = widget.foodItem.price.values.first;
+        widget.foodItem.effectivePosPrice.containsKey(_selectedSize)) {
+      price = widget.foodItem.effectivePosPrice[_selectedSize] ?? 0.0;
+    } else if (widget.foodItem.effectivePosPrice.keys.length == 1 &&
+        widget.foodItem.effectivePosPrice.isNotEmpty) {
+      price = widget.foodItem.effectivePosPrice.values.first;
     } else {
       debugPrint("No valid size selected or price not found");
       return 0.0;
@@ -1911,7 +1911,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   }
 
   void _confirmSelection() {
-    if (widget.foodItem.price.keys.length > 1 && _selectedSize == null) {
+    if (widget.foodItem.effectivePosPrice.keys.length > 1 &&
+        _selectedSize == null) {
       CustomPopupService.show(
         context,
         "Please select a size before adding to cart",
@@ -1951,7 +1952,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
 
     // Only show size for non-deal items (deals handle sizing differently)
     if (_selectedSize != null &&
-        widget.foodItem.price.keys.length > 1 &&
+        widget.foodItem.effectivePosPrice.keys.length > 1 &&
         widget.foodItem.category != 'Deals') {
       selectedOptions.add('Size: $_selectedSize');
     }
@@ -3341,7 +3342,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         widget.foodItem.name.toLowerCase().contains('drink');
 
     bool canConfirmSelection = true;
-    if ((widget.foodItem.price.keys.length > 1 && _selectedSize == null) ||
+    if ((widget.foodItem.effectivePosPrice.keys.length > 1 &&
+            _selectedSize == null) ||
         (_makeItAMeal && _selectedDrink == null) ||
         (kidsMealNeedsDrinkForValidation && _selectedDrink == null) ||
         (_makeItAMeal &&
@@ -3760,7 +3762,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
 
     debugPrint("Item Category: ${widget.foodItem.category}");
     debugPrint(
-      "Price keys length for rendering: ${widget.foodItem.price.keys.length}",
+      "Price keys length for rendering: ${widget.foodItem.effectivePosPrice.keys.length}",
     );
     debugPrint("Is in size selection mode: $_isInSizeSelectionMode");
     debugPrint("Size has been selected: $_sizeHasBeenSelected");
@@ -4270,7 +4272,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
             runSpacing: 15,
             alignment: WrapAlignment.center,
             children:
-                widget.foodItem.price.keys.map((sizeKeyFromData) {
+                widget.foodItem.effectivePosPrice.keys.map((sizeKeyFromData) {
                   final bool isActive = _selectedSize == sizeKeyFromData;
                   final String displayedText = _getDisplaySize(sizeKeyFromData);
 

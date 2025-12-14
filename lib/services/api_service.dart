@@ -16,12 +16,13 @@ class ApiService {
   static Future<bool> markOrderAsPaid(
     int orderId, {
     String? paymentType,
+    bool paidStatus = true,
   }) async {
     final url = Uri.parse(_buildUrl('/item/set-paid-status'));
     try {
       final Map<String, dynamic> requestBody = {
         'order_id': orderId,
-        'paid_status': true,
+        'paid_status': paidStatus,
       };
 
       // Add payment type if provided
@@ -125,7 +126,7 @@ class ApiService {
     }
   }
 
-  static Future<String> createOrderFromMap(
+  static Future<OrderCreationResponse> createOrderFromMap(
     Map<String, dynamic> orderData,
   ) async {
     final url = Uri.parse(_buildUrl('/orders/full-create'));
@@ -139,8 +140,8 @@ class ApiService {
       print(
         "Order body length: ${utf8.encode(jsonEncode(orderData)).length} bytes",
       );
-      print("📤 DEBUG: Response status: ${response.statusCode}");
-      print("📤 DEBUG: Response body: ${response.body}");
+      print("dY\x0f DEBUG: Response status: ${response.statusCode}");
+      print("dY\x0f DEBUG: Response body: ${response.body}");
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
@@ -149,17 +150,28 @@ class ApiService {
           print("Backend Error: ${data['error']}");
         }
 
-        if (data.containsKey('order_id')) {
+        final orderResponse = OrderCreationResponse(
+          orderId: data['order_id']?.toString(),
+          orderNumber: data['order_number']?.toString(),
+        );
+
+        if (orderResponse.orderId != null) {
           print(
-            "📤 DEBUG: Successfully created order with ID: ${data['order_id']}",
+            "dY\x0f DEBUG: Successfully created order with ID: ${orderResponse.orderId}",
           );
-          return data['order_id'].toString();
         } else {
           print(
             'createOrderFromMap: Warning: Backend response does not contain "order_id" key. Body: ${response.body}',
           );
-          return 'Order placed successfully (ID not returned from map)';
         }
+
+        if (orderResponse.orderNumber == null) {
+          print(
+            'createOrderFromMap: Warning: Backend response does not contain "order_number" key.',
+          );
+        }
+
+        return orderResponse;
       } else {
         throw Exception(
           "Failed to create order from map: ${response.statusCode} - ${response.body}",
@@ -662,6 +674,7 @@ class ApiService {
     required String type,
     required String description,
     required Map<String, double> price,
+    required Map<String, double> posPrice,
     required List<String> toppings,
     required bool website,
     String? subtype,
@@ -675,6 +688,7 @@ class ApiService {
         "type": type,
         "description": description,
         "price": price,
+        "pos_price": posPrice,
         "toppings": toppings,
         "website": website,
       };
@@ -715,6 +729,7 @@ class ApiService {
     required String type,
     required String description,
     required Map<String, double> price,
+    required Map<String, double> posPrice,
     required List<String> toppings,
     required bool website,
     required bool availability,
@@ -730,6 +745,7 @@ class ApiService {
         "description": description,
         "availability": availability,
         "price": price,
+        "pos_price": posPrice,
         "toppings": toppings,
         "website": website,
       };
@@ -880,4 +896,11 @@ class ApiService {
       rethrow;
     }
   }
+}
+
+class OrderCreationResponse {
+  final String? orderId;
+  final String? orderNumber;
+
+  OrderCreationResponse({required this.orderId, required this.orderNumber});
 }

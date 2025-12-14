@@ -1,5 +1,4 @@
 // lib/providers/food_item_details_provider.dart
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:epos/models/food_item.dart';
 import 'package:epos/models/cart_item.dart';
@@ -41,19 +40,61 @@ class FoodItemDetailsProvider extends ChangeNotifier {
   final TextEditingController _reviewNotesController = TextEditingController();
 
   final List<String> _allToppings = [
-    "Mushrooms", "Artichoke", "Carcioffi", "Onion", "Pepper", "Rocket", "Spinach", "Parsley", "Capers", "Oregano",
-    "Egg", "Sweetcorn", "Chips", "Pineapple", "Chilli", "Basil", "Olives", "Sausages", "Mozzarella", "Emmental",
-    "Taleggio", "Gorgonzola", "Brie", "Grana", "Red onion", "Red pepper", "Green chillies", "Buffalo mozzarella",
+    "Mushrooms",
+    "Artichoke",
+    "Carcioffi",
+    "Onion",
+    "Pepper",
+    "Rocket",
+    "Spinach",
+    "Parsley",
+    "Capers",
+    "Oregano",
+    "Egg",
+    "Sweetcorn",
+    "Chips",
+    "Pineapple",
+    "Chilli",
+    "Basil",
+    "Olives",
+    "Sausages",
+    "Mozzarella",
+    "Emmental",
+    "Taleggio",
+    "Gorgonzola",
+    "Brie",
+    "Grana",
+    "Red onion",
+    "Red pepper",
+    "Green chillies",
+    "Buffalo mozzarella",
     "Fresh cherry tomatoes",
   ];
 
   final List<String> _allBases = ["BBQ", "Garlic", "Tomato"];
   final List<String> _allCrusts = ["Normal", "Stuffed"];
-  final List<String> _allSauces = ["Mayo", "Ketchup", "Chilli sauce", "Sweet chilli", "Garlic Sauce"];
-  final List<String> _allDrinks = ["Coca Cola", "7Up", "Diet Coca Cola", "Fanta", "Pepsi", "Sprite", "J20 GLASS BOTTLE"];
+  final List<String> _allSauces = [
+    "Mayo",
+    "Ketchup",
+    "Chilli sauce",
+    "Sweet chilli",
+    "Garlic Sauce",
+  ];
+  final List<String> _allDrinks = [
+    "7Up",
+    "Diet Coca Cola",
+    "Fanta",
+    "Pepsi",
+    "Sprite",
+    "J20 GLASS BOTTLE",
+  ];
 
   final Map<String, List<String>> _drinkFlavors = {
-    "J20 GLASS BOTTLE": ["Apple & Raspberry", "Apple & Mango", "Orange & Passion Fruit"],
+    "J20 GLASS BOTTLE": [
+      "Apple & Raspberry",
+      "Apple & Mango",
+      "Orange & Passion Fruit",
+    ],
   };
 
   // Getters to access the state
@@ -85,7 +126,11 @@ class FoodItemDetailsProvider extends ChangeNotifier {
   Map<String, List<String>> get drinkFlavors => _drinkFlavors;
 
   // Initialization method to set the state based on the passed food item
-  void initialize(FoodItem foodItem, CartItem? initialCartItem, bool isEditing) {
+  void initialize(
+    FoodItem foodItem,
+    CartItem? initialCartItem,
+    bool isEditing,
+  ) {
     _foodItem = foodItem;
     // Reset state if it's a new item or if we're not in edit mode
     if (!isEditing || initialCartItem == null) {
@@ -105,23 +150,32 @@ class FoodItemDetailsProvider extends ChangeNotifier {
       _isAddButtonPressed = false;
       _isRemoveButtonPressed = false;
 
-
-      bool requiresSizeSelection = ([
-        'Pizza', 'GarlicBread', 'Shawarma', 'Wraps', 'Burgers', 'Chicken', 'Wings'
-      ].contains(_foodItem.category) && _foodItem.price.keys.length > 1);
+      bool requiresSizeSelection =
+          ([
+                'Pizza',
+                'GarlicBread',
+                'Shawarma',
+                'Wraps',
+                'Burgers',
+                'Chicken',
+                'Wings',
+              ].contains(_foodItem.category) &&
+              _foodItem.effectivePosPrice.keys.length > 1);
 
       if (requiresSizeSelection) {
         _isInSizeSelectionMode = true;
         _sizeHasBeenSelected = false;
       } else {
-        if (_foodItem.price.keys.length == 1 && _foodItem.price.isNotEmpty) {
-          _selectedSize = _foodItem.price.keys.first;
+        if (_foodItem.effectivePosPrice.keys.length == 1 &&
+            _foodItem.effectivePosPrice.isNotEmpty) {
+          _selectedSize = _foodItem.effectivePosPrice.keys.first;
           _sizeHasBeenSelected = true;
         }
         _isInSizeSelectionMode = false;
       }
 
-      if (_foodItem.category == 'Pizza' || _foodItem.category == 'GarlicBread') {
+      if (_foodItem.category == 'Pizza' ||
+          _foodItem.category == 'GarlicBread') {
         _selectedBase = "Tomato";
         _selectedCrust = "Normal";
         _selectedToppings.addAll(_foodItem.defaultToppings ?? []);
@@ -138,7 +192,10 @@ class FoodItemDetailsProvider extends ChangeNotifier {
       _reviewNotesController.text = initialCartItem.comment ?? '';
       _parseCartItemOptions(initialCartItem.selectedOptions);
       _isInSizeSelectionMode = false;
-      _sizeHasBeenSelected = _selectedSize != null || (_foodItem.price.keys.length == 1 && _foodItem.price.isNotEmpty);
+      _sizeHasBeenSelected =
+          _selectedSize != null ||
+          (_foodItem.effectivePosPrice.keys.length == 1 &&
+              _foodItem.effectivePosPrice.isNotEmpty);
     }
     _updatePricePerUnit();
   }
@@ -150,20 +207,31 @@ class FoodItemDetailsProvider extends ChangeNotifier {
       if (lowerOption.startsWith('size:')) {
         _selectedSize = option.split(':').last.trim();
       } else if (lowerOption.startsWith('toppings:')) {
-        _selectedToppings.addAll(option.split(':').last.trim().split(',').map((s) => s.trim()));
+        _selectedToppings.addAll(
+          option.split(':').last.trim().split(',').map((s) => s.trim()),
+        );
       } else if (lowerOption.startsWith('base:')) {
         _selectedBase = option.split(':').last.trim();
       } else if (lowerOption.startsWith('crust:')) {
         _selectedCrust = option.split(':').last.trim();
       } else if (lowerOption.startsWith('sauce dips:')) {
-        _selectedSauces.addAll(option.split(':').last.trim().split(',').map((s) => s.trim()));
+        _selectedSauces.addAll(
+          option.split(':').last.trim().split(',').map((s) => s.trim()),
+        );
       } else if (lowerOption == 'make it a meal') {
         _makeItAMeal = true;
       } else if (lowerOption.startsWith('drink:')) {
         String drinkAndFlavor = option.split(':').last.trim();
         if (drinkAndFlavor.contains('(') && drinkAndFlavor.contains(')')) {
-          _selectedDrink = drinkAndFlavor.substring(0, drinkAndFlavor.indexOf('(')).trim();
-          _selectedDrinkFlavor = drinkAndFlavor.substring(drinkAndFlavor.indexOf('(') + 1, drinkAndFlavor.indexOf(')')).trim();
+          _selectedDrink =
+              drinkAndFlavor.substring(0, drinkAndFlavor.indexOf('(')).trim();
+          _selectedDrinkFlavor =
+              drinkAndFlavor
+                  .substring(
+                    drinkAndFlavor.indexOf('(') + 1,
+                    drinkAndFlavor.indexOf(')'),
+                  )
+                  .trim();
         } else {
           _selectedDrink = drinkAndFlavor;
         }
@@ -173,7 +241,8 @@ class FoodItemDetailsProvider extends ChangeNotifier {
         _noSauce = true;
       } else if (lowerOption == 'no cream') {
         _noCream = true;
-      } else if (lowerOption.startsWith('flavor:') && !_drinkFlavors.containsKey(_foodItem.name)) {
+      } else if (lowerOption.startsWith('flavor:') &&
+          !_drinkFlavors.containsKey(_foodItem.name)) {
         _selectedDrinkFlavor = option.split(':').last.trim();
       }
     }
@@ -287,45 +356,68 @@ class FoodItemDetailsProvider extends ChangeNotifier {
 
   double _calculatePricePerUnit() {
     double price = 0.0;
-    if (_selectedSize != null && _foodItem.price.containsKey(_selectedSize)) {
-      price = _foodItem.price[_selectedSize] ?? 0.0;
-    } else if (_foodItem.price.keys.length == 1 && _foodItem.price.isNotEmpty) {
-      price = _foodItem.price.values.first;
+    if (_selectedSize != null &&
+        _foodItem.effectivePosPrice.containsKey(_selectedSize)) {
+      price = _foodItem.effectivePosPrice[_selectedSize] ?? 0.0;
+    } else if (_foodItem.effectivePosPrice.keys.length == 1 &&
+        _foodItem.effectivePosPrice.isNotEmpty) {
+      price = _foodItem.effectivePosPrice.values.first;
     } else {
       return 0.0;
     }
 
     if (_foodItem.category == 'Pizza' || _foodItem.category == 'GarlicBread') {
+      final bool qualifiesForFreeExtraToppings =
+          _foodItem.category.toLowerCase() == 'pizza' &&
+          _foodItem.name.toLowerCase().contains('free loaded');
+      // Allow the first four extra toppings to be free for the Free Loaded pizza.
+      int freeExtraToppingsRemaining = qualifiesForFreeExtraToppings ? 4 : 0;
       double toppingCost = 0.0;
       for (var topping in _selectedToppings) {
-        if (!((_foodItem.defaultToppings ?? []).contains(topping) || (_foodItem.defaultCheese ?? []).contains(topping))) {
-          if (_selectedSize == "10 inch" || _selectedSize == "7 inch") toppingCost += 1.0;
-          else if (_selectedSize == "12 inch" || _selectedSize == "9 inch") toppingCost += 1.5;
-          else if (_selectedSize == "18 inch") toppingCost += 5.5;
+        if (!((_foodItem.defaultToppings ?? []).contains(topping) ||
+            (_foodItem.defaultCheese ?? []).contains(topping))) {
+          if (freeExtraToppingsRemaining > 0) {
+            freeExtraToppingsRemaining--;
+            continue;
+          }
+          if (_selectedSize == "10 inch" || _selectedSize == "7 inch")
+            toppingCost += 1.0;
+          else if (_selectedSize == "12 inch" || _selectedSize == "9 inch")
+            toppingCost += 1.5;
+          else if (_selectedSize == "18 inch")
+            toppingCost += 5.5;
         }
       }
       price += toppingCost;
 
       double baseCost = 0.0;
       if (_selectedBase != null && _selectedBase != "Tomato") {
-        if (_selectedSize == "10 inch" || _selectedSize == "7 inch") baseCost = 1.0;
-        else if (_selectedSize == "12 inch" || _selectedSize == "9 inch") baseCost = 1.5;
-        else if (_selectedSize == "18 inch") baseCost = 4.0;
+        if (_selectedSize == "10 inch" || _selectedSize == "7 inch")
+          baseCost = 1.0;
+        else if (_selectedSize == "12 inch" || _selectedSize == "9 inch")
+          baseCost = 1.5;
+        else if (_selectedSize == "18 inch")
+          baseCost = 4.0;
       }
       price += baseCost;
 
       double crustCost = 0.0;
       if (_selectedCrust == "Stuffed") {
-        if (_selectedSize == "10 inch" || _selectedSize == "7 inch") crustCost = 1.5;
-        else if (_selectedSize == "12 inch" || _selectedSize == "9 inch") crustCost = 2.5;
-        else if (_selectedSize == "18 inch") crustCost = 4.5;
+        if (_selectedSize == "10 inch" || _selectedSize == "7 inch")
+          crustCost = 1.5;
+        else if (_selectedSize == "12 inch" || _selectedSize == "9 inch")
+          crustCost = 2.5;
+        else if (_selectedSize == "18 inch")
+          crustCost = 4.5;
       }
       price += crustCost;
 
       double sauceCost = 0.0;
       for (var sauce in _selectedSauces) {
-        if (sauce == "Chilli sauce" || sauce == "Garlic Sauce") sauceCost += 0.75;
-        else sauceCost += 0.5;
+        if (sauce == "Chilli sauce" || sauce == "Garlic Sauce")
+          sauceCost += 0.75;
+        else
+          sauceCost += 0.5;
       }
       price += sauceCost;
     } else if (['Shawarma', 'Wraps', 'Burgers'].contains(_foodItem.category)) {
@@ -337,19 +429,25 @@ class FoodItemDetailsProvider extends ChangeNotifier {
 
   CartItem createCartItem() {
     final List<String> selectedOptions = [];
-    if (_selectedSize != null && _foodItem.price.keys.length > 1) {
+    if (_selectedSize != null && _foodItem.effectivePosPrice.keys.length > 1) {
       selectedOptions.add('Size: $_selectedSize');
     }
     if (_selectedToppings.isNotEmpty) {
       selectedOptions.add('Toppings: ${_selectedToppings.join(', ')}');
     }
-    if (_selectedBase != null && (_foodItem.category == 'Pizza' || _foodItem.category == 'GarlicBread')) {
+    if (_selectedBase != null &&
+        (_foodItem.category == 'Pizza' ||
+            _foodItem.category == 'GarlicBread')) {
       selectedOptions.add('Base: $_selectedBase');
     }
-    if (_selectedCrust != null && (_foodItem.category == 'Pizza' || _foodItem.category == 'GarlicBread')) {
+    if (_selectedCrust != null &&
+        (_foodItem.category == 'Pizza' ||
+            _foodItem.category == 'GarlicBread')) {
       selectedOptions.add('Crust: $_selectedCrust');
     }
-    if (_selectedSauces.isNotEmpty && (_foodItem.category == 'Pizza' || _foodItem.category == 'GarlicBread')) {
+    if (_selectedSauces.isNotEmpty &&
+        (_foodItem.category == 'Pizza' ||
+            _foodItem.category == 'GarlicBread')) {
       selectedOptions.add('Sauce Dips: ${_selectedSauces.join(', ')}');
     }
     if (_makeItAMeal) {
@@ -361,7 +459,8 @@ class FoodItemDetailsProvider extends ChangeNotifier {
         }
         selectedOptions.add(drinkOption);
       }
-    } else if (_drinkFlavors.containsKey(_foodItem.name) && _selectedDrinkFlavor != null) {
+    } else if (_drinkFlavors.containsKey(_foodItem.name) &&
+        _selectedDrinkFlavor != null) {
       selectedOptions.add('Flavor: $_selectedDrinkFlavor');
     }
     if (['Shawarma', 'Wraps', 'Burgers'].contains(_foodItem.category)) {
@@ -386,7 +485,8 @@ class FoodItemDetailsProvider extends ChangeNotifier {
     final Map<String, Map<String, String>> categorySizeDisplayMap = {
       'Shawarma': {'naan': 'Large', 'pitta': 'Small'},
     };
-    final Map<String, String>? currentCategoryMap = categorySizeDisplayMap[_foodItem.category];
+    final Map<String, String>? currentCategoryMap =
+        categorySizeDisplayMap[_foodItem.category];
     if (currentCategoryMap != null && currentCategoryMap.containsKey(sizeKey)) {
       return currentCategoryMap[sizeKey]!;
     } else if (sizeKey.toLowerCase().contains('inch')) {

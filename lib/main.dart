@@ -27,6 +27,7 @@ import 'package:epos/services/uk_time_service.dart';
 import 'package:epos/services/offline_storage_service.dart';
 import 'package:epos/services/connectivity_service.dart';
 import 'package:epos/services/thermal_printer_service.dart';
+import 'package:epos/services/order_price_tracking_service.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -37,11 +38,15 @@ void main() async {
   // Initialize offline storage first
   await OfflineStorageService.initialize();
 
+  // Initialize price tracking service (after Hive init)
+  await OrderPriceTrackingService().initialize();
+
   // Initialize connectivity service
   await ConnectivityService().initialize();
 
-  // Prime thermal printer connections in the background so first print is fast
-  ThermalPrinterService().primeConnectionsInBackground();
+  // CRITICAL: Prime thermal printer connections SYNCHRONOUSLY so first print is INSTANT
+  // This waits for device scanning to complete before app starts (25s max)
+  await ThermalPrinterService().primeConnectionsSync();
 
   UKTimeService.debugTime();
   OrderApiService();
@@ -216,13 +221,6 @@ void main() async {
         ),
 
         // NEW: OrderHistoryProvider - HANDLES ORDER HISTORY BY DATE
-        ChangeNotifierProvider<OrderHistoryProvider>(
-          create: (_) {
-            print('📜 CREATING OrderHistoryProvider');
-            return OrderHistoryProvider();
-          },
-          lazy: false, // Make non-lazy for immediate availability
-        ),
         ChangeNotifierProvider<OrderHistoryProvider>(
           create: (_) {
             print('📜 CREATING OrderHistoryProvider');

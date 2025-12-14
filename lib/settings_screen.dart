@@ -1,12 +1,14 @@
 // lib/settings_screen.dart (Updated with Driver Settings)
 
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:epos/config/security_config.dart';
 import '../services/api_service.dart';
 import 'package:epos/custom_bottom_nav_bar.dart';
-import 'admin_portal_screen.dart';
+import 'admin_panel_webview_screen.dart';
 import 'package:epos/services/custom_popup_service.dart';
 import 'edit_items_screen.dart';
 import 'order_history_screen.dart';
@@ -1046,13 +1048,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _handleAdminPortalTap() async {
+    final isAuthorized = await _promptForAdminPin();
+    if (!isAuthorized || !mounted) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const AdminPanelWebViewScreen()),
+    );
+  }
+
+  Future<bool> _promptForAdminPin() async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => const _AdminPinDialog(),
+    );
+    return result ?? false;
+  }
+
   Widget _buildAdminPortalItem() {
     return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (context) => const AdminPortalScreen()),
-        );
-      },
+      onTap: _handleAdminPortalTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
         decoration: BoxDecoration(
@@ -1351,6 +1367,156 @@ class _SettingsScreenState extends State<SettingsScreen> {
           });
         },
       ),
+    );
+  }
+}
+
+class _AdminPinDialog extends StatefulWidget {
+  const _AdminPinDialog();
+
+  @override
+  State<_AdminPinDialog> createState() => _AdminPinDialogState();
+}
+
+class _AdminPinDialogState extends State<_AdminPinDialog> {
+  final TextEditingController _pinController = TextEditingController();
+
+  @override
+  void dispose() {
+    _pinController.dispose();
+    super.dispose();
+  }
+
+  void _validatePin() {
+    final enteredPin = _pinController.text.trim();
+    if (enteredPin == SecurityConfig.adminPin) {
+      Navigator.of(context).pop(true);
+    } else {
+      CustomPopupService.show(
+        context,
+        'Invalid PIN. Please try again.',
+        type: PopupType.failure,
+      );
+      _pinController.clear();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+            child: Container(color: Colors.black.withOpacity(0.3)),
+          ),
+        ),
+        Center(
+          child: Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Container(
+              width: 300,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.admin_panel_settings,
+                    size: 48,
+                    color: Colors.black,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Admin Portal',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Enter PIN to access admin features',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _pinController,
+                    obscureText: true,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 8,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: '••••',
+                      hintStyle: TextStyle(
+                        color: Colors.grey.shade400,
+                        letterSpacing: 8,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Colors.black),
+                      ),
+                      counterText: '',
+                    ),
+                    onSubmitted: (_) => _validatePin(),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _validatePin,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            'Access',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

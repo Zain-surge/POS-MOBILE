@@ -31,7 +31,7 @@ class XprinterService {
         print('📱 XprinterService: Found ${usbDevices.length} USB devices');
         for (var device in usbDevices) {
           print(
-            '   - ${device['deviceName']} (VID: ${device['vendorId']}, PID: ${device['productId']})',
+            '   - ${device['deviceName']} (Path: ${device['devicePath']}, VID: ${device['vendorId']}, PID: ${device['productId']})',
           );
         }
       }

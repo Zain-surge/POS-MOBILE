@@ -1,5 +1,6 @@
 // lib/models/order.dart
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:epos/models/food_item.dart';
 import 'package:epos/services/uk_time_service.dart';
@@ -125,7 +126,8 @@ class OrderItem {
 }
 
 class Order {
-  final int orderId;
+  final int orderId; // Internal use only (for API calls)
+  final String? orderNumber; // Display to user (on receipts, UI, etc.)
   final String paymentType;
   final String transactionId;
   final String orderType;
@@ -142,6 +144,9 @@ class Order {
   final String? county;
   final String? postalCode;
   final double orderTotalPrice;
+  final double? previousTotalPrice; // Track price before edit
+  final double? discountPercentage; // Discount percentage applied
+  final double? discountAmount; // Discount amount in currency
   final String? orderExtraNotes;
   final List<OrderItem> items;
   final int? driverId;
@@ -149,6 +154,7 @@ class Order {
 
   Order({
     required this.orderId,
+    this.orderNumber, // Optional - from backend
     required this.paymentType,
     required this.transactionId,
     required this.orderType,
@@ -165,14 +171,29 @@ class Order {
     this.county,
     this.postalCode,
     required this.orderTotalPrice,
+    this.previousTotalPrice, // Optional - only set when order is edited
+    this.discountPercentage, // Optional discount percentage
+    this.discountAmount, // Optional discount amount
     this.orderExtraNotes,
     required this.items,
     this.driverId,
     this.paidStatus = false,
   });
 
+  // Helper to get display order number (fallback to orderId if not available)
+  String get displayOrderNumber => orderNumber ?? orderId.toString();
+
   // Helper method to check if order was edited
   bool get isEdited => updatedAt != null;
+
+  // Helper method to get price difference (positive = increase, negative = decrease)
+  double get priceDifference {
+    if (previousTotalPrice == null) return 0.0;
+    return orderTotalPrice - previousTotalPrice!;
+  }
+
+  // Helper method to check if price changed
+  bool get priceChanged => previousTotalPrice != null && priceDifference != 0.0;
 
   factory Order.fromJson(Map<String, dynamic> json) {
     // Move helper function inside factory constructor
@@ -193,6 +214,49 @@ class Order {
         'Warning: Unexpected type for Order $fieldName: ${value.runtimeType}. Value: $value',
       );
       return 0.0;
+    }
+
+    String? parseNullableString(dynamic value) {
+      if (value == null) return null;
+      if (value is String) return value;
+      return value.toString();
+    }
+
+    // Helper to parse discount_details (which might be JSON string, object, or text)
+    Map<String, dynamic>? parseDiscountDetails(dynamic discountDetails) {
+      if (discountDetails == null) return null;
+
+      // If it's already a map, return it
+      if (discountDetails is Map<String, dynamic>) {
+        return discountDetails;
+      }
+
+      // If it's a string, try to parse it as JSON
+      if (discountDetails is String) {
+        try {
+          return jsonDecode(discountDetails) as Map<String, dynamic>;
+        } catch (e) {
+          // Not valid JSON (might be promotional text) - return null to fallback
+          return null;
+        }
+      }
+
+      return null;
+    }
+
+    // Helper to extract percentage from promotional text like "25% OFF..."
+    double? extractPercentageFromText(String? text) {
+      if (text == null || text.isEmpty) return null;
+
+      // Look for pattern like "25% OFF" or "25%" in the text
+      final regex = RegExp(r'(\d+(?:\.\d+)?)\s*%');
+      final match = regex.firstMatch(text);
+
+      if (match != null && match.groupCount >= 1) {
+        return double.tryParse(match.group(1)!);
+      }
+
+      return null;
     }
 
     double totalPrice = 0.0;
@@ -216,10 +280,11 @@ class Order {
     }
     final parsedOrder = Order(
       orderId: json['order_id'] ?? 0,
-      paymentType: json['payment_type'] ?? 'N/A',
-      transactionId: json['transaction_id'] ?? 'N/A',
-      orderType: json['order_type'] ?? 'N/A',
-      status: json['status'] ?? 'unknown',
+      orderNumber: parseNullableString(json['order_number']),
+      paymentType: parseNullableString(json['payment_type']) ?? 'N/A',
+      transactionId: parseNullableString(json['transaction_id']) ?? 'N/A',
+      orderType: parseNullableString(json['order_type']) ?? 'N/A',
+      status: parseNullableString(json['status']) ?? 'unknown',
       createdAt:
           json['created_at'] != null
               ? DateTime.tryParse(json['created_at']) ?? UKTimeService.now()
@@ -229,17 +294,64 @@ class Order {
               ? DateTime.tryParse(json['updated_at'])
               : null, // Parse updated_at if exists
       changeDue: parseDouble(json['change_due'], 'change_due'),
-      orderSource: json['order_source'] ?? 'N/A',
-      customerName: json['customer_name'] ?? 'N/A',
-      customerEmail: json['customer_email'],
-      phoneNumber: json['phone_number'],
-      streetAddress: json['street_address'],
-      city: json['city'],
-      county: json['county'],
-      postalCode: json['postal_code'],
+      orderSource: parseNullableString(json['order_source']) ?? 'N/A',
+      customerName: parseNullableString(json['customer_name']) ?? 'N/A',
+      customerEmail: parseNullableString(json['customer_email']),
+      phoneNumber: parseNullableString(json['phone_number']),
+      streetAddress: parseNullableString(json['street_address']),
+      city: parseNullableString(json['city']),
+      county: parseNullableString(json['county']),
+      postalCode: parseNullableString(json['postal_code']),
       orderTotalPrice: totalPrice,
-      orderExtraNotes:
-          json['order_extra_notes'] ?? json['extra_notes'] ?? json['notes'],
+      previousTotalPrice: null, // Will be set locally when editing
+      discountPercentage: () {
+        // Try to parse discount_details first (JSON format)
+        final discountDetails = parseDiscountDetails(json['discount_details']);
+        if (discountDetails != null) {
+          return parseDouble(
+            discountDetails['percentage'],
+            'discount_details.percentage',
+          );
+        }
+        // Fallback to direct discount_percentage field
+        final directPercentage = parseDouble(
+          json['discount_percentage'],
+          'discount_percentage',
+        );
+        if (directPercentage > 0) return directPercentage;
+
+        // Fallback to extracting percentage from promotional text
+        final extractedPercentage = extractPercentageFromText(
+          json['discount_details']?.toString(),
+        );
+        if (extractedPercentage != null && extractedPercentage > 0) {
+          return extractedPercentage;
+        }
+
+        return 0.0;
+      }(),
+      discountAmount: () {
+        // Try to parse discount_details first (JSON format)
+        final discountDetails = parseDiscountDetails(json['discount_details']);
+        if (discountDetails != null) {
+          return parseDouble(
+            discountDetails['amount'],
+            'discount_details.amount',
+          );
+        }
+        // Fallback to direct discount_amount field
+        final directAmount = parseDouble(
+          json['discount_amount'],
+          'discount_amount',
+        );
+        if (directAmount > 0) return directAmount;
+
+        // Fallback to discount field (used by website orders)
+        return parseDouble(json['discount'], 'discount');
+      }(),
+      orderExtraNotes: parseNullableString(
+        json['order_extra_notes'] ?? json['extra_notes'] ?? json['notes'],
+      ),
       items:
           (json['items'] as List?)
               ?.map((itemJson) => OrderItem.fromJson(itemJson))
@@ -268,11 +380,13 @@ class Order {
 
   Order copyWith({
     int? orderId,
+    String? orderNumber,
     String? paymentType,
     String? transactionId,
     String? orderType,
     String? status,
     DateTime? createdAt,
+    DateTime? updatedAt,
     double? changeDue,
     String? orderSource,
     String? customerName,
@@ -283,6 +397,9 @@ class Order {
     String? county,
     String? postalCode,
     double? orderTotalPrice,
+    double? previousTotalPrice,
+    double? discountPercentage,
+    double? discountAmount,
     String? orderExtraNotes,
     List<OrderItem>? items,
     int? driverId,
@@ -292,11 +409,13 @@ class Order {
   }) {
     return Order(
       orderId: orderId ?? this.orderId,
+      orderNumber: orderNumber ?? this.orderNumber,
       paymentType: paymentType ?? this.paymentType,
       transactionId: transactionId ?? this.transactionId,
       orderType: orderType ?? this.orderType,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       changeDue: changeDue ?? this.changeDue,
       orderSource: orderSource ?? this.orderSource,
       customerName: customerName ?? this.customerName,
@@ -307,6 +426,9 @@ class Order {
       county: county ?? this.county,
       postalCode: postalCode ?? this.postalCode,
       orderTotalPrice: orderTotalPrice ?? this.orderTotalPrice,
+      previousTotalPrice: previousTotalPrice ?? this.previousTotalPrice,
+      discountPercentage: discountPercentage ?? this.discountPercentage,
+      discountAmount: discountAmount ?? this.discountAmount,
       orderExtraNotes: orderExtraNotes ?? this.orderExtraNotes,
       items: items ?? this.items,
       driverId: driverId ?? this.driverId,

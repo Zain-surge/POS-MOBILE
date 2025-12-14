@@ -24,11 +24,13 @@ import 'package:epos/providers/order_counts_provider.dart';
 import 'package:epos/providers/epos_orders_provider.dart';
 import 'package:epos/custom_bottom_nav_bar.dart';
 import 'package:epos/discount_page.dart';
+import 'package:epos/config/security_config.dart';
 import 'package:epos/services/custom_popup_service.dart';
 import 'package:epos/providers/item_availability_provider.dart';
 import 'package:epos/providers/offline_provider.dart';
 import 'package:epos/providers/payment_link_provider.dart';
 import 'package:epos/services/offline_order_manager.dart';
+import 'package:epos/services/order_price_tracking_service.dart';
 import 'package:epos/services/uk_time_service.dart';
 
 class Page4 extends StatefulWidget {
@@ -170,7 +172,7 @@ class _Page4State extends State<Page4> {
   }
 
   void _validatePin(String pin) {
-    if (pin == '2840') {
+    if (pin == SecurityConfig.adminPin) {
       Navigator.of(context).pop();
       setState(() {});
       // Proceed to discount page
@@ -1397,10 +1399,19 @@ class _Page4State extends State<Page4> {
         _calculateDiscountAmount().toStringAsFixed(2),
       );
 
+      // Get previous total price from existing order
+      final double? previousTotalPrice = _existingOrder?.orderTotalPrice;
+
       print('🔄 Updating order $_editingOrderId:');
       print('   Payment Type: ${paymentDetails.paymentType}');
       print('   Paid Status: ${paymentDetails.paidStatus}');
       print('   Total Price: $totalBeforeDiscount');
+      if (previousTotalPrice != null) {
+        print('   Previous Price: £${previousTotalPrice.toStringAsFixed(2)}');
+        final diff = totalBeforeDiscount - previousTotalPrice;
+        final sign = diff >= 0 ? '+' : '';
+        print('   Price Change: $sign£${diff.toStringAsFixed(2)}');
+      }
 
       final apiService = ApiService();
       final bool success = await apiService.updateOrderCart(
@@ -1414,10 +1425,21 @@ class _Page4State extends State<Page4> {
       if (!mounted) return;
 
       if (success) {
+        // Store price change for frontend display (only if price changed)
+        if (previousTotalPrice != null &&
+            totalBeforeDiscount != previousTotalPrice) {
+          await OrderPriceTrackingService().storePriceChange(
+            orderId: _editingOrderId!,
+            previousPrice: previousTotalPrice,
+            newPrice: totalBeforeDiscount,
+          );
+        }
+
         // Also update payment status separately using existing API
         final bool paymentUpdated = await ApiService.markOrderAsPaid(
           _editingOrderId!,
           paymentType: paymentDetails.paymentType,
+          paidStatus: paymentDetails.paidStatus,
         );
 
         if (!mounted) return;
@@ -3225,9 +3247,7 @@ class _Page4State extends State<Page4> {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              ],
-            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: []),
           ),
           Padding(
             padding: const EdgeInsets.only(left: 50, right: 120, top: 20),
@@ -5606,6 +5626,10 @@ class _Page4State extends State<Page4> {
         "payment_type": _selectedPaymentType,
         "amount_received": finalAmountReceived,
         "discount_percentage": finalDiscountPercentage,
+        "discount_details": {
+          "percentage": finalDiscountPercentage,
+          "amount": dynamicDiscountAmount,
+        },
         "order_type":
             _actualOrderType.toLowerCase() == 'collection'
                 ? 'takeaway'
@@ -5662,7 +5686,9 @@ class _Page4State extends State<Page4> {
               .trim();
 
       // First submit order to backend and get order ID
-      final String? backendOrderId = await _submitOrderAndGetId(orderData);
+      final OrderCreationResponse? backendOrder = await _submitOrderAndGetId(
+        orderData,
+      );
 
       // Always use UK time for receipts and dialogs
       final DateTime orderCreationTime = UKTimeService.now();
@@ -5681,7 +5707,8 @@ class _Page4State extends State<Page4> {
         extraNotes: extraNotes,
         changeDue: finalChangeDue,
         paidStatus: paymentDetails.paidStatus,
-        orderId: backendOrderId,
+        orderId: backendOrder?.orderId,
+        orderNumber: backendOrder?.orderNumber,
         orderDateTime: orderCreationTime,
         orderSource: 'EPOS', // POS orders from page4
         formattedCartItems: formattedCartItems,
@@ -5705,7 +5732,9 @@ class _Page4State extends State<Page4> {
     }
   }
 
-  Future<String?> _submitOrderAndGetId(Map<String, dynamic> orderData) async {
+  Future<OrderCreationResponse?> _submitOrderAndGetId(
+    Map<String, dynamic> orderData,
+  ) async {
     final offlineProvider = Provider.of<OfflineProvider>(
       context,
       listen: false,
@@ -5736,32 +5765,35 @@ class _Page4State extends State<Page4> {
 
         // Add offline order to the orders list in background
         eposOrdersProvider.addOfflineOrder(offlineOrder).catchError((error) {
-          print('⚠️ Background addOfflineOrder failed: $error');
+          print('?s??,? Background addOfflineOrder failed: $error');
         });
 
         // Return null for offline orders (no backend order ID)
         return null;
       } catch (e) {
-        print('❌ Failed to create offline order: $e');
+        print('??O Failed to create offline order: $e');
         throw Exception('Failed to save order offline: $e');
       }
     }
 
-    // ONLINE MODE: Submit to backend and get order ID
+    // ONLINE MODE: Submit to backend and get order ID/number
     try {
-      final orderId = await ApiService.createOrderFromMap(orderData);
+      final orderResponse = await ApiService.createOrderFromMap(orderData);
+      final orderId = orderResponse.orderId;
+      final orderNumber = orderResponse.orderNumber;
+      final displayIdentifier = orderNumber ?? orderId ?? 'UNKNOWN';
       print(
-        '✅ Order placed successfully online: $orderId for type: $_actualOrderType',
+        '?o. Order placed successfully online: $displayIdentifier for type: $_actualOrderType',
       );
 
       // Refresh provider in background
       eposOrdersProvider.refresh().catchError((error) {
-        print('⚠️ Background refresh failed after order placement: $error');
+        print('?s??,? Background refresh failed after order placement: $error');
       });
 
-      return orderId;
+      return orderResponse;
     } catch (e) {
-      print('❌ Failed to submit order online: $e');
+      print('??O Failed to submit order online: $e');
 
       // Try to save offline as fallback
       try {
@@ -5781,13 +5813,13 @@ class _Page4State extends State<Page4> {
         );
 
         eposOrdersProvider.addOfflineOrder(offlineOrder).catchError((error) {
-          print('⚠️ Background addOfflineOrder failed: $error');
+          print('?s??,? Background addOfflineOrder failed: $error');
         });
 
-        print('✅ Order saved offline as fallback');
+        print('?o. Order saved offline as fallback');
         return null; // No backend order ID for offline orders
       } catch (offlineError) {
-        print('❌ Offline fallback also failed: $offlineError');
+        print('??O Offline fallback also failed: $offlineError');
         throw Exception(
           'Failed to submit order online and offline fallback failed: $offlineError',
         );
@@ -5804,6 +5836,7 @@ class _Page4State extends State<Page4> {
     required double changeDue,
     required bool paidStatus,
     String? orderId,
+    String? orderNumber,
     DateTime? orderDateTime,
     String? orderSource,
     List<CartItem>? formattedCartItems,
@@ -5817,6 +5850,10 @@ class _Page4State extends State<Page4> {
       if (_shouldApplyDeliveryCharge(_actualOrderType, _selectedPaymentType)) {
         deliveryChargeAmount = 1.50; // Delivery charge amount
       }
+
+      // Extract discount from orderData
+      final discountPercentage = orderData['discount_percentage'] as double?;
+      final discountAmount = orderData['discount_amount'] as double?;
 
       await ThermalPrinterService().printReceiptWithUserInteraction(
         transactionId: transactionId,
@@ -5835,8 +5872,11 @@ class _Page4State extends State<Page4> {
         paymentType: _selectedPaymentType,
         paidStatus: paidStatus,
         orderId: orderId != null ? int.tryParse(orderId) : null,
+        orderNumber: orderNumber,
         deliveryCharge: deliveryChargeAmount,
         orderDateTime: orderDateTime,
+        discountPercentage: discountPercentage,
+        discountAmount: discountAmount,
         onShowMethodSelection: (availableMethods) {
           if (mounted) {
             CustomPopupService.show(
