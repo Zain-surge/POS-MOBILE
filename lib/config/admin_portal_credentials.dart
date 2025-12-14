@@ -7,10 +7,25 @@ import 'package:epos/config/brand_info.dart';
 class AdminPortalCredentials {
   const AdminPortalCredentials._();
 
-  static const Map<String, Map<String, String>> _brandCredentials = {
-    'TVP': {'username': 'admin', 'password': 'surge2002'},
-    'Dallas': {'username': '', 'password': ''},
-    'SuperSub': {'username': 'admin_12', 'password': 'supersub2389'},
+  /// Load credentials from compile-time environment (dart-define) to avoid
+  /// hard-coding secrets in source.
+  ///
+  /// Examples:
+  ///   --dart-define=ADMIN_USERNAME_TVP=admin
+  ///   --dart-define=ADMIN_PASSWORD_TVP=secret
+  static final Map<String, Map<String, String>> _brandCredentials = {
+    'TVP': {
+      'username': const String.fromEnvironment('ADMIN_USERNAME_TVP'),
+      'password': const String.fromEnvironment('ADMIN_PASSWORD_TVP'),
+    },
+    'Dallas': {
+      'username': const String.fromEnvironment('ADMIN_USERNAME_DALLAS'),
+      'password': const String.fromEnvironment('ADMIN_PASSWORD_DALLAS'),
+    },
+    'SuperSub': {
+      'username': const String.fromEnvironment('ADMIN_USERNAME_SUPERSUB'),
+      'password': const String.fromEnvironment('ADMIN_PASSWORD_SUPERSUB'),
+    },
   };
 
   static String get username =>
