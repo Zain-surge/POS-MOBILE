@@ -25,6 +25,7 @@ class MainAppWrapper extends StatefulWidget {
 }
 
 class _MainAppWrapperState extends State<MainAppWrapper> {
+  OrderProvider? _orderProvider;
   // Helper method to check if an option should be excluded (same logic as thermal printer)
   bool _shouldExcludeOption(String? value) {
     if (value == null || value.isEmpty) return true;
@@ -87,6 +88,12 @@ class _MainAppWrapperState extends State<MainAppWrapper> {
       _initializePreviousOrderStatuses();
       _startProcessingCleanup();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _orderProvider = Provider.of<OrderProvider>(context, listen: false);
   }
 
   // Cleanup old processed orders every 5 minutes to prevent memory leaks
@@ -254,21 +261,18 @@ class _MainAppWrapperState extends State<MainAppWrapper> {
 
     // CRITICAL FIX: Immediately refresh orders in UI when new order notification is added
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        try {
-          final orderProvider = Provider.of<OrderProvider>(
-            context,
-            listen: false,
-          );
-          print(
-            "MainAppWrapper: Triggering immediate order refresh for new order $orderId",
-          );
-          orderProvider.fetchWebsiteOrders();
-        } catch (e) {
-          print(
-            "MainAppWrapper: Error refreshing orders after new notification: $e",
-          );
-        }
+      if (!mounted) return;
+      try {
+        final orderProvider = _orderProvider;
+        if (orderProvider == null) return;
+        print(
+          "MainAppWrapper: Triggering immediate order refresh for new order $orderId",
+        );
+        orderProvider.fetchWebsiteOrders();
+      } catch (e) {
+        print(
+          "MainAppWrapper: Error refreshing orders after new notification: $e",
+        );
       }
     });
   }

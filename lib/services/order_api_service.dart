@@ -273,16 +273,12 @@ class OrderApiService {
             }
 
             final normalized =
-                candidates.map((c) => c.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '')).toList();
-            final bool hasBrand = normalized.isNotEmpty;
-            final bool matches = normalized.contains(currentBrand);
-            if (!hasBrand) {
-              print(
-                'fetchTodayOrders: Skipping order with missing brand info to avoid cross-brand data.',
-              );
-              continue;
-            }
-            if (!matches) {
+                candidates
+                    .map(
+                      (c) => c.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ''),
+                    )
+                    .toList();
+            if (normalized.isNotEmpty && !normalized.contains(currentBrand)) {
               continue;
             }
           }
