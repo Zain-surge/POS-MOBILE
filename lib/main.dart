@@ -502,6 +502,5 @@ class _MyAppState extends State<MyApp> {
     return Page3(foodItems: foodItems);
   }
 }
-// I want that in food item model when it is opened show a option add extra at the top 
-// with amount and reason field. And the amount should be added to the total of the item. 
-// you got me?
+
+// flutter build apk --release --dart-define=ADMIN_USERNAME_TVP=admin --dart-define=ADMIN_PASSWORD_TVP=surge2002

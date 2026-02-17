@@ -78,34 +78,25 @@ class OrderApiService {
     );
 
     _socket.onConnect((_) {
-      print('🟢 Connected to backend socket: ${_socket.id}');
-      print('🏷️  Brand: ${BrandInfo.currentBrand}');
+      print('Connected to backend socket: ${_socket.id}');
+      print('Brand: ${BrandInfo.currentBrand}');
       _connectionStatusController.add(true);
     });
 
     _socket.on('new_order', (data) {
-      print('📦 New order received from server: $data');
+      print('New order received from server: $data');
       try {
-        // Check if the order is for the current brand before processing
-        final currentBrand = BrandInfo.currentBrand.toLowerCase();
-        final orderBrand =
-            (data['brand_name']?.toString().toLowerCase()) ??
-            (data['order_brand']?.toString().toLowerCase()) ??
-            '';
+        if (data is! Map<String, dynamic>) {
+          print('new_order payload is not a Map: ${data.runtimeType}');
+          return;
+        }
 
-        print(
-          '🏷️  Order brand: "$orderBrand", Current brand: "$currentBrand"',
-        );
-
-        // Only process orders for the current brand
-        if (orderBrand.isEmpty || orderBrand == currentBrand) {
+        if (_isForCurrentBrand(data)) {
           final orderData = Order.fromJson(data);
-          print('✅ New order ${orderData.orderId} accepted for current brand');
+          print('New order ${orderData.orderId} accepted for current brand');
           _newOrderController.add(orderData);
         } else {
-          print(
-            '❌ New order rejected - not for current brand (order: "$orderBrand", current: "$currentBrand")',
-          );
+          print('New order rejected - not for current brand');
         }
       } catch (e) {
         print('Error parsing new_order data: $e');
@@ -113,14 +104,14 @@ class OrderApiService {
     });
 
     _socket.on('offers_updated', (data) {
-      print('🔥 Real-time offers update received: $data');
+      print('Real-time offers update received: $data');
       if (data is List) {
         _offersUpdatedController.add(data);
       }
     });
 
     _socket.on('shop_status_updated', (data) {
-      print('🟢 Shop status changed: $data');
+      print('Shop status changed: $data');
       try {
         final shopStatus = ShopStatusData.fromJson(data);
         _shopStatusUpdatedController.add(shopStatus);
@@ -130,48 +121,35 @@ class OrderApiService {
     });
 
     _socket.on("order_status_or_driver_changed", (data) {
-      print("🔄 Socket: Order status or driver updated (Real-time): $data");
-      print("🔍 Data type: ${data.runtimeType}");
+      print("Socket: Order status or driver updated (Real-time): $data");
+      print("Data type: ${data.runtimeType}");
 
       if (data is Map<String, dynamic>) {
-        print("📋 Available keys: ${data.keys.toList()}");
-        print("📋 Values: ${data.values.toList()}");
-
-        // Check if the order status change is for the current brand
-        final currentBrand = BrandInfo.currentBrand.toLowerCase();
-        final orderBrand =
-            (data['brand_name']?.toString().toLowerCase()) ??
-            (data['order_brand']?.toString().toLowerCase()) ??
-            '';
-
-        print(
-          '🏷️  Order status change - Order brand: "$orderBrand", Current brand: "$currentBrand"',
-        );
+        print("Available keys: ${data.keys.toList()}");
+        print("Values: ${data.values.toList()}");
 
         // Only process status changes for the current brand
-        if (orderBrand.isEmpty || orderBrand == currentBrand) {
-          print('✅ Order status change accepted for current brand');
+        if (_isForCurrentBrand(data)) {
+          print('Order status change accepted for current brand');
           _orderStatusOrDriverChangedController.add(data);
         } else {
-          print(
-            '❌ Order status change rejected - not for current brand (order: "$orderBrand", current: "$currentBrand")',
-          );
+          print('Order status change rejected - not for current brand');
         }
       } else {
         print(
-          '❌ Received non-Map data for order_status_or_driver_changed: $data',
+          'Received non-Map data for order_status_or_driver_changed: $data',
         );
-        print('❌ Actual type: ${data.runtimeType}');
+        print('Actual type: ${data.runtimeType}');
       }
     });
 
     _socket.onDisconnect((_) {
-      print('🔴 Disconnected from socket');
+      print('Disconnected from socket');
       _connectionStatusController.add(false);
     });
 
     _socket.onError((error) {
-      print('❌ Socket Error: $error');
+      print('Socket Error: $error');
       _connectionStatusController.add(false);
     });
 
@@ -180,6 +158,61 @@ class OrderApiService {
     _socket.onReconnectAttempt((_) => print('Reconnect Attempting...'));
     _socket.onReconnect((attempt) => print('Reconnected on attempt: $attempt'));
     _socket.onReconnectFailed((_) => print('Reconnect Failed'));
+  }
+
+  String _normalizeBrand(String? value) {
+    if (value == null) return '';
+    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+  }
+
+  List<String> _extractBrandCandidates(Map<String, dynamic> data) {
+    final List<String> candidates = [];
+    final keys = [
+      'brand_name',
+      'order_brand',
+      'brand',
+      'brandName',
+      'shop_brand',
+      'restaurant_brand',
+      'store_brand',
+      'client_id',
+      'x-client-id',
+    ];
+
+    for (final key in keys) {
+      final value = data[key];
+      if (value is String && value.isNotEmpty) {
+        candidates.add(value);
+      } else if (value is Map<String, dynamic>) {
+        final nestedName =
+            value['name'] ??
+            value['brand_name'] ??
+            value['brandName'] ??
+            value['brand'];
+        if (nestedName is String && nestedName.isNotEmpty) {
+          candidates.add(nestedName);
+        }
+      }
+    }
+
+    return candidates;
+  }
+
+  bool _isForCurrentBrand(Map<String, dynamic> data) {
+    final current = _normalizeBrand(BrandInfo.currentBrand);
+    final candidates = _extractBrandCandidates(data)
+        .map(_normalizeBrand)
+        .where((c) => c.isNotEmpty)
+        .toList();
+
+    if (candidates.isEmpty) {
+      print(
+        'Socket event missing brand info. Ignoring to prevent cross-brand notifications.',
+      );
+      return false;
+    }
+
+    return candidates.any((c) => c == current);
   }
 
   void connectSocket() {
@@ -215,8 +248,45 @@ class OrderApiService {
       );
       if (response.statusCode == 200) {
         List jsonResponse = json.decode(response.body);
+        final String currentBrand =
+            BrandInfo.currentBrand.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
         List<Order> orders = [];
         for (var orderJson in jsonResponse) {
+          if (orderJson is Map<String, dynamic>) {
+            final candidates = <String>[];
+            final keys = [
+              'brand_name',
+              'order_brand',
+              'brand',
+              'brandName',
+              'shop_brand',
+              'restaurant_brand',
+              'store_brand',
+              'client_id',
+              'x-client-id',
+            ];
+            for (final key in keys) {
+              final value = orderJson[key];
+              if (value is String && value.isNotEmpty) {
+                candidates.add(value);
+              }
+            }
+
+            final normalized =
+                candidates.map((c) => c.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '')).toList();
+            final bool hasBrand = normalized.isNotEmpty;
+            final bool matches = normalized.contains(currentBrand);
+            if (!hasBrand) {
+              print(
+                'fetchTodayOrders: Skipping order with missing brand info to avoid cross-brand data.',
+              );
+              continue;
+            }
+            if (!matches) {
+              continue;
+            }
+          }
+
           final order = Order.fromJson(orderJson);
           orders.add(order);
         }

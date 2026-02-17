@@ -98,10 +98,27 @@ class OfflineStorageService {
     String? city,
     String? postalCode,
     required double changeDue,
+    String? transactionIdOverride,
   }) async {
     try {
+      if (transactionIdOverride != null && transactionIdOverride.isNotEmpty) {
+        final existing =
+            offlineOrdersBox.values.where((order) {
+              return order.transactionId == transactionIdOverride;
+            }).isNotEmpty;
+        if (existing) {
+          print(
+            '🛑 Duplicate offline save blocked for transaction_id: $transactionIdOverride',
+          );
+          return transactionIdOverride;
+        }
+      }
+
       final localId = const Uuid().v4();
-      final transactionId = generateOfflineTransactionId();
+      final String transactionId =
+          (transactionIdOverride != null && transactionIdOverride.isNotEmpty)
+              ? transactionIdOverride
+              : generateOfflineTransactionId();
 
       final offlineOrder = OfflineOrder.fromCartItems(
         localId: localId,

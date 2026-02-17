@@ -556,6 +556,17 @@ class EposOrdersProvider extends ChangeNotifier {
   /// Add a new offline order to the orders list
   Future<void> addOfflineOrder(Order offlineOrder) async {
     try {
+      final String incomingTxn = offlineOrder.transactionId.trim();
+      final bool alreadyExists = _allOrders.any((order) {
+        return order.transactionId.trim() == incomingTxn;
+      });
+      if (alreadyExists) {
+        print(
+          "🛑 EposOrdersProvider: Duplicate offline order blocked (${offlineOrder.transactionId})",
+        );
+        return;
+      }
+
       // Add the offline order at the beginning of the list
       _allOrders.insert(0, offlineOrder);
 

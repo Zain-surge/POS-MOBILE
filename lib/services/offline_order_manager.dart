@@ -23,9 +23,13 @@ class OfflineOrderManager {
     String? city,
     String? postalCode,
     required double changeDue,
+    String? transactionIdOverride,
   }) async {
     // Generate unique offline transaction ID
-    final transactionId = OfflineStorageService.generateOfflineTransactionId();
+    final String transactionId =
+        (transactionIdOverride != null && transactionIdOverride.isNotEmpty)
+            ? transactionIdOverride
+            : OfflineStorageService.generateOfflineTransactionId();
     final offlineOrderId = _nextOfflineId--;
 
     // Convert CartItems to OrderItems
@@ -79,6 +83,7 @@ class OfflineOrderManager {
       city: city,
       postalCode: postalCode,
       changeDue: changeDue,
+      transactionIdOverride: transactionId,
     );
 
     print(

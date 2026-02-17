@@ -2815,14 +2815,39 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
         throw Exception('Sync operation returned false');
       }
     } catch (e) {
+      final String message = _getSyncErrorMessage(e);
       if (mounted) {
         CustomPopupService.show(
           context,
-          'Failed to sync offline order: ${e.toString()}',
+          message,
           type: PopupType.failure,
         );
       }
     }
+  }
+
+  String _getSyncErrorMessage(Object error) {
+    final String errorText = error.toString().toLowerCase();
+    final bool isNetworkIssue =
+        errorText.contains('socketexception') ||
+        errorText.contains('failed host lookup') ||
+        errorText.contains('connection refused') ||
+        errorText.contains('network is unreachable') ||
+        errorText.contains('timed out') ||
+        errorText.contains('connection closed') ||
+        errorText.contains('handshake') ||
+        errorText.contains('connection reset') ||
+        errorText.contains('clientexception') ||
+        errorText.contains('failed to fetch') ||
+        errorText.contains('failed to connect') ||
+        errorText.contains('host is down') ||
+        errorText.contains('no route to host');
+
+    if (isNetworkIssue) {
+      return 'No internet connection. Please try again when the connection is stable.';
+    }
+
+    return 'Failed to sync offline order: ${error.toString()}';
   }
 
   // Helper function to determine if delivery charges should apply

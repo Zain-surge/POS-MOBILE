@@ -5688,6 +5688,7 @@ class _Page4State extends State<Page4> {
       // First submit order to backend and get order ID
       final OrderCreationResponse? backendOrder = await _submitOrderAndGetId(
         orderData,
+        transactionId,
       );
 
       // Always use UK time for receipts and dialogs
@@ -5734,6 +5735,7 @@ class _Page4State extends State<Page4> {
 
   Future<OrderCreationResponse?> _submitOrderAndGetId(
     Map<String, dynamic> orderData,
+    String transactionId,
   ) async {
     final offlineProvider = Provider.of<OfflineProvider>(
       context,
@@ -5761,6 +5763,7 @@ class _Page4State extends State<Page4> {
           city: _customerDetails?.city,
           postalCode: _customerDetails?.postalCode,
           changeDue: orderData['change_due'] as double? ?? 0.0,
+          transactionIdOverride: transactionId,
         );
 
         // Add offline order to the orders list in background
@@ -5810,6 +5813,7 @@ class _Page4State extends State<Page4> {
           city: _customerDetails?.city,
           postalCode: _customerDetails?.postalCode,
           changeDue: orderData['change_due'] as double? ?? 0.0,
+          transactionIdOverride: transactionId,
         );
 
         eposOrdersProvider.addOfflineOrder(offlineOrder).catchError((error) {

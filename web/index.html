@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -27,12 +28,34 @@
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" href="favicon.png" />
 
   <title>epos</title>
   <link rel="manifest" href="manifest.json">
+
+  <script>
+    // Force HTML renderer to avoid CanvasKit CDN dependency issues
+    window.flutterWebRenderer = "html";
+  </script>
 </head>
+
 <body>
+  {{flutter_js}}
+  {{flutter_build_config}}
+
+  <script>
+    if (typeof _flutter !== 'undefined') {
+      // Production build
+      _flutter.loader.load({
+        config: {
+          renderer: "html",
+        }
+      });
+    }
+  </script>
+
+  <!-- Development mode fallback -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
+
 </html>

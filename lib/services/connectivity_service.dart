@@ -252,6 +252,13 @@ class ConnectivityService {
   }
 
   Map<String, dynamic> _buildOrderDataFromOfflineOrder(OfflineOrder order) {
+    final String paymentTypeLower = order.paymentType.toLowerCase();
+    final bool paidStatus =
+        paymentTypeLower != 'unpaid' &&
+        !paymentTypeLower.contains('cod') &&
+        !paymentTypeLower.contains('cash on delivery');
+    final double amountReceived = paidStatus ? order.orderTotalPrice : 0.0;
+
     // Convert OfflineOrder back to the format expected by ApiService.createOrderFromMap
     return {
       "guest": {
@@ -265,8 +272,8 @@ class ConnectivityService {
       },
       "transaction_id": order.transactionId,
       "payment_type": order.paymentType,
-      "amount_received":
-          order.orderTotalPrice, // Assuming full payment for offline orders
+      "paid_status": paidStatus,
+      "amount_received": amountReceived,
       "discount_percentage": 0.0, // No discount for offline orders
       "order_type": order.orderType,
       "order_source":
@@ -283,16 +290,33 @@ class ConnectivityService {
               .map(
                 (item) => {
                   "item_id": item.foodItem.id,
-                  "name": item.foodItem.name,
                   "quantity": item.quantity,
+                  "description": _buildDescriptionForOfflineItem(item),
+                  "price_per_unit": item.pricePerUnit,
                   "total_price": item.totalPrice,
                   "comment": item.comment,
-                  "selected_size": "default", // Default size
-                  "selected_options": item.selectedOptions ?? [],
+                  "extra_amount": 0.0,
+                  "extra_reason": "",
                 },
               )
               .toList(),
     };
+  }
+
+  String _buildDescriptionForOfflineItem(OfflineCartItem item) {
+    final List<String> options =
+        item.selectedOptions
+            ?.map((option) => option.trim())
+            .where((option) => option.isNotEmpty)
+            .toList() ??
+        [];
+
+    final StringBuffer buffer = StringBuffer(item.foodItem.name);
+    for (final option in options) {
+      buffer.writeln();
+      buffer.write(option);
+    }
+    return buffer.toString();
   }
 
   // Sync a specific offline order by transaction ID
