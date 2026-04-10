@@ -3,7 +3,7 @@
 import 'dart:async';
 import 'package:epos/services/thermal_printer_service.dart';
 import 'package:epos/services/order_api_service.dart';
-//import 'package:epos/widgets/receipt_preview_dialog.dart';
+import 'package:epos/widgets/receipt_preview_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:epos/models/order.dart';
 import 'package:epos/providers/website_orders_provider.dart';
@@ -15,6 +15,7 @@ import 'models/cart_item.dart';
 import 'models/food_item.dart';
 import 'package:epos/services/uk_time_service.dart';
 import 'package:epos/services/custom_popup_service.dart';
+import 'package:epos/config/app_config.dart';
 import 'package:intl/intl.dart';
 
 extension HexColor on Color {
@@ -387,6 +388,33 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
         deliveryChargeAmount = 1.50; // Delivery charge amount
       }
 
+      if (AppConfig.enableReceiptPreview) {
+        await ReceiptPreviewDialog.show(
+          context,
+          transactionId:
+              _selectedOrder!.transactionId.isNotEmpty
+                  ? _selectedOrder!.transactionId
+                  : _selectedOrder!.orderId.toString(),
+          orderType: _selectedOrder!.orderType,
+          cartItems: cartItems,
+          subtotal: subtotal,
+          totalCharge: _selectedOrder!.orderTotalPrice,
+          changeDue: _selectedOrder!.changeDue,
+          extraNotes: _selectedOrder!.orderExtraNotes,
+          customerName: _selectedOrder!.customerName,
+          customerEmail: _selectedOrder!.customerEmail,
+          phoneNumber: _selectedOrder!.phoneNumber,
+          streetAddress: _selectedOrder!.streetAddress,
+          city: _selectedOrder!.city,
+          postalCode: _selectedOrder!.postalCode,
+          deliveryCharge: deliveryChargeAmount,
+          paymentType: _selectedOrder!.paymentType,
+          paidStatus: _selectedOrder!.paidStatus,
+          orderId: _selectedOrder!.orderId,
+          orderDateTime: UKTimeService.now(),
+        );
+      }
+
       // // Show receipt preview dialog before printing
       // await ReceiptPreviewDialog.show(
       //   context,
@@ -416,6 +444,8 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
       // Use the thermal printer service to print
       bool
       success = await ThermalPrinterService().printReceiptWithUserInteraction(
+        previewContext: context,
+        showReceiptPreviewDialog: false,
         transactionId:
             _selectedOrder!.transactionId.isNotEmpty
                 ? _selectedOrder!.transactionId

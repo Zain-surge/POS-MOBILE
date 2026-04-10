@@ -16,6 +16,8 @@ import 'package:epos/services/uk_time_service.dart';
 import 'package:epos/services/custom_popup_service.dart';
 import 'package:epos/services/connectivity_service.dart';
 import 'package:epos/services/order_price_tracking_service.dart';
+import 'package:epos/widgets/receipt_preview_dialog.dart';
+import 'package:epos/config/app_config.dart';
 import 'models/cart_item.dart';
 import 'models/food_item.dart';
 import 'package:intl/intl.dart';
@@ -2554,8 +2556,37 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
         deliveryChargeAmount = 1.50; // Delivery charge amount
       }
 
+      if (AppConfig.enableReceiptPreview) {
+        await ReceiptPreviewDialog.show(
+          context,
+          transactionId:
+              _selectedOrder!.transactionId.isNotEmpty
+                  ? _selectedOrder!.transactionId
+                  : _selectedOrder!.orderId.toString(),
+          orderType: _selectedOrder!.orderType,
+          cartItems: cartItems,
+          subtotal: subtotal,
+          totalCharge: _selectedOrder!.orderTotalPrice,
+          extraNotes: _selectedOrder!.orderExtraNotes,
+          changeDue: _selectedOrder!.changeDue,
+          customerName: _selectedOrder!.customerName,
+          customerEmail: _selectedOrder!.customerEmail,
+          phoneNumber: _selectedOrder!.phoneNumber,
+          streetAddress: _selectedOrder!.streetAddress,
+          city: _selectedOrder!.city,
+          postalCode: _selectedOrder!.postalCode,
+          paymentType: _selectedOrder!.paymentType,
+          paidStatus: _selectedOrder!.paidStatus,
+          orderId: _selectedOrder!.orderId,
+          deliveryCharge: deliveryChargeAmount,
+          orderDateTime: UKTimeService.now(),
+        );
+      }
+
       bool
       success = await ThermalPrinterService().printReceiptWithUserInteraction(
+        previewContext: context,
+        showReceiptPreviewDialog: false,
         transactionId:
             _selectedOrder!.transactionId.isNotEmpty
                 ? _selectedOrder!.transactionId
@@ -2817,11 +2848,7 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
     } catch (e) {
       final String message = _getSyncErrorMessage(e);
       if (mounted) {
-        CustomPopupService.show(
-          context,
-          message,
-          type: PopupType.failure,
-        );
+        CustomPopupService.show(context, message, type: PopupType.failure);
       }
     }
   }

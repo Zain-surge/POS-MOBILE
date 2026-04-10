@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:epos/services/order_api_service.dart';
 import 'package:epos/services/thermal_printer_service.dart';
 import 'package:epos/services/uk_time_service.dart';
-// import 'package:epos/widgets/receipt_preview_dialog.dart';
+import 'package:epos/widgets/receipt_preview_dialog.dart';
 import 'package:epos/models/order.dart';
 import 'package:epos/models/cart_item.dart';
 import 'package:epos/models/food_item.dart';
@@ -14,6 +14,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:epos/services/custom_popup_service.dart';
 import 'package:epos/main.dart';
+import 'package:epos/config/app_config.dart';
 
 class MainAppWrapper extends StatefulWidget {
   final Widget child;
@@ -626,31 +627,34 @@ class _MainAppWrapperState extends State<MainAppWrapper> {
         deliveryChargeAmount = 1.50; // Delivery charge amount
       }
 
-      // Show receipt preview dialog before printing
-      // await ReceiptPreviewDialog.show(
-      //   context,
-      //   transactionId: order.orderId.toString(),
-      //   orderType: order.orderType,
-      //   cartItems: cartItems,
-      //   subtotal: order.orderTotalPrice,
-      //   totalCharge: order.orderTotalPrice,
-      //   extraNotes: order.orderExtraNotes,
-      //   changeDue: order.changeDue,
-      //   customerName: order.customerName,
-      //   customerEmail: order.customerEmail,
-      //   phoneNumber: order.phoneNumber,
-      //   streetAddress: order.streetAddress,
-      //   city: order.city,
-      //   postalCode: order.postalCode,
-      //   paymentType: order.paymentType,
-      //   paidStatus: order.paidStatus,
-      //   orderId: order.orderId,
-      //   deliveryCharge: deliveryChargeAmount,
-      //   orderDateTime: UKTimeService.now(),
-      // );
+      if (AppConfig.enableReceiptPreview) {
+        await ReceiptPreviewDialog.show(
+          context,
+          transactionId: order.orderId.toString(),
+          orderType: order.orderType,
+          cartItems: cartItems,
+          subtotal: order.orderTotalPrice,
+          totalCharge: order.orderTotalPrice,
+          extraNotes: order.orderExtraNotes,
+          changeDue: order.changeDue,
+          customerName: order.customerName,
+          customerEmail: order.customerEmail,
+          phoneNumber: order.phoneNumber,
+          streetAddress: order.streetAddress,
+          city: order.city,
+          postalCode: order.postalCode,
+          paymentType: order.paymentType,
+          paidStatus: order.paidStatus,
+          orderId: order.orderId,
+          deliveryCharge: deliveryChargeAmount,
+          orderDateTime: UKTimeService.now(),
+        );
+      }
 
       bool
       success = await ThermalPrinterService().printReceiptWithUserInteraction(
+        previewContext: context,
+        showReceiptPreviewDialog: false,
         transactionId: order.orderId.toString(),
         orderType: order.orderType,
         cartItems: cartItems,

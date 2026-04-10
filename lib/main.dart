@@ -31,6 +31,8 @@ import 'package:epos/services/order_price_tracking_service.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+const bool kReceiptPreviewDialogEnabled = true;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -244,6 +246,12 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
+    ThermalPrinterService().configureReceiptPreviewDialog(
+      enabled: kReceiptPreviewDialogEnabled,
+      barrierDismissible: false,
+      navigatorKey: appNavigatorKey,
+    );
+
     // Use Consumer to get food items from the global provider
     return Consumer<FoodItemsProvider>(
       builder: (context, foodItemsProvider, child) {
@@ -253,6 +261,7 @@ class _MyAppState extends State<MyApp> {
 
         return MaterialApp(
           title: 'The Village POS',
+          navigatorKey: appNavigatorKey,
           scaffoldMessengerKey: scaffoldMessengerKey,
           theme: ThemeData(
             primarySwatch: Colors.purple,

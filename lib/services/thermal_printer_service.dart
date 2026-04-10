@@ -1,4 +1,5 @@
 ﻿// lib/services/thermal_printer_service.dart
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +7,7 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:usb_serial/usb_serial.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:epos/models/cart_item.dart';
+import 'package:epos/widgets/receipt_preview_dialog.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
@@ -64,6 +66,21 @@ class ThermalPrinterService {
   // Cash drawer settings
   bool _isDrawerOpeningEnabled = true;
   bool _autoOpenOnCashPayment = true;
+
+  // Receipt preview dialog settings
+  bool _receiptPreviewDialogEnabled = false;
+  bool _receiptPreviewBarrierDismissible = false;
+  GlobalKey<NavigatorState>? _receiptPreviewNavigatorKey;
+
+  void configureReceiptPreviewDialog({
+    required bool enabled,
+    bool barrierDismissible = false,
+    GlobalKey<NavigatorState>? navigatorKey,
+  }) {
+    _receiptPreviewDialogEnabled = enabled;
+    _receiptPreviewBarrierDismissible = barrierDismissible;
+    _receiptPreviewNavigatorKey = navigatorKey;
+  }
 
   // Helper method to check if a field should be excluded from receipt
   bool _shouldExcludeField(String? value) {
@@ -490,6 +507,8 @@ class ThermalPrinterService {
 
   // SUPER OPTIMIZED: Ultra-fast printing with pre-generated receipts
   Future<bool> printReceiptWithUserInteraction({
+    BuildContext? previewContext,
+    bool showReceiptPreviewDialog = false,
     required String transactionId,
     required String orderType,
     required List<CartItem> cartItems,
@@ -532,6 +551,39 @@ class ThermalPrinterService {
       await Future.delayed(Duration(seconds: 1));
       print('🧪 Web test mode: Receipt printing simulated successfully');
       return true;
+    }
+
+    if (showReceiptPreviewDialog && _receiptPreviewDialogEnabled) {
+      final BuildContext? dialogContext =
+          previewContext ?? _receiptPreviewNavigatorKey?.currentContext;
+      if (dialogContext != null && dialogContext.mounted) {
+        await showDialog(
+          context: dialogContext,
+          barrierDismissible: _receiptPreviewBarrierDismissible,
+          builder: (BuildContext context) {
+            return ReceiptPreviewDialog(
+              transactionId: transactionId,
+              orderType: orderType,
+              cartItems: cartItems,
+              subtotal: subtotal,
+              totalCharge: totalCharge,
+              extraNotes: extraNotes,
+              changeDue: changeDue,
+              customerName: customerName,
+              customerEmail: customerEmail,
+              phoneNumber: phoneNumber,
+              streetAddress: streetAddress,
+              city: city,
+              postalCode: postalCode,
+              paymentType: paymentType,
+              paidStatus: paidStatus,
+              orderId: orderId,
+              deliveryCharge: deliveryCharge,
+              orderDateTime: orderDateTime,
+            );
+          },
+        );
+      }
     }
 
     print('🖨️ Starting super-fast print job...');
@@ -1025,6 +1077,18 @@ class ThermalPrinterService {
           bytes += generator.text(
             statusText,
             styles: const PosStyles(
+              bold: true,
+              height: PosTextSize.size2,
+              width: PosTextSize.size1,
+            ),
+          );
+        } else if (line.trim().startsWith('**') && line.trim().endsWith('**')) {
+          // Fully wrapped **TITLE** lines -> centered + bold
+          String titleText = line.trim().replaceAll('**', '');
+          bytes += generator.text(
+            titleText,
+            styles: const PosStyles(
+              align: PosAlign.center,
               bold: true,
               height: PosTextSize.size2,
               width: PosTextSize.size1,
@@ -2513,6 +2577,28 @@ class ThermalPrinterService {
     return bestMatch;
   }
 
+  /// Normalises order type for display on receipts.
+  /// Maps backend aliases (e.g. 'takeaway', 'pickup') → 'COLLECTION'.
+  String _displayOrderType(String rawType) {
+    switch (rawType.trim().toLowerCase()) {
+      case 'collection':
+      case 'takeaway':
+      case 'pickup':
+        return 'COLLECTION';
+      case 'delivery':
+        return 'DELIVERY';
+      case 'dinein':
+      case 'dine_in':
+      case 'dine-in':
+      case 'dine in':
+        return 'DINE IN';
+      case 'takeout':
+        return 'TAKEOUT';
+      default:
+        return rawType.toUpperCase();
+    }
+  }
+
   String _generateReceiptContent({
     required String transactionId,
     required String orderType,
@@ -2552,7 +2638,7 @@ class ThermalPrinterService {
       receipt.writeln('**Order #: $displayNumber**'); // Bold order number
     }
     receipt.writeln(
-      '**Order Type: ${orderType.toUpperCase()}**',
+      '**Order Type: ${_displayOrderType(orderType)}**',
     ); // Bold order type
     receipt.writeln('================================================');
     receipt.writeln();
@@ -2636,6 +2722,16 @@ class ThermalPrinterService {
         for (String wrappedLine in wrappedLines) {
           receipt.writeln(wrappedLine);
         }
+      }
+      receipt.writeln();
+    }
+
+    if (!_shouldExcludeField(extraNotes)) {
+      receipt.writeln('ORDER NOTES:');
+      receipt.writeln('------------------------------------------------');
+      List<String> wrappedLines = _wrapText(extraNotes!.trim(), 48);
+      for (String wrappedLine in wrappedLines) {
+        receipt.writeln('  $wrappedLine');
       }
       receipt.writeln();
     }
@@ -2972,6 +3068,21 @@ class ThermalPrinterService {
       bytes += generator.emptyLines(1);
     }
 
+    if (!_shouldExcludeField(extraNotes)) {
+      bytes += generator.text(
+        'ORDER NOTES:',
+        styles: const PosStyles(height: PosTextSize.size2),
+      );
+      bytes += generator.text(
+        '------------------------------------------------',
+      );
+      List<String> wrappedLines = _wrapText(extraNotes!.trim(), 42);
+      for (String wrappedLine in wrappedLines) {
+        bytes += generator.text('  $wrappedLine');
+      }
+      bytes += generator.emptyLines(1);
+    }
+
     bytes += generator.text('------------------------------------------------');
 
     // Show delivery charges for delivery orders before subtotal
@@ -3170,6 +3281,14 @@ class ThermalPrinterService {
     return bytes;
   }
 
+  Future<List<int>> _generateReceiptFromOverride(String content) async {
+    _cachedCapabilityProfile ??= await CapabilityProfile.load();
+    final generator = Generator(PaperSize.mm80, _cachedCapabilityProfile!);
+
+    // Reuse the same receipt parsing/styling rules used by other receipts.
+    return _convertReceiptContentToESCPOS(content, generator);
+  }
+
   Future<bool> printSalesReportWithUserInteraction({
     required String reportType,
     required Map<String, dynamic> reportData,
@@ -3178,6 +3297,7 @@ class ThermalPrinterService {
     int? selectedYear,
     int? selectedWeek,
     int? selectedMonth,
+    String? receiptOverride,
     Function(List<String> availableMethods)? onShowMethodSelection,
   }) async {
     if (kIsWeb) {
@@ -3190,18 +3310,14 @@ class ThermalPrinterService {
     print('🖨️ Starting sales report print job...');
 
     try {
-      Future<List<int>> reportDataFuture = _generateSalesReportESCPOS(
-        reportType: reportType,
-        reportData: reportData,
-        filters: filters,
-        selectedDate: selectedDate,
-        selectedYear: selectedYear,
-        selectedWeek: selectedWeek,
-        selectedMonth: selectedMonth,
-      );
+      Future<List<int>> reportDataFuture;
+      Future<String> reportContentFuture;
 
-      Future<String> reportContentFuture = Future.value(
-        _generateSalesReportContent(
+      if (receiptOverride != null && receiptOverride.isNotEmpty) {
+        reportContentFuture = Future.value(receiptOverride);
+        reportDataFuture = _generateReceiptFromOverride(receiptOverride);
+      } else {
+        reportDataFuture = _generateSalesReportESCPOS(
           reportType: reportType,
           reportData: reportData,
           filters: filters,
@@ -3209,8 +3325,20 @@ class ThermalPrinterService {
           selectedYear: selectedYear,
           selectedWeek: selectedWeek,
           selectedMonth: selectedMonth,
-        ),
-      );
+        );
+
+        reportContentFuture = Future.value(
+          _generateSalesReportContent(
+            reportType: reportType,
+            reportData: reportData,
+            filters: filters,
+            selectedDate: selectedDate,
+            selectedYear: selectedYear,
+            selectedWeek: selectedWeek,
+            selectedMonth: selectedMonth,
+          ),
+        );
+      }
 
       List<int> thermalReportData = await reportDataFuture;
       String reportContent = await reportContentFuture;
@@ -3322,26 +3450,52 @@ class ThermalPrinterService {
     }
 
     // Try Xprinter SDK first if enabled and connected
-    if (_useXprinterSDK && Platform.isAndroid && _xprinterService.isConnected) {
+    if (_useXprinterSDK && Platform.isAndroid) {
       try {
-        print('🎯 Using Xprinter SDK for sales report printing...');
+        if (!_xprinterService.isConnected) {
+          // Attempt to reconnect using last known path or first available device
+          if (_lastXprinterDevicePath != null &&
+              _lastXprinterDevicePath!.isNotEmpty) {
+            await _xprinterService.connectUsb(_lastXprinterDevicePath!);
+          }
 
-        // Convert ESC/POS bytes to String for XPrinter SDK
-        String reportString = String.fromCharCodes(reportData);
-        bool success = await _xprinterService.printReceipt(reportString);
+          if (!_xprinterService.isConnected) {
+            final devices = await _xprinterService.getUsbDevices();
+            if (devices.isNotEmpty) {
+              final firstDevice = devices.first;
+              final devicePath =
+                  (firstDevice['devicePath'] ?? firstDevice['deviceName'])
+                      as String?;
+              if (devicePath != null && devicePath.isNotEmpty) {
+                bool connected = await _xprinterService.connectUsb(devicePath);
+                if (connected) {
+                  _lastXprinterDevicePath = devicePath;
+                }
+              }
+            }
+          }
+        }
 
-        if (success) {
-          print('✅ Xprinter SDK sales report printing successful');
-          return true;
+        if (_xprinterService.isConnected) {
+          print('🎯 Using Xprinter SDK for sales report printing...');
+
+          // Convert ESC/POS bytes to String for XPrinter SDK
+          String reportString = String.fromCharCodes(reportData);
+          bool success = await _xprinterService.printReceipt(reportString);
+
+          if (success) {
+            print('✅ Xprinter SDK sales report printing successful');
+            return true;
+          } else {
+            print(
+              '⚠️ Xprinter SDK sales report printing failed, falling back to legacy method',
+            );
+          }
         } else {
-          print(
-            '⚠️ Xprinter SDK sales report printing failed, falling back to legacy method',
-          );
+          print('⚠️ Xprinter SDK not connected, trying legacy USB');
         }
       } catch (e) {
-        print(
-          '⚠️ Xprinter SDK sales report printing error, falling back to legacy method: $e',
-        );
+        print('❌ Xprinter SDK error, falling back to legacy USB: $e');
       }
     }
 
@@ -3441,9 +3595,9 @@ class ThermalPrinterService {
     StringBuffer report = StringBuffer();
 
     // Header
-    report.writeln('================================');
-    report.writeln('             TEST');
-    report.writeln('================================');
+    report.writeln('================================================');
+    report.writeln('                    **TVP**');
+    report.writeln('================================================');
     report.writeln();
 
     // Report Title and Date
@@ -3463,7 +3617,7 @@ class ThermalPrinterService {
     report.writeln(
       'Generated: ${DateFormat('dd/MM/yyyy HH:mm').format(UKTimeService.now())}',
     );
-    report.writeln('================================');
+    report.writeln('================================================');
     report.writeln();
 
     // Applied Filters
@@ -3478,7 +3632,7 @@ class ThermalPrinterService {
         report.writeln('Payment: ${filters['payment']}');
       if (filters['orderType'] != 'All')
         report.writeln('Order Type: ${filters['orderType']}');
-      report.writeln('================================');
+      report.writeln('================================================');
       report.writeln();
     }
 
@@ -3523,7 +3677,7 @@ class ThermalPrinterService {
       report.writeln('Top Category: $typeName ($quantity sold)');
     }
 
-    report.writeln('================================');
+    report.writeln('================================================');
     report.writeln();
 
     // Sales by Payment Method
@@ -3543,7 +3697,7 @@ class ThermalPrinterService {
           report.writeln();
         }
       }
-      report.writeln('================================');
+      report.writeln('================================================');
       report.writeln();
     }
 
@@ -3564,7 +3718,7 @@ class ThermalPrinterService {
           report.writeln();
         }
       }
-      report.writeln('================================');
+      report.writeln('================================================');
       report.writeln();
     }
 
@@ -3585,13 +3739,13 @@ class ThermalPrinterService {
           report.writeln();
         }
       }
-      report.writeln('================================');
+      report.writeln('================================================');
       report.writeln();
     }
 
     // Footer
     report.writeln('End of Report');
-    report.writeln('================================');
+    report.writeln('================================================');
 
     return report.toString();
   }

@@ -104,7 +104,8 @@ public class XprinterPlugin implements FlutterPlugin, MethodCallHandler {
 
                 List<Map<String, Object>> devices = new ArrayList<>();
 
-                // Primary: return the POSConnect device paths with detailed metadata when available
+                // Primary: return the POSConnect device paths with detailed metadata when
+                // available
                 if (devicePaths != null && !devicePaths.isEmpty()) {
                     for (String path : devicePaths) {
                         Map<String, Object> deviceInfo = new HashMap<>();
@@ -123,7 +124,8 @@ public class XprinterPlugin implements FlutterPlugin, MethodCallHandler {
                     }
                 }
 
-                // Fallback: if POSConnect returned nothing, still return the raw UsbManager list
+                // Fallback: if POSConnect returned nothing, still return the raw UsbManager
+                // list
                 if (devices.isEmpty() && usbManager != null) {
                     for (UsbDevice device : usbManager.getDeviceList().values()) {
                         Map<String, Object> deviceInfo = new HashMap<>();
@@ -157,18 +159,19 @@ public class XprinterPlugin implements FlutterPlugin, MethodCallHandler {
 
                 // Create USB connection
                 usbConnection = POSConnect.createDevice(POSConnect.DEVICE_TYPE_USB);
-                
+
                 // Connect synchronously
                 boolean connected = usbConnection.connectSync(devicePath, (code, connectInfo, message) -> {
-                    Log.d(TAG, "USB Connection callback - Code: " + code + ", Info: " + connectInfo + ", Message: " + message);
+                    Log.d(TAG, "USB Connection callback - Code: " + code + ", Info: " + connectInfo + ", Message: "
+                            + message);
                 });
 
                 if (connected) {
                     posPrinter = new POSPrinter(usbConnection);
-                    
+
                     // CRITICAL: Clear printer memory on connection to prevent auto-headers
                     clearPrinterMemory();
-                    
+
                     Log.d(TAG, "USB printer connected and memory cleared successfully");
                     mainHandler.post(() -> result.success(true));
                 } else {
@@ -189,7 +192,8 @@ public class XprinterPlugin implements FlutterPlugin, MethodCallHandler {
      */
     private void clearPrinterMemory() {
         try {
-            if (posPrinter == null) return;
+            if (posPrinter == null)
+                return;
 
             Log.d(TAG, "Clearing printer memory on connection...");
 
@@ -244,8 +248,8 @@ public class XprinterPlugin implements FlutterPlugin, MethodCallHandler {
                 // Print the receipt
                 long printStart = System.currentTimeMillis();
                 posPrinter.printString(receiptData)
-                         .feedLine(3)
-                         .cutPaper();
+                        .feedLine(3)
+                        .cutPaper();
                 long printDuration = System.currentTimeMillis() - printStart;
                 Log.d(TAG, "⏱️ printString() took " + printDuration + "ms");
 
@@ -303,11 +307,11 @@ public class XprinterPlugin implements FlutterPlugin, MethodCallHandler {
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
         channel.setMethodCallHandler(null);
-        
+
         if (executor != null) {
             executor.shutdown();
         }
-        
+
         if (usbConnection != null) {
             try {
                 usbConnection.close();
@@ -315,7 +319,7 @@ public class XprinterPlugin implements FlutterPlugin, MethodCallHandler {
                 Log.e(TAG, "Error closing connection on detach", e);
             }
         }
-        
+
         POSConnect.exit();
         Log.d(TAG, "Xprinter SDK plugin detached");
     }

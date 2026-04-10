@@ -12,6 +12,8 @@ import 'package:epos/services/uk_time_service.dart';
 import 'package:epos/payment_details_widget.dart';
 import 'package:epos/models/order_models.dart';
 import 'package:epos/discount_page.dart';
+import 'package:epos/widgets/receipt_preview_dialog.dart';
+import 'package:epos/config/app_config.dart';
 import 'dart:ui';
 import 'models/cart_item.dart';
 import 'models/food_item.dart';
@@ -1097,8 +1099,37 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
         deliveryChargeAmount = 1.50; // Delivery charge amount
       }
 
+      if (AppConfig.enableReceiptPreview) {
+        await ReceiptPreviewDialog.show(
+          context,
+          transactionId:
+              _selectedOrder!.transactionId.isNotEmpty
+                  ? _selectedOrder!.transactionId
+                  : _selectedOrder!.orderId.toString(),
+          orderType: _selectedOrder!.orderType,
+          cartItems: cartItems,
+          subtotal: subtotal,
+          totalCharge: _selectedOrder!.orderTotalPrice,
+          extraNotes: _selectedOrder!.orderExtraNotes,
+          changeDue: _selectedOrder!.changeDue,
+          customerName: _selectedOrder!.customerName,
+          customerEmail: _selectedOrder!.customerEmail,
+          phoneNumber: _selectedOrder!.phoneNumber,
+          streetAddress: _selectedOrder!.streetAddress,
+          city: _selectedOrder!.city,
+          postalCode: _selectedOrder!.postalCode,
+          paymentType: _selectedOrder!.paymentType,
+          paidStatus: _selectedOrder!.paidStatus,
+          orderId: _selectedOrder!.orderId,
+          deliveryCharge: deliveryChargeAmount,
+          orderDateTime: UKTimeService.now(),
+        );
+      }
+
       bool
       success = await ThermalPrinterService().printReceiptWithUserInteraction(
+        previewContext: context,
+        showReceiptPreviewDialog: false,
         transactionId:
             _selectedOrder!.transactionId.isNotEmpty
                 ? _selectedOrder!.transactionId

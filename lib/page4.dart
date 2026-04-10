@@ -13,7 +13,7 @@ import 'dart:ui';
 import 'package:epos/dynamic_order_list_screen.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:epos/services/thermal_printer_service.dart';
-// import 'package:epos/widgets/receipt_preview_dialog.dart';
+import 'package:epos/widgets/receipt_preview_dialog.dart';
 import 'package:epos/customer_details_widget.dart';
 import 'package:epos/payment_details_widget.dart';
 import 'package:epos/settings_screen.dart';
@@ -32,6 +32,7 @@ import 'package:epos/providers/payment_link_provider.dart';
 import 'package:epos/services/offline_order_manager.dart';
 import 'package:epos/services/order_price_tracking_service.dart';
 import 'package:epos/services/uk_time_service.dart';
+import 'package:epos/config/app_config.dart';
 
 class Page4 extends StatefulWidget {
   final String? initialSelectedServiceImage;
@@ -5859,7 +5860,33 @@ class _Page4State extends State<Page4> {
       final discountPercentage = orderData['discount_percentage'] as double?;
       final discountAmount = orderData['discount_amount'] as double?;
 
+      if (AppConfig.enableReceiptPreview) {
+        await ReceiptPreviewDialog.show(
+          context,
+          transactionId: transactionId,
+          orderType: _actualOrderType,
+          cartItems: formattedCartItems ?? _cartItems,
+          subtotal: subtotal,
+          totalCharge: totalCharge,
+          extraNotes: extraNotes,
+          changeDue: changeDue,
+          customerName: guestData?['name'] as String?,
+          customerEmail: guestData?['email'] as String?,
+          phoneNumber: guestData?['phone_number'] as String?,
+          streetAddress: guestData?['street_address'] as String?,
+          city: guestData?['city'] as String?,
+          postalCode: guestData?['postal_code'] as String?,
+          paymentType: _selectedPaymentType,
+          paidStatus: paidStatus,
+          orderId: orderId != null ? int.tryParse(orderId) : null,
+          deliveryCharge: deliveryChargeAmount,
+          orderDateTime: orderDateTime,
+        );
+      }
+
       await ThermalPrinterService().printReceiptWithUserInteraction(
+        previewContext: context,
+        showReceiptPreviewDialog: false,
         transactionId: transactionId,
         orderType: _actualOrderType,
         cartItems: formattedCartItems ?? _cartItems,
