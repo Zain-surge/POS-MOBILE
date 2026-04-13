@@ -8,6 +8,7 @@ import 'package:epos/custom_bottom_nav_bar.dart';
 import 'package:epos/services/thermal_printer_service.dart';
 import 'package:epos/services/custom_popup_service.dart';
 import 'package:epos/widgets/animated_tap_button.dart';
+import 'order_history_screen.dart';
 
 class Page3 extends StatefulWidget {
   final List<FoodItem> foodItems;
@@ -589,8 +590,8 @@ class _Page3State extends State<Page3> {
                   child: Row(
                     children: [
                       Expanded(
-                        // <--- Left section (2/3 of the screen) - Service Selection
-                        flex: 2,
+                        // <--- Left section - Service Selection
+                        flex: 5,
                         child: Column(
                           children: [
                             const SizedBox(height: 30),
@@ -666,11 +667,30 @@ class _Page3State extends State<Page3> {
                       ),
 
                       Expanded(
-                        // <--- Right section (1/3 of the screen) - Active Orders List
-                        flex: 1,
+                        // <--- Right section - Order History + Active Orders
+                        flex: 4,
                         child: Container(
                           color: Colors.white,
-                          child: const ActiveOrdersList(),
+                          child: Row(
+                            children: [
+                              const Expanded(
+                                flex: 1,
+                                child: OrderHistoryScreen(
+                                  embedded: true,
+                                  showBackButton: false,
+                                ),
+                              ),
+                              const VerticalDivider(
+                                width: 0,
+                                thickness: 2,
+                                color: Color(0xFFB2B2B2),
+                              ),
+                              const Expanded(
+                                flex: 1,
+                                child: ActiveOrdersList(),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],

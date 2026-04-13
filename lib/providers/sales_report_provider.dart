@@ -1,8 +1,10 @@
 // lib/providers/sales_report_provider.dart (Updated)
 
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
+import 'package:collection/collection.dart';
 import '../services/api_service.dart';
 import '../services/thermal_printer_service.dart';
 import 'package:epos/services/uk_time_service.dart';
@@ -72,6 +74,8 @@ class SalesReportProvider with ChangeNotifier {
 
   // Initialization flag to ensure data loads immediately
   bool _isInitialized = false;
+  Timer? _autoRefreshTimer;
+  static const Duration _autoRefreshInterval = Duration(seconds: 30);
 
   // Helper method to calculate week number
   static int _getWeekNumber(DateTime date) {
@@ -89,11 +93,25 @@ class SalesReportProvider with ChangeNotifier {
 
     print('🚀 Initializing SalesReportProvider...');
     _isInitialized = true;
+    _startAutoRefresh();
 
     // Load today's report immediately for default tab
     if (_currentTabIndex == 0) {
       await loadTodaysReport();
     }
+  }
+
+  void _startAutoRefresh() {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = Timer.periodic(_autoRefreshInterval, (_) {
+      if (_isLoading) return;
+      _refreshCurrentReportWithFilters(silent: true);
+    });
+  }
+
+  void _stopAutoRefresh() {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = null;
   }
 
   // Clear error message
@@ -169,24 +187,26 @@ class SalesReportProvider with ChangeNotifier {
   }
 
   // Method to refresh with filters applied
-  Future<void> _refreshCurrentReportWithFilters() async {
-    if (_isLoading) return;
+  Future<void> _refreshCurrentReportWithFilters({bool silent = false}) async {
+    if (_isLoading && !silent) return;
 
     switch (_currentTabIndex) {
       case 0:
-        await loadTodaysReport();
+        await loadTodaysReport(silent: silent);
         break;
       case 1:
-        await loadDailyReport();
+        await loadDailyReport(silent: silent);
         break;
       case 2:
-        await loadWeeklyReport();
+        await loadWeeklyReport(silent: silent);
         break;
       case 3:
-        await loadMonthlyReport();
+        await loadMonthlyReport(silent: silent);
         break;
       case 4:
-        await loadDriverReport(); // Driver report doesn't use filters
+        await loadDriverReport(
+          silent: silent,
+        ); // Driver report doesn't use filters
         break;
     }
   }
@@ -238,12 +258,14 @@ class SalesReportProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadTodaysReport() async {
-    if (_isLoading) return;
+  Future<void> loadTodaysReport({bool silent = false}) async {
+    if (_isLoading && !silent) return;
 
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+    if (!silent) {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+    }
 
     try {
       print(
@@ -263,24 +285,34 @@ class SalesReportProvider with ChangeNotifier {
       );
       print('✅ Today\'s report loaded with filters');
 
-      _todaysReport = report;
-      print('📊 Today\'s report data keys: ${report.keys.toList()}');
+      final changed = !_areReportsEqual(_todaysReport, report);
+      if (changed) {
+        _todaysReport = report;
+        print('📊 Today\'s report data keys: ${report.keys.toList()}');
+        if (silent) notifyListeners();
+      }
     } catch (e) {
-      _errorMessage = 'Failed to load today\'s report: ${e.toString()}';
+      if (!silent) {
+        _errorMessage = 'Failed to load today\'s report: ${e.toString()}';
+        _todaysReport = null;
+      }
       print('❌ Error loading today\'s report: $e');
-      _todaysReport = null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!silent) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  Future<void> loadDailyReport() async {
-    if (_isLoading) return;
+  Future<void> loadDailyReport({bool silent = false}) async {
+    if (_isLoading && !silent) return;
 
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+    if (!silent) {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+    }
 
     try {
       print(
@@ -300,23 +332,33 @@ class SalesReportProvider with ChangeNotifier {
       );
       print('✅ Daily report loaded with filters');
 
-      _dailyReport = report;
+      final changed = !_areReportsEqual(_dailyReport, report);
+      if (changed) {
+        _dailyReport = report;
+        if (silent) notifyListeners();
+      }
     } catch (e) {
-      _errorMessage = 'Failed to load daily report: ${e.toString()}';
+      if (!silent) {
+        _errorMessage = 'Failed to load daily report: ${e.toString()}';
+        _dailyReport = null;
+      }
       print('❌ Error loading daily report: $e');
-      _dailyReport = null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!silent) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  Future<void> loadWeeklyReport() async {
-    if (_isLoading) return;
+  Future<void> loadWeeklyReport({bool silent = false}) async {
+    if (_isLoading && !silent) return;
 
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+    if (!silent) {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+    }
 
     try {
       print('🔄 Loading weekly report for Date: $_selectedDate with filters');
@@ -334,23 +376,33 @@ class SalesReportProvider with ChangeNotifier {
       );
       print('✅ Weekly report loaded with filters');
 
-      _weeklyReport = report;
+      final changed = !_areReportsEqual(_weeklyReport, report);
+      if (changed) {
+        _weeklyReport = report;
+        if (silent) notifyListeners();
+      }
     } catch (e) {
-      _errorMessage = 'Failed to load weekly report: ${e.toString()}';
+      if (!silent) {
+        _errorMessage = 'Failed to load weekly report: ${e.toString()}';
+        _weeklyReport = null;
+      }
       print('❌ Error loading weekly report: $e');
-      _weeklyReport = null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!silent) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  Future<void> loadMonthlyReport() async {
-    if (_isLoading) return;
+  Future<void> loadMonthlyReport({bool silent = false}) async {
+    if (_isLoading && !silent) return;
 
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+    if (!silent) {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+    }
 
     try {
       print(
@@ -371,23 +423,33 @@ class SalesReportProvider with ChangeNotifier {
       );
       print('✅ Monthly report loaded with filters');
 
-      _monthlyReport = report;
+      final changed = !_areReportsEqual(_monthlyReport, report);
+      if (changed) {
+        _monthlyReport = report;
+        if (silent) notifyListeners();
+      }
     } catch (e) {
-      _errorMessage = 'Failed to load monthly report: ${e.toString()}';
+      if (!silent) {
+        _errorMessage = 'Failed to load monthly report: ${e.toString()}';
+        _monthlyReport = null;
+      }
       print('❌ Error loading monthly report: $e');
-      _monthlyReport = null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!silent) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  Future<void> loadDriverReport() async {
-    if (_isLoading) return;
+  Future<void> loadDriverReport({bool silent = false}) async {
+    if (_isLoading && !silent) return;
 
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+    if (!silent) {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+    }
 
     try {
       print(
@@ -396,16 +458,30 @@ class SalesReportProvider with ChangeNotifier {
 
       final report = await ApiService.getDriverReport(_selectedDate);
 
-      _driverReport = report;
-      print('✅ Driver report loaded successfully');
+      final changed = !_areReportsEqual(_driverReport, report);
+      if (changed) {
+        _driverReport = report;
+        print('✅ Driver report loaded successfully');
+        if (silent) notifyListeners();
+      }
     } catch (e) {
-      _errorMessage = 'Failed to load driver report: ${e.toString()}';
+      if (!silent) {
+        _errorMessage = 'Failed to load driver report: ${e.toString()}';
+        _driverReport = null;
+      }
       print('❌ Error loading driver report: $e');
-      _driverReport = null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!silent) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
+  }
+
+  bool _areReportsEqual(Map<String, dynamic>? a, Map<String, dynamic>? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    return const DeepCollectionEquality().equals(a, b);
   }
 
   // Get current report data
@@ -444,7 +520,7 @@ class SalesReportProvider with ChangeNotifier {
     }
   }
 
-  Future<void> printThermalReport() async {
+  Future<void> printThermalReport({String? receiptOverride}) async {
     final currentReport = getCurrentReport();
     if (currentReport == null) {
       throw Exception(
@@ -501,28 +577,45 @@ class SalesReportProvider with ChangeNotifier {
       // Attempt to print the report
       bool printSuccess = false;
 
+      final void Function(List<String>) handleMethods = (availableMethods) {
+        print('Available printing methods: $availableMethods');
+        if (availableMethods.isEmpty ||
+            availableMethods.first == 'No printers available') {
+          _errorMessage =
+              'No thermal printers detected. Please connect a printer and try again.';
+        } else {
+          _errorMessage =
+              'Printing failed on available methods: ${availableMethods.join(', ')}';
+        }
+      };
+
       try {
-        printSuccess = await ThermalPrinterService()
-            .printSalesReportWithUserInteraction(
-              reportType: getReportTitle(),
-              reportData: currentReport,
-              filters: filters,
-              selectedDate: selectedDateString,
-              selectedYear: selectedYearValue,
-              selectedWeek: selectedWeekValue,
-              selectedMonth: selectedMonthValue,
-              onShowMethodSelection: (availableMethods) {
-                print('Available printing methods: $availableMethods');
-                if (availableMethods.isEmpty ||
-                    availableMethods.first == 'No printers available') {
-                  _errorMessage =
-                      'No thermal printers detected. Please connect a printer and try again.';
-                } else {
-                  _errorMessage =
-                      'Printing failed on available methods: ${availableMethods.join(', ')}';
-                }
-              },
-            );
+        if (receiptOverride != null && receiptOverride.isNotEmpty) {
+          // Use generic receipt printer for custom overrides (from dialog)
+          printSuccess = await ThermalPrinterService().printReceiptWithUserInteraction(
+            transactionId: 'SALES-${DateTime.now().millisecondsSinceEpoch}',
+            orderType: getReportTitle(),
+            cartItems: [],
+            subtotal: 0,
+            totalCharge: 0,
+            changeDue: 0,
+            receiptOverride: receiptOverride,
+            onShowMethodSelection: handleMethods,
+          );
+        } else {
+          // Use specialized sales report printer for automatic generation (from Admin Portal)
+          printSuccess = await ThermalPrinterService().printSalesReportWithUserInteraction(
+            reportType: getReportTitle(),
+            reportData: currentReport,
+            filters: filters,
+            selectedDate: selectedDateString,
+            selectedYear: selectedYearValue,
+            selectedWeek: selectedWeekValue,
+            selectedMonth: selectedMonthValue,
+            receiptOverride: null,
+            onShowMethodSelection: handleMethods,
+          );
+        }
       } catch (e) {
         printSuccess = false;
 
@@ -583,11 +676,24 @@ class SalesReportProvider with ChangeNotifier {
     return report != null && report.isNotEmpty;
   }
 
-  // Get items count for current report
+  // Get items count for current report – handles both new (analytics.overall) and legacy structure
   int getItemsCount() {
     final report = getCurrentReport();
     if (report == null) return 0;
 
+    // New unified API: analytics.overall.all_items_sold
+    final analytics = report['analytics'];
+    if (analytics is Map) {
+      for (final key in ['overall', 'pos', 'website']) {
+        final section = analytics[key];
+        if (section is Map) {
+          final items = section['all_items_sold'];
+          if (items is List && items.isNotEmpty) return items.length;
+        }
+      }
+    }
+
+    // Legacy API: top-level all_items_sold
     final items = report['all_items_sold'];
     if (items is List) return items.length;
     return 0;
@@ -725,6 +831,7 @@ class SalesReportProvider with ChangeNotifier {
   @override
   void dispose() {
     print('🗑️ SalesReportProvider disposed');
+    _stopAutoRefresh();
     super.dispose();
   }
 }

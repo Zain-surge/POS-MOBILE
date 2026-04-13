@@ -447,8 +447,15 @@ class ApiService {
     String? payment,
     String? orderType,
   }) async {
-    final Map<String, String> queryParams = {};
+    // Try unified endpoint first (new API structure)
+    try {
+      return await getUnifiedSalesReport(periodType: 'today');
+    } catch (e) {
+      print("getTodaysReport: Unified endpoint failed, falling back to legacy: $e");
+    }
 
+    // Fallback to legacy endpoint
+    final Map<String, String> queryParams = {};
     if (source != null && source != 'All') queryParams['source'] = source;
     if (payment != null && payment != 'All') queryParams['payment'] = payment;
     if (orderType != null && orderType != 'All')
@@ -458,28 +465,49 @@ class ApiService {
       _buildUrl('/admin/sales-report/today'),
     ).replace(queryParameters: queryParams);
 
-    print("getTodaysReport: Final URL: $url");
-    print("getTodaysReport: Query params: $queryParams");
+    print("getTodaysReport: Fallback URL: $url");
 
     try {
-      final response = await http.get(
-        url,
-        headers: BrandInfo.getDefaultHeaders(),
-      );
+      final response = await http.get(url, headers: BrandInfo.getDefaultHeaders());
       print("getTodaysReport: Response Code: ${response.statusCode}");
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         print("getTodaysReport: Success - Data keys: ${data.keys.toList()}");
         return data;
       } else {
-        throw Exception(
-          "Failed to load today's report: ${response.statusCode}",
-        );
+        throw Exception("Failed to load today's report: ${response.statusCode}");
       }
     } catch (e) {
       print("getTodaysReport: Exception: $e");
       throw Exception("Error fetching today's report: $e");
+    }
+  }
+
+  /// Hits /admin/sales-report/unified with period_type query param.
+  static Future<Map<String, dynamic>> getUnifiedSalesReport({
+    required String periodType,
+    String? date,
+  }) async {
+    final Map<String, String> qp = {'period_type': periodType};
+    if (date != null) qp['date'] = date;
+
+    final Uri url = Uri.parse(
+      _buildUrl('/admin/sales-report/unified'),
+    ).replace(queryParameters: qp);
+
+    print("getUnifiedSalesReport: URL: $url");
+
+    final response = await http.get(url, headers: BrandInfo.getDefaultHeaders());
+    print("getUnifiedSalesReport: Response Code: ${response.statusCode}");
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      print("getUnifiedSalesReport: Keys: ${data.keys.toList()}");
+      return data;
+    } else {
+      throw Exception(
+        "getUnifiedSalesReport failed: ${response.statusCode} – ${response.body}",
+      );
     }
   }
 

@@ -7,7 +7,14 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 class OrderHistoryScreen extends StatefulWidget {
-  const OrderHistoryScreen({super.key});
+  final bool embedded;
+  final bool showBackButton;
+
+  const OrderHistoryScreen({
+    super.key,
+    this.embedded = false,
+    this.showBackButton = true,
+  });
 
   @override
   State<OrderHistoryScreen> createState() => _OrderHistoryScreenState();
@@ -69,6 +76,9 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
         return 'READY';
       case 'blue':
         return 'COMPLETED';
+      case 'red':
+      case 'cancelled':
+        return 'CANCELLED';
       default:
         return status.toUpperCase();
     }
@@ -83,6 +93,9 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
         return Colors.green.shade100;
       case 'blue':
         return Colors.blue.shade100;
+      case 'red':
+      case 'cancelled':
+        return Colors.red.shade100;
       default:
         return Colors.grey.shade200;
     }
@@ -97,57 +110,111 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
         return Colors.green.shade900;
       case 'blue':
         return Colors.blue.shade900;
+      case 'red':
+      case 'cancelled':
+        return Colors.red.shade900;
       default:
         return Colors.grey.shade700;
     }
   }
 
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      child: Row(
+  Widget _buildHeader({required bool showBackButton}) {
+    if (!showBackButton) {
+      return Column(
         children: [
-          // Back button
-          GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.arrow_back_ios,
-                color: Colors.grey.shade600,
-                size: 20,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          // Order History title
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.history, color: Colors.white, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    "Order History",
+          const SizedBox(height: 30),
+          Padding(
+            padding: const EdgeInsets.only(top: 10.0, bottom: 10.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3D9FF),
+                    borderRadius: BorderRadius.circular(50),
+                  ),
+                  child: const Text(
+                    'Order History',
+                    textAlign: TextAlign.left,
                     style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
+                      fontSize: 25,
                       fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                      fontFamily: 'Poppins',
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 60.0),
+            child: Divider(height: 0, thickness: 2.5, color: Colors.grey),
+          ),
+          const SizedBox(height: 10),
+        ],
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.arrow_back_ios,
+                    color: Colors.grey.shade600,
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 28,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3D9FF),
+                        borderRadius: BorderRadius.circular(50),
+                      ),
+                      child: const Text(
+                        'Order History',
+                        textAlign: TextAlign.left,
+                        style: TextStyle(
+                          fontSize: 25,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 60.0),
+            child: Divider(height: 0, thickness: 2.5, color: Colors.grey),
           ),
         ],
       ),
@@ -231,25 +298,34 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children:
-                        PaidStatusFilter.values
-                            .map(
-                              (filter) => Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: _buildChoiceChip(
-                                  label: _paidStatusLabel(filter),
-                                  isSelected: paidFilter == filter,
-                                  onSelected:
-                                      () =>
-                                          provider.setPaidStatusFilter(filter),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                  ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final chips =
+                        PaidStatusFilter.values.map((filter) {
+                          return _buildChoiceChip(
+                            label: _paidStatusLabel(filter),
+                            isSelected: paidFilter == filter,
+                            onSelected:
+                                () => provider.setPaidStatusFilter(filter),
+                          );
+                        }).toList();
+
+                    return Row(
+                      children: List.generate(chips.length, (index) {
+                        return Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              right: index == chips.length - 1 ? 0 : 8,
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: chips[index],
+                            ),
+                          ),
+                        );
+                      }),
+                    );
+                  },
                 ),
               ),
             ],
@@ -963,65 +1039,66 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final content = Column(
+      children: [
+        _buildHeader(showBackButton: widget.showBackButton),
+        _buildDateSelector(),
+        Expanded(
+          child: Consumer<OrderHistoryProvider>(
+            builder: (context, provider, child) {
+              if (provider.isLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (provider.error != null) {
+                return _buildEmptyState(provider.error!, Icons.error_outline);
+              }
+
+              if (provider.selectedDate == null) {
+                return _buildEmptyState(
+                  'Select a date to view order history',
+                  Icons.calendar_today,
+                );
+              }
+
+              final hasAnyOrders = provider.totalOrdersCount > 0;
+              final hasFilteredOrders = provider.orders.isNotEmpty;
+
+              final Widget body;
+              if (!hasAnyOrders) {
+                body = _buildEmptyState(
+                  'No orders found for ${_formatOrderDate(provider.selectedDate!)}',
+                  Icons.inbox,
+                );
+              } else if (!hasFilteredOrders) {
+                body = _buildEmptyState(
+                  'No orders match the selected filters',
+                  Icons.filter_list,
+                );
+              } else {
+                body = _buildOrdersList(provider.orders);
+              }
+
+              return Column(
+                children: [
+                  _buildFilters(provider),
+                  const SizedBox(height: 12),
+                  Expanded(child: body),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+
+    if (widget.embedded) {
+      return Container(color: Colors.white, child: content);
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            _buildDateSelector(),
-            Expanded(
-              child: Consumer<OrderHistoryProvider>(
-                builder: (context, provider, child) {
-                  if (provider.isLoading) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  if (provider.error != null) {
-                    return _buildEmptyState(
-                      provider.error!,
-                      Icons.error_outline,
-                    );
-                  }
-
-                  if (provider.selectedDate == null) {
-                    return _buildEmptyState(
-                      'Select a date to view order history',
-                      Icons.calendar_today,
-                    );
-                  }
-
-                  final hasAnyOrders = provider.totalOrdersCount > 0;
-                  final hasFilteredOrders = provider.orders.isNotEmpty;
-
-                  final Widget content;
-                  if (!hasAnyOrders) {
-                    content = _buildEmptyState(
-                      'No orders found for ${_formatOrderDate(provider.selectedDate!)}',
-                      Icons.inbox,
-                    );
-                  } else if (!hasFilteredOrders) {
-                    content = _buildEmptyState(
-                      'No orders match the selected filters',
-                      Icons.filter_list,
-                    );
-                  } else {
-                    content = _buildOrdersList(provider.orders);
-                  }
-
-                  return Column(
-                    children: [
-                      _buildFilters(provider),
-                      const SizedBox(height: 12),
-                      Expanded(child: content),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+      body: SafeArea(child: content),
     );
   }
 }

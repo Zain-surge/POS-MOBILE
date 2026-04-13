@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:async';
+import 'package:intl/intl.dart';
 import '../models/order.dart';
 import '../models/customer_search_model.dart';
 import '../config/brand_info.dart';
+import 'server_time_service.dart';
 
 class ShopStatusData {
   final bool shopOpen;
@@ -78,8 +80,8 @@ class OrderApiService {
     );
 
     _socket.onConnect((_) {
-      print('Connected to backend socket: ${_socket.id}');
-      print('Brand: ${BrandInfo.currentBrand}');
+      print('🟢 Connected to backend socket: ${_socket.id}');
+      print('🏷️  Brand: ${BrandInfo.currentBrand}');
       _connectionStatusController.add(true);
     });
 
@@ -104,14 +106,14 @@ class OrderApiService {
     });
 
     _socket.on('offers_updated', (data) {
-      print('Real-time offers update received: $data');
+      print('🔥 Real-time offers update received: $data');
       if (data is List) {
         _offersUpdatedController.add(data);
       }
     });
 
     _socket.on('shop_status_updated', (data) {
-      print('Shop status changed: $data');
+      print('🟢 Shop status changed: $data');
       try {
         final shopStatus = ShopStatusData.fromJson(data);
         _shopStatusUpdatedController.add(shopStatus);
@@ -128,7 +130,6 @@ class OrderApiService {
         print("Available keys: ${data.keys.toList()}");
         print("Values: ${data.values.toList()}");
 
-        // Only process status changes for the current brand
         if (_isForCurrentBrand(data)) {
           print('Order status change accepted for current brand');
           _orderStatusOrDriverChangedController.add(data);
@@ -144,12 +145,12 @@ class OrderApiService {
     });
 
     _socket.onDisconnect((_) {
-      print('Disconnected from socket');
+      print('🔴 Disconnected from socket');
       _connectionStatusController.add(false);
     });
 
     _socket.onError((error) {
-      print('Socket Error: $error');
+      print('❌ Socket Error: $error');
       _connectionStatusController.add(false);
     });
 
@@ -158,6 +159,30 @@ class OrderApiService {
     _socket.onReconnectAttempt((_) => print('Reconnect Attempting...'));
     _socket.onReconnect((attempt) => print('Reconnected on attempt: $attempt'));
     _socket.onReconnectFailed((_) => print('Reconnect Failed'));
+  }
+
+  void connectSocket() {
+    if (!_socket.connected) {
+      _socket.connect();
+    }
+  }
+
+  void disconnectSocket() {
+    _socket.disconnect();
+  }
+
+  void dispose() {
+    _newOrderController.close();
+    _offersUpdatedController.close();
+    _shopStatusUpdatedController.close();
+    _connectionStatusController.close();
+    _acceptedOrderController.close();
+    _orderStatusOrDriverChangedController.close();
+    _socket.dispose();
+  }
+
+  static Uri _buildProxyUrl(String path) {
+    return Uri.parse('$_backendBaseUrl$path');
   }
 
   String _normalizeBrand(String? value) {
@@ -200,10 +225,10 @@ class OrderApiService {
 
   bool _isForCurrentBrand(Map<String, dynamic> data) {
     final current = _normalizeBrand(BrandInfo.currentBrand);
-    final candidates = _extractBrandCandidates(data)
-        .map(_normalizeBrand)
-        .where((c) => c.isNotEmpty)
-        .toList();
+    final candidates =
+        _extractBrandCandidates(
+          data,
+        ).map(_normalizeBrand).where((c) => c.isNotEmpty).toList();
 
     if (candidates.isEmpty) {
       print(
@@ -215,30 +240,6 @@ class OrderApiService {
     return candidates.any((c) => c == current);
   }
 
-  void connectSocket() {
-    if (!_socket.connected) {
-      _socket.connect();
-    }
-  }
-
-  void disconnectSocket() {
-    _socket.disconnect();
-  }
-
-  void dispose() {
-    _newOrderController.close();
-    _offersUpdatedController.close();
-    _shopStatusUpdatedController.close();
-    _connectionStatusController.close();
-    _acceptedOrderController.close();
-    _orderStatusOrDriverChangedController.close();
-    _socket.dispose();
-  }
-
-  static Uri _buildProxyUrl(String path) {
-    return Uri.parse('$_backendBaseUrl$path');
-  }
-
   static Future<List<Order>> fetchTodayOrders() async {
     final url = _buildProxyUrl('/orders/today');
     try {
@@ -248,8 +249,9 @@ class OrderApiService {
       );
       if (response.statusCode == 200) {
         List jsonResponse = json.decode(response.body);
-        final String currentBrand =
-            BrandInfo.currentBrand.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+        final String currentBrand = BrandInfo.currentBrand
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z0-9]+'), '');
         List<Order> orders = [];
         for (var orderJson in jsonResponse) {
           if (orderJson is Map<String, dynamic>) {
@@ -275,7 +277,8 @@ class OrderApiService {
             final normalized =
                 candidates
                     .map(
-                      (c) => c.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ''),
+                      (c) =>
+                          c.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ''),
                     )
                     .toList();
             if (normalized.isNotEmpty && !normalized.contains(currentBrand)) {
@@ -286,14 +289,27 @@ class OrderApiService {
           final order = Order.fromJson(orderJson);
           orders.add(order);
         }
+
+        // Sync server time using HTTP Date header
+        if (response.headers.containsKey('date')) {
+          try {
+            final dateStr = response.headers['date']!;
+            final dateFormat = DateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'");
+            final serverTime = dateFormat.parse(dateStr, true).toLocal();
+            ServerTimeService.updateFromMostRecentOrder(serverTime);
+          } catch (e) {
+            print('Error parsing Date header: $e');
+          }
+        }
+
         return orders;
       } else {
         throw Exception(
-          'Failed to load today\'s orders: ${response.statusCode} ${response.body}',
+          "Failed to load today's orders: ${response.statusCode} ${response.body}",
         );
       }
     } catch (e) {
-      throw Exception('Error fetching today\'s orders: $e');
+      throw Exception("Error fetching today's orders: $e");
     }
   }
 
@@ -381,7 +397,9 @@ class OrderApiService {
         List jsonResponse = json.decode(response.body);
         List<Order> orders = [];
         for (var orderJson in jsonResponse) {
-          orders.add(Order.fromJson(orderJson));
+          if (orderJson is Map<String, dynamic>) {
+            orders.add(Order.fromJson(orderJson));
+          }
         }
         print('✅ Fetched ${orders.length} orders for $dateString');
         return orders;

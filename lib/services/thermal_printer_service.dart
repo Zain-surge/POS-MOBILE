@@ -1,4 +1,4 @@
-﻿// lib/services/thermal_printer_service.dart
+// lib/services/thermal_printer_service.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
@@ -532,6 +532,7 @@ class ThermalPrinterService {
     bool isEdited = false, // New parameter to indicate if order was edited
     double? discountPercentage, // Discount percentage
     double? discountAmount, // Discount amount
+    String? receiptOverride, // Override receipt generation with custom markdown
   }) async {
     if (kIsWeb && !ENABLE_DRAWER_TEST_MODE) {
       print('🚫 Web platform - printer not supported');
@@ -591,35 +592,15 @@ class ThermalPrinterService {
     // Pre-generate receipt data while testing connections
     String receiptKey = '$transactionId-$orderType-${cartItems.length}';
 
-    // Generate receipt data in parallel with connection testing
-    Future<List<int>> receiptDataFuture = _generateESCPOSReceipt(
-      transactionId: transactionId,
-      orderType: orderType,
-      cartItems: cartItems,
-      subtotal: subtotal,
-      totalCharge: totalCharge,
-      extraNotes: extraNotes,
-      changeDue: changeDue,
-      customerName: customerName,
-      customerEmail: customerEmail,
-      phoneNumber: phoneNumber,
-      streetAddress: streetAddress,
-      city: city,
-      postalCode: postalCode,
-      paymentType: paymentType,
-      paidStatus: paidStatus,
-      orderId: orderId,
-      orderNumber: orderNumber,
-      deliveryCharge: deliveryCharge,
-      isXprinterUSB:
-          _useXprinterSDK && Platform.isAndroid && _xprinterService.isConnected,
-      isEdited: isEdited,
-      discountPercentage: discountPercentage,
-      discountAmount: discountAmount,
-    );
+    Future<List<int>> receiptDataFuture;
+    Future<String> receiptContentFuture;
 
-    Future<String> receiptContentFuture = Future.value(
-      _generateReceiptContent(
+    if (receiptOverride != null && receiptOverride.isNotEmpty) {
+      receiptContentFuture = Future.value(receiptOverride);
+      receiptDataFuture = _generateReceiptFromOverride(receiptOverride);
+    } else {
+      // Generate receipt data in parallel with connection testing
+      receiptDataFuture = _generateESCPOSReceipt(
         transactionId: transactionId,
         orderType: orderType,
         cartItems: cartItems,
@@ -636,14 +617,42 @@ class ThermalPrinterService {
         paymentType: paymentType,
         paidStatus: paidStatus,
         orderId: orderId,
+        orderNumber: orderNumber,
         deliveryCharge: deliveryCharge,
-        orderDateTime: orderDateTime,
         isXprinterUSB:
-            _useXprinterSDK &&
-            Platform.isAndroid &&
-            _xprinterService.isConnected,
-      ),
-    );
+            _useXprinterSDK && Platform.isAndroid && _xprinterService.isConnected,
+        isEdited: isEdited,
+        discountPercentage: discountPercentage,
+        discountAmount: discountAmount,
+      );
+
+      receiptContentFuture = Future.value(
+        _generateReceiptContent(
+          transactionId: transactionId,
+          orderType: orderType,
+          cartItems: cartItems,
+          subtotal: subtotal,
+          totalCharge: totalCharge,
+          extraNotes: extraNotes,
+          changeDue: changeDue,
+          customerName: customerName,
+          customerEmail: customerEmail,
+          phoneNumber: phoneNumber,
+          streetAddress: streetAddress,
+          city: city,
+          postalCode: postalCode,
+          paymentType: paymentType,
+          paidStatus: paidStatus,
+          orderId: orderId,
+          deliveryCharge: deliveryCharge,
+          orderDateTime: orderDateTime,
+          isXprinterUSB:
+              _useXprinterSDK &&
+              Platform.isAndroid &&
+              _xprinterService.isConnected,
+        ),
+      );
+    }
 
     List<int> receiptData = await receiptDataFuture;
     String receiptContent = await receiptContentFuture;
