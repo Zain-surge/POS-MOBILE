@@ -118,7 +118,7 @@ class _EditItemsScreenState extends State<EditItemsScreen> {
     );
 
     const iconMap = {
-      'DEALS': 'assets/images/DealS.png',
+      'DEALS': 'assets/images/deals.png',
       'PIZZA': 'assets/images/PizzasS.png',
       'PIZZAS': 'assets/images/PizzasS.png',
       'CALZONE': 'assets/images/CalzonesS.png',

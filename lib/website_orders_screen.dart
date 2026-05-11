@@ -1335,7 +1335,9 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
     } else if (cleanCategory.contains('WING')) {
       return 'assets/images/Wings.png';
     } else if (cleanCategory.contains('DEAL')) {
-      return 'assets/images/DealsS.png';
+      return 'assets/images/deals.png';
+    } else if (cleanCategory.contains('COFFEE')) {
+      return 'assets/images/Coffee.png';
     }
 
     // Exact matches as fallback
@@ -1372,7 +1374,9 @@ class _WebsiteOrdersScreenState extends State<WebsiteOrdersScreen> {
       case 'WINGS':
         return 'assets/images/Wings.png';
       case 'DEALS':
-        return 'assets/images/DealsS.png';
+        return 'assets/images/deals.png';
+      case 'COFFEE':
+        return 'assets/images/Coffee.png';
       case 'GENERAL':
       default:
         print(

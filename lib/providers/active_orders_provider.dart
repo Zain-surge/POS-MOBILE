@@ -153,6 +153,21 @@ class ActiveOrdersProvider with ChangeNotifier {
     _processIncomingOrder(updatedOrder);
   }
 
+  void removeOrderById(int orderId) {
+    final existingIndex = _activeOrders.indexWhere(
+      (order) => order.orderId == orderId,
+    );
+
+    if (existingIndex == -1) {
+      return;
+    }
+
+    _cancelScheduledUpdatesForOrder(orderId);
+    _activeOrders.removeAt(existingIndex);
+    _calculateAndUpdateCountsWithLogging(true, orderId);
+    notifyListeners();
+  }
+
   Future<void> _fetchAndListenToOrders() async {
     try {
       _isLoading = true;

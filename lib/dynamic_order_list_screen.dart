@@ -643,7 +643,9 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
       case 'WINGS':
         return 'assets/images/Wings.png';
       case 'DEALS':
-        return 'assets/images/DealsS.png';
+        return 'assets/images/deals.png';
+      case 'COFFEE':
+        return 'assets/images/Coffee.png';
       default:
         return 'assets/images/default.png';
     }
@@ -917,7 +919,14 @@ class _DynamicOrderListScreenState extends State<DynamicOrderListScreen>
             liveSelectedOrder = updatedOrder;
             // Update the internal _selectedOrder for tap handling
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (_selectedOrder?.orderId != liveSelectedOrder?.orderId) {
+              final selectedNeedsUpdate =
+                  _selectedOrder?.orderId != liveSelectedOrder?.orderId ||
+                  _selectedOrder?.status != liveSelectedOrder?.status ||
+                  _selectedOrder?.driverId != liveSelectedOrder?.driverId ||
+                  _selectedOrder?.paidStatus != liveSelectedOrder?.paidStatus ||
+                  _selectedOrder?.paymentType != liveSelectedOrder?.paymentType;
+
+              if (mounted && selectedNeedsUpdate) {
                 setState(() {
                   _selectedOrder = liveSelectedOrder;
                 });

@@ -246,13 +246,34 @@ class OrderProvider extends ChangeNotifier {
           oldOrder.status != newOrder.status ||
           oldOrder.orderTotalPrice != newOrder.orderTotalPrice ||
           oldOrder.items.length != newOrder.items.length ||
-          oldOrder.driverId != newOrder.driverId) {
+          oldOrder.driverId != newOrder.driverId ||
+          oldOrder.paidStatus != newOrder.paidStatus ||
+          oldOrder.paymentType != newOrder.paymentType) {
         // Added driverId comparison
         return true;
       }
     }
 
     return false;
+  }
+
+  void updateOrderPaymentStatus({
+    required int orderId,
+    required String paymentType,
+    required bool paidStatus,
+  }) {
+    final index = _websiteOrders.indexWhere(
+      (order) => order.orderId == orderId,
+    );
+    if (index == -1) {
+      return;
+    }
+
+    _websiteOrders[index] = _websiteOrders[index].copyWith(
+      paymentType: paymentType,
+      paidStatus: paidStatus,
+    );
+    notifyListeners();
   }
 
   // Method to update a single order's status and refresh the list

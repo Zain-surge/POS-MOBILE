@@ -2867,6 +2867,8 @@ class _Page4State extends State<Page4> {
         return 'assets/images/MilkshakeS.png';
       case 'DIPS':
         return 'assets/images/DipsS.png';
+      case 'COFFEE':
+        return 'assets/images/Coffee.png';
       // case 'DESSERTS':
       //   return 'assets/images/Desserts.png';
       // case 'CHICKEN':

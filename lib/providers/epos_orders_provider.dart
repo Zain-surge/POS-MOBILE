@@ -34,7 +34,7 @@ class EposOrdersProvider extends ChangeNotifier {
   void dispose() {
     // Set disposed flag first to prevent any callbacks from triggering notifications
     _isDisposed = true;
-    
+
     // Remove connectivity listener first before stopping polling
     try {
       ConnectivityService().removeSyncCompletionListener(_onSyncCompleted);
@@ -42,10 +42,10 @@ class EposOrdersProvider extends ChangeNotifier {
       print('⚠️ EposOrdersProvider: Error removing connectivity listener: $e');
       // Continue with disposal even if listener removal fails
     }
-    
+
     // Stop polling after removing listener
     _stopPolling();
-    
+
     super.dispose();
   }
 
@@ -89,14 +89,16 @@ class EposOrdersProvider extends ChangeNotifier {
   void _onSyncCompleted() {
     // Double-check disposal status for extra safety
     if (_isDisposed) {
-      print('⚠️ EposOrdersProvider: _onSyncCompleted called after disposal - ignoring');
+      print(
+        '⚠️ EposOrdersProvider: _onSyncCompleted called after disposal - ignoring',
+      );
       return;
     }
-    
+
     print(
       '🔄 EposOrdersProvider: Sync completed, triggering immediate refresh...',
     );
-    
+
     // Additional safety check before calling _fetchOrdersQuietly
     try {
       _fetchOrdersQuietly();
@@ -205,11 +207,13 @@ class EposOrdersProvider extends ChangeNotifier {
     // Create maps for efficient comparison
     Map<int, String> oldOrderStatus = {
       for (var order in oldOrders)
-        order.orderId: '${order.status}_${order.driverId ?? 0}',
+        order.orderId:
+            '${order.status}_${order.driverId ?? 0}_${order.paidStatus}_${order.paymentType}',
     };
     Map<int, String> newOrderStatus = {
       for (var order in newOrders)
-        order.orderId: '${order.status}_${order.driverId ?? 0}',
+        order.orderId:
+            '${order.status}_${order.driverId ?? 0}_${order.paidStatus}_${order.paymentType}',
     };
 
     // Check for status or driver changes
@@ -386,6 +390,25 @@ class EposOrdersProvider extends ChangeNotifier {
       );
       if (!_isDisposed) notifyListeners();
     }
+  }
+
+  void updateOrderPaymentStatus({
+    required int orderId,
+    required String paymentType,
+    required bool paidStatus,
+  }) {
+    final orderIndex = _allOrders.indexWhere(
+      (order) => order.orderId == orderId,
+    );
+    if (orderIndex == -1) {
+      return;
+    }
+
+    _allOrders[orderIndex] = _allOrders[orderIndex].copyWith(
+      paymentType: paymentType,
+      paidStatus: paidStatus,
+    );
+    if (!_isDisposed) notifyListeners();
   }
 
   Future<bool> updateOrderStatus(int orderId, String newStatus) async {

@@ -222,6 +222,34 @@ class Order {
       return value.toString();
     }
 
+    bool parseBool(dynamic value, {bool defaultValue = false}) {
+      if (value == null) return defaultValue;
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      if (value is String) {
+        final normalizedValue = value.trim().toLowerCase();
+        if (['true', '1', 'yes', 'y', 't', 'paid'].contains(normalizedValue)) {
+          return true;
+        }
+        if ([
+          'false',
+          '0',
+          'no',
+          'n',
+          'f',
+          'unpaid',
+          '',
+        ].contains(normalizedValue)) {
+          return false;
+        }
+      }
+
+      print(
+        'Warning: Unexpected type/value for Order paid_status: ${value.runtimeType}. Value: $value',
+      );
+      return defaultValue;
+    }
+
     // Helper to parse discount_details (which might be JSON string, object, or text)
     Map<String, dynamic>? parseDiscountDetails(dynamic discountDetails) {
       if (discountDetails == null) return null;
@@ -358,9 +386,9 @@ class Order {
               .toList() ??
           [],
       driverId: json['driver_id'] as int?,
-      paidStatus:
-          json['paid_status'] as bool? ??
-          false, // Default to unpaid if not specified, so orders show in active list
+      paidStatus: parseBool(
+        json['paid_status'],
+      ), // Default to unpaid if not specified, so orders show in active list
     );
 
     return parsedOrder;

@@ -451,7 +451,9 @@ class ApiService {
     try {
       return await getUnifiedSalesReport(periodType: 'today');
     } catch (e) {
-      print("getTodaysReport: Unified endpoint failed, falling back to legacy: $e");
+      print(
+        "getTodaysReport: Unified endpoint failed, falling back to legacy: $e",
+      );
     }
 
     // Fallback to legacy endpoint
@@ -468,14 +470,19 @@ class ApiService {
     print("getTodaysReport: Fallback URL: $url");
 
     try {
-      final response = await http.get(url, headers: BrandInfo.getDefaultHeaders());
+      final response = await http.get(
+        url,
+        headers: BrandInfo.getDefaultHeaders(),
+      );
       print("getTodaysReport: Response Code: ${response.statusCode}");
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         print("getTodaysReport: Success - Data keys: ${data.keys.toList()}");
         return data;
       } else {
-        throw Exception("Failed to load today's report: ${response.statusCode}");
+        throw Exception(
+          "Failed to load today's report: ${response.statusCode}",
+        );
       }
     } catch (e) {
       print("getTodaysReport: Exception: $e");
@@ -497,7 +504,10 @@ class ApiService {
 
     print("getUnifiedSalesReport: URL: $url");
 
-    final response = await http.get(url, headers: BrandInfo.getDefaultHeaders());
+    final response = await http.get(
+      url,
+      headers: BrandInfo.getDefaultHeaders(),
+    );
     print("getUnifiedSalesReport: Response Code: ${response.statusCode}");
 
     if (response.statusCode == 200) {

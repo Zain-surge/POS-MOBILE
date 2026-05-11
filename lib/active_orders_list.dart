@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:epos/models/order.dart';
 import 'package:provider/provider.dart';
 import 'package:epos/providers/active_orders_provider.dart';
+import 'package:epos/providers/epos_orders_provider.dart';
+import 'package:epos/providers/website_orders_provider.dart';
 import 'package:epos/services/thermal_printer_service.dart';
 import 'package:epos/services/custom_popup_service.dart';
 import 'package:epos/services/api_service.dart';
@@ -140,12 +142,24 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
     Provider.of<ActiveOrdersProvider>(context, listen: false).refreshOrders();
   }
 
+  bool _shouldShowPaymentType(String paymentType) {
+    final normalizedPaymentType = paymentType.trim().toLowerCase();
+    return normalizedPaymentType.isNotEmpty &&
+        normalizedPaymentType != 'unpaid' &&
+        normalizedPaymentType != 'n/a';
+  }
+
+  String _paymentTypeForSelection(String paymentType) {
+    return _shouldShowPaymentType(paymentType) ? paymentType : '';
+  }
+
   String _getCategoryIcon(String categoryName) {
     switch (categoryName.toUpperCase()) {
       case 'DEALS':
         return 'assets/images/deals.png';
       case 'PIZZA':
         return 'assets/images/PizzasS.png';
+      case 'SHAWARMA':
       case 'SHAWARMAS':
         return 'assets/images/ShawarmaS.png';
       case 'BURGERS':
@@ -174,6 +188,8 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
         return 'assets/images/Kebabs.png';
       case 'WINGS':
         return 'assets/images/Wings.png';
+      case 'COFFEE':
+        return 'assets/images/Coffee.png';
       default:
         return 'assets/images/default.png';
     }
@@ -223,7 +239,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                     const SizedBox(height: 8),
                     // Subtitle
                     Text(
-                      'Mark Order #${order.orderId} as paid?',
+                      'Mark Order #${order.displayOrderNumber} as paid?',
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey.shade600,
@@ -319,7 +335,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
     setState(() {
       _selectedOrder = order;
       _showCartView = true;
-      _selectedPaymentType = order.paymentType; // Use existing payment type
+      _selectedPaymentType = _paymentTypeForSelection(order.paymentType);
     });
   }
 
@@ -353,12 +369,16 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                 },
               ),
               const SizedBox(width: 10),
-              Text(
-                'Order #${_selectedOrder!.orderId} - ${_selectedOrder!.customerName}',
-                style: TextStyle(
-                  fontSize: isLargeScreen ? 22 : 20,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Poppins',
+              Expanded(
+                child: Text(
+                  'Order #${_selectedOrder!.displayOrderNumber} - ${_selectedOrder!.customerName}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: isLargeScreen ? 22 : 20,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Poppins',
+                  ),
                 ),
               ),
             ],
@@ -788,14 +808,18 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                   children: [
                     Icon(Icons.discount, size: isLargeScreen ? 22 : 20),
                     const SizedBox(width: 8),
-                    Text(
-                      _appliedDiscountPercentage > 0
-                          ? 'Discount (${_appliedDiscountPercentage.toStringAsFixed(0)}%)'
-                          : 'Add Discount',
-                      style: TextStyle(
-                        fontSize: isLargeScreen ? 16 : 14,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'Poppins',
+                    Flexible(
+                      child: Text(
+                        _appliedDiscountPercentage > 0
+                            ? 'Discount (${_appliedDiscountPercentage.toStringAsFixed(0)}%)'
+                            : 'Add Discount',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: isLargeScreen ? 16 : 14,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Poppins',
+                        ),
                       ),
                     ),
                   ],
@@ -808,7 +832,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
             Expanded(
               child: ElevatedButton(
                 onPressed:
-                    _selectedPaymentType.isNotEmpty
+                    _shouldShowPaymentType(_selectedPaymentType)
                         ? () {
                           setState(() {
                             _showPayment = true;
@@ -817,7 +841,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                         : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor:
-                      _selectedPaymentType.isNotEmpty
+                      _shouldShowPaymentType(_selectedPaymentType)
                           ? Colors.black
                           : Colors.grey.shade400,
                   foregroundColor: Colors.white,
@@ -834,12 +858,16 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                   children: [
                     Icon(Icons.arrow_forward, size: isLargeScreen ? 22 : 20),
                     const SizedBox(width: 8),
-                    Text(
-                      'Proceed to Payment',
-                      style: TextStyle(
-                        fontSize: isLargeScreen ? 16 : 14,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'Poppins',
+                    Flexible(
+                      child: Text(
+                        'Proceed to Payment',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: isLargeScreen ? 16 : 14,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Poppins',
+                        ),
                       ),
                     ),
                   ],
@@ -905,14 +933,53 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
       customerDetails: customerDetails,
       paymentType: _selectedPaymentType,
       onPaymentConfirmed: (PaymentDetails paymentDetails) async {
+        final orderBeingPaid = _selectedOrder;
+        if (orderBeingPaid == null) return;
+
+        final activeOrdersProvider = Provider.of<ActiveOrdersProvider>(
+          context,
+          listen: false,
+        );
+
         try {
           // Call the API to mark order as paid after payment completion
           bool success = await ApiService.markOrderAsPaid(
-            _selectedOrder!.orderId,
+            orderBeingPaid.orderId,
+            paymentType: paymentDetails.paymentType,
+            paidStatus: paymentDetails.paidStatus,
           );
 
+          if (!mounted) return;
+
           if (success) {
-            // Reset state and refresh orders
+            final updatedOrder = orderBeingPaid.copyWith(
+              paymentType: paymentDetails.paymentType,
+              paidStatus: paymentDetails.paidStatus,
+            );
+
+            if (paymentDetails.paidStatus) {
+              activeOrdersProvider.removeOrderById(orderBeingPaid.orderId);
+            } else {
+              activeOrdersProvider.handleManualOrderUpdate(updatedOrder);
+            }
+            Provider.of<OrderProvider>(
+              context,
+              listen: false,
+            ).updateOrderPaymentStatus(
+              orderId: orderBeingPaid.orderId,
+              paymentType: paymentDetails.paymentType,
+              paidStatus: paymentDetails.paidStatus,
+            );
+            Provider.of<EposOrdersProvider>(
+              context,
+              listen: false,
+            ).updateOrderPaymentStatus(
+              orderId: orderBeingPaid.orderId,
+              paymentType: paymentDetails.paymentType,
+              paidStatus: paymentDetails.paidStatus,
+            );
+
+            // Return to the list after the provider removes/updates the order.
             setState(() {
               _showCartView = false;
               _showPayment = false;
@@ -921,9 +988,6 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
               _selectedPaymentType = '';
               _appliedDiscountPercentage = 0.0;
             });
-
-            // Refresh the orders list
-            refreshOrders();
 
             CustomPopupService.show(
               context,
@@ -938,6 +1002,8 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
             );
           }
         } catch (e) {
+          if (!mounted) return;
+
           print('Error marking order as paid after payment: $e');
           CustomPopupService.show(
             context,
@@ -1481,7 +1547,10 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
   @override
   Widget build(BuildContext context) {
     final activeOrdersProvider = Provider.of<ActiveOrdersProvider>(context);
-    final List<Order> activeOrders = activeOrdersProvider.activeOrders;
+    final List<Order> activeOrders =
+        activeOrdersProvider.activeOrders
+            .where((order) => !order.paidStatus)
+            .toList();
     final bool isLoadingOrders = activeOrdersProvider.isLoading;
     final String? errorLoadingOrders = activeOrdersProvider.error;
 
@@ -1584,7 +1653,7 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                             ),
                           ),
                           Text(
-                            'Order no. ${_selectedOrder!.orderId}',
+                            'Order no. ${_selectedOrder!.displayOrderNumber}',
                             style: TextStyle(
                               fontSize: isLargeScreen ? 19 : 17,
                               fontWeight: FontWeight.normal,
@@ -1941,23 +2010,27 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                 Column(
                   children: [
                     // Payment Type Row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Payment Type:',
-                          style: TextStyle(fontSize: isLargeScreen ? 20 : 18),
-                        ),
-                        Text(
-                          _selectedOrder!.paymentType,
-                          style: TextStyle(
-                            fontSize: isLargeScreen ? 20 : 18,
-                            fontWeight: FontWeight.bold,
+                    if (_shouldShowPaymentType(
+                      _selectedOrder!.paymentType,
+                    )) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Payment Type:',
+                            style: TextStyle(fontSize: isLargeScreen ? 20 : 18),
                           ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: isLargeScreen ? 18 : 13),
+                          Text(
+                            _selectedOrder!.paymentType,
+                            style: TextStyle(
+                              fontSize: isLargeScreen ? 20 : 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: isLargeScreen ? 18 : 13),
+                    ],
 
                     // Total and Change Due Box with Printer Icon
                     Row(
@@ -2179,15 +2252,23 @@ class _ActiveOrdersListState extends State<ActiveOrdersList> {
                                     borderRadius: BorderRadius.circular(35),
                                   ),
                                   alignment: Alignment.center,
-                                  child: Text(
-                                    '#${order.orderId}',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                      fontFamily: 'Poppins',
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
                                     ),
-                                    textAlign: TextAlign.center,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        '#${order.displayOrderNumber}',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                          fontFamily: 'Poppins',
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 15),

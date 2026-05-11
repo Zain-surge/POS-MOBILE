@@ -1556,8 +1556,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     if (_selectedSize != null &&
         widget.foodItem.effectivePosPrice.containsKey(_selectedSize)) {
       price = widget.foodItem.effectivePosPrice[_selectedSize] ?? 0.0;
-    } else if (widget.foodItem.effectivePosPrice.keys.length == 1 &&
-        widget.foodItem.effectivePosPrice.isNotEmpty) {
+    } else if (widget.foodItem.effectivePosPrice.isNotEmpty) {
+      // No size selected yet — fall back to the first available price
       price = widget.foodItem.effectivePosPrice.values.first;
     } else {
       debugPrint("No valid size selected or price not found");
@@ -1920,34 +1920,6 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       );
       return;
     }
-
-    bool kidsMealNeedsDrink =
-        widget.foodItem.category == 'KidsMeal' &&
-        widget.foodItem.name.toLowerCase().contains('drink');
-
-    if ((_makeItAMeal || kidsMealNeedsDrink) && _selectedDrink == null) {
-      CustomPopupService.show(
-        context,
-        'Please select a drink for your meal',
-        type: PopupType.failure,
-      );
-      return;
-    }
-
-    if ((_drinkFlavors.containsKey(widget.foodItem.name) &&
-            _selectedDrinkFlavor == null) ||
-        (_makeItAMeal &&
-            _selectedDrink != null &&
-            _drinkFlavors.containsKey(_selectedDrink!) &&
-            _selectedDrinkFlavor == null)) {
-      CustomPopupService.show(
-        context,
-        'Please select a flavour fpr your drink',
-        type: PopupType.failure,
-      );
-      return;
-    }
-
     final List<String> selectedOptions = [];
 
     // Only show size for non-deal items (deals handle sizing differently)
@@ -3337,44 +3309,12 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       1500.0,
     );
 
-    bool kidsMealNeedsDrinkForValidation =
-        widget.foodItem.category == 'KidsMeal' &&
-        widget.foodItem.name.toLowerCase().contains('drink');
-
+    // Only Deals have mandatory option selection; all other items can be added freely
+    // However, size selection is mandatory if multiple sizes are available.
     bool canConfirmSelection = true;
-    if ((widget.foodItem.effectivePosPrice.keys.length > 1 &&
-            _selectedSize == null) ||
-        (_makeItAMeal && _selectedDrink == null) ||
-        (kidsMealNeedsDrinkForValidation && _selectedDrink == null) ||
-        (_makeItAMeal &&
-            _selectedDrink != null &&
-            _drinkFlavors.containsKey(_selectedDrink!) &&
-            _selectedDrinkFlavor == null) ||
-        (kidsMealNeedsDrinkForValidation &&
-            _selectedDrink != null &&
-            _drinkFlavors.containsKey(_selectedDrink!) &&
-            _selectedDrinkFlavor == null)) {
+    if (widget.foodItem.effectivePosPrice.keys.length > 1 &&
+        _selectedSize == null) {
       canConfirmSelection = false;
-    }
-    if ((_drinkFlavors.containsKey(widget.foodItem.name) &&
-        _selectedDrinkFlavor == null)) {
-      canConfirmSelection = false;
-    }
-
-    // Burger validation (for regular Burgers category, not deals)
-    if (widget.foodItem.category == 'Burgers') {
-      // Check if sauce is selected (including "No Sauce")
-      bool sauceSelected = _selectedSauces.isNotEmpty || _noSauce;
-
-      // If no sauce is selected, validation fails
-      if (!sauceSelected) {
-        canConfirmSelection = false;
-        debugPrint("🔍 BURGER VALIDATION FAILED: No sauce option selected");
-      }
-
-      debugPrint(
-        "🔍 BURGER VALIDATION: sauceSelected=$sauceSelected, canConfirm=$canConfirmSelection",
-      );
     }
 
     // Deal validation - ensure all required selections are made
