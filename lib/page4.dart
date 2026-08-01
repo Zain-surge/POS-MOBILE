@@ -4367,6 +4367,8 @@ class _Page4State extends State<Page4> {
                     List<String> saladOptions = [];
                     String? selectedSeasoning;
                     bool hasOptions = false;
+                    final String cartItemNameLower =
+                        item.foodItem.name.toLowerCase();
 
                     if (item.selectedOptions?.isNotEmpty ?? false) {
                       hasOptions = true;
@@ -4394,9 +4396,10 @@ class _Page4State extends State<Page4> {
                             }
                           }
                         } else if (lowerOption.contains('crust:')) {
-                          // Skip individual crust extraction for Pizza Offers - it's handled in deal formatting
-                          if (item.foodItem.name.toLowerCase() !=
-                              'pizza offers') {
+                          // Skip deal pizza crusts; they are already included in Selected Pizzas.
+                          if (cartItemNameLower != 'pizza offers' &&
+                              cartItemNameLower != 'wednesday special' &&
+                              cartItemNameLower != 'meal deal') {
                             String crust = option.split(':').last.trim();
                             if (crust.toLowerCase() != 'normal') {
                               selectedCrust = crust;

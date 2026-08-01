@@ -168,6 +168,51 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   final Map<String, String?> _dealSelections = {};
   final Map<String, Set<String>> _dealMultiSelections = {};
 
+  String _normalizedDealName([String? dealName]) =>
+      (dealName ?? widget.foodItem.name).toLowerCase();
+
+  bool _isMealDealName([String? dealName]) =>
+      _normalizedDealName(dealName) == 'meal deal';
+
+  bool _isWednesdaySpecialDealName([String? dealName]) =>
+      _normalizedDealName(dealName) == 'wednesday special';
+
+  bool _isTwoPizzaCanDealName([String? dealName]) =>
+      _isWednesdaySpecialDealName(dealName) || _isMealDealName(dealName);
+
+  String _getTwoPizzaCanDealPizzaBase([String? dealName]) =>
+      _isMealDealName(dealName) ? 'Pizza (10")' : 'Pizza (12")';
+
+  List<String> _getTwoPizzaCanDealPizzaSections([String? dealName]) {
+    final pizzaBase = _getTwoPizzaCanDealPizzaBase(dealName);
+    return ['$pizzaBase 1', '$pizzaBase 2'];
+  }
+
+  String _getTwoPizzaCanDealSizeDisplay([String? dealName]) =>
+      _isMealDealName(dealName) ? '10 Inch' : '12 Inch';
+
+  double _getTwoPizzaCanDealStuffedCrustCost([String? dealName]) =>
+      _isMealDealName(dealName) ? 1.5 : 2.5;
+
+  List<String> _getTwoPizzaCanDealIncludedSides([String? dealName]) {
+    if (_isMealDealName(dealName)) {
+      return ['Portion of Potato Wedges'];
+    }
+
+    return ['1 Garlic Bread'];
+  }
+
+  List<String> _getTwoPizzaCanDealPizzaOptions(List<String> pizzaOptions) {
+    return pizzaOptions.where((pizza) {
+      final lowerName = pizza.toLowerCase();
+      return !lowerName.contains('create your own') &&
+          !lowerName.contains('4\u00a3') &&
+          !lowerName.contains('4 \u00a3') &&
+          !lowerName.contains('4Â£') &&
+          !lowerName.contains('4 Â£');
+    }).toList();
+  }
+
   // Method to get all pizza flavours from the actual menu items
   List<String> _getPizzaFlavoursFromMenu() {
     return widget.allFoodItems
@@ -498,14 +543,17 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           print(
             '🔍 AFTER PIZZA OFFERS PARSING - Final multi-selections: $_dealMultiSelections',
           );
-        } else if (widget.foodItem.name.toLowerCase() == 'wednesday special' &&
+        } else if (_isTwoPizzaCanDealName(widget.foodItem.name) &&
             item.selectedOptions != null) {
-          print('dY"? WEDNESDAY SPECIAL PARSING');
+          print('TWO PIZZA CAN DEAL PARSING: ${widget.foodItem.name}');
           _dealSelections.clear();
           _dealMultiSelections.clear();
-          _parseWednesdaySpecialEditingOptions(item.selectedOptions!);
+          _parseTwoPizzaCanDealEditingOptions(
+            item.selectedOptions!,
+            widget.foodItem.name,
+          );
           print(
-            'dY"? AFTER WEDNESDAY SPECIAL PARSING - Final selections: $_dealSelections',
+            'AFTER TWO PIZZA CAN DEAL PARSING - Final selections: $_dealSelections',
           );
         }
         // Convert consolidated cart options back to modal structure for editing
@@ -1461,9 +1509,17 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     print('🔍 PIZZA OFFERS SET DEFAULT TAB: $_selectedDealCategory');
   }
 
-  void _parseWednesdaySpecialEditingOptions(List<String> selectedOptions) {
+  void _parseTwoPizzaCanDealEditingOptions(
+    List<String> selectedOptions,
+    String dealName,
+  ) {
     _dealSelections.clear();
     _dealMultiSelections.clear();
+    final pizzaSections = _getTwoPizzaCanDealPizzaSections(dealName);
+    final includedSides =
+        _getTwoPizzaCanDealIncludedSides(
+          dealName,
+        ).map((side) => side.toLowerCase()).toSet();
 
     for (String option in selectedOptions) {
       final String trimmedOption = option.trim();
@@ -1474,11 +1530,11 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         continue;
       }
 
-      if (lowerOption.startsWith('1 garlic bread')) {
+      if (includedSides.contains(lowerOption)) {
         continue;
       }
 
-      // CRITICAL FIX: Skip chips seasoning - not part of Wednesday Special
+      // Skip chips seasoning - these deals only use fixed included sides.
       if (lowerOption.contains('chips seasoning') ||
           lowerOption.contains('seasoning')) {
         continue;
@@ -1506,7 +1562,7 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         }
 
         for (int i = 0; i < pizzas.length && i < 2; i++) {
-          final String sectionName = 'Pizza (12") ${i + 1}';
+          final String sectionName = pizzaSections[i];
           final String pizzaInfo = pizzas[i];
 
           final RegExp regExp = RegExp(r'^(.+?)\s*\(Crust:\s*(.+?)\)$');
@@ -1534,12 +1590,12 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       }
     }
 
-    for (int i = 1; i <= 2; i++) {
-      final String crustKey = 'Pizza (12") $i - Crust';
+    for (final sectionName in pizzaSections) {
+      final String crustKey = '$sectionName - Crust';
       _dealSelections[crustKey] ??= 'Normal';
     }
 
-    _selectedDealCategory = 'Pizza (12") 1';
+    _selectedDealCategory = pizzaSections.first;
   }
 
   double _calculatePricePerUnit() {
@@ -1811,21 +1867,25 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       price += crustCost;
       debugPrint("Pizza Offers crust cost: $crustCost, total price: $price");
     } else if (widget.foodItem.category == 'Deals' &&
-        widget.foodItem.name.toLowerCase() == 'wednesday special') {
+        _isTwoPizzaCanDealName(widget.foodItem.name)) {
       double crustCost = 0.0;
 
-      for (int i = 1; i <= 2; i++) {
-        String crustKey = 'Pizza (12") $i - Crust';
+      for (final sectionName in _getTwoPizzaCanDealPizzaSections(
+        widget.foodItem.name,
+      )) {
+        String crustKey = '$sectionName - Crust';
         String? selectedCrust = _dealSelections[crustKey];
 
         if (selectedCrust == 'Stuffed') {
-          crustCost += 2.5;
+          crustCost += _getTwoPizzaCanDealStuffedCrustCost(
+            widget.foodItem.name,
+          );
         }
       }
 
       price += crustCost;
       debugPrint(
-        "Wednesday Special crust cost: $crustCost, total price: $price",
+        "${widget.foodItem.name} crust cost: $crustCost, total price: $price",
       );
     }
 
@@ -1895,7 +1955,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           dealName == 'family meal' ||
           dealName == 'combo meal' ||
           dealName == 'pizza offers' ||
-          dealName == 'wednesday special') {
+          dealName == 'wednesday special' ||
+          dealName == 'meal deal') {
         return false; // These deals don't need chips seasoning
       }
       // For other deals that might have chips, return true
@@ -2405,13 +2466,16 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         }
 
         selectedOptions.addAll(formattedItems);
-      } else if (widget.foodItem.name.toLowerCase() == 'wednesday special') {
+      } else if (_isTwoPizzaCanDealName(widget.foodItem.name)) {
         List<String> formattedItems = [];
-        formattedItems.add('Size : 12 Inch');
+        formattedItems.add(
+          'Size : ${_getTwoPizzaCanDealSizeDisplay(widget.foodItem.name)}',
+        );
 
         List<String> selectedPizzas = [];
-        for (int i = 1; i <= 2; i++) {
-          String sectionName = 'Pizza (12") $i';
+        for (final sectionName in _getTwoPizzaCanDealPizzaSections(
+          widget.foodItem.name,
+        )) {
           String? selectedPizza = _dealSelections[sectionName];
           if (selectedPizza != null) {
             String? selectedCrust = _dealSelections['$sectionName - Crust'];
@@ -2427,7 +2491,9 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           formattedItems.add('Selected Pizzas: ${selectedPizzas.join(', ')}');
         }
 
-        formattedItems.add('1 Garlic Bread');
+        formattedItems.addAll(
+          _getTwoPizzaCanDealIncludedSides(widget.foodItem.name),
+        );
 
         String? can1Selection = _dealSelections['Drinks - Can 1'];
         if (can1Selection != null && can1Selection.isNotEmpty) {
@@ -3637,10 +3703,13 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
               }
             }
           }
-        } else if (widget.foodItem.name.toLowerCase() == 'wednesday special') {
-          bool bothPizzasSelected =
-              _dealSelections['Pizza (12") 1'] != null &&
-              _dealSelections['Pizza (12") 2'] != null;
+        } else if (_isTwoPizzaCanDealName(widget.foodItem.name)) {
+          final pizzaSections = _getTwoPizzaCanDealPizzaSections(
+            widget.foodItem.name,
+          );
+          bool bothPizzasSelected = pizzaSections.every(
+            (sectionName) => _dealSelections[sectionName] != null,
+          );
 
           bool bothCansSelected =
               (_dealSelections['Drinks - Can 1'] != null &&
@@ -3651,8 +3720,9 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
           if (!bothPizzasSelected || !bothCansSelected) {
             canConfirmSelection = false;
           } else {
-            _dealSelections['Pizza (12") 1 - Crust'] ??= 'Normal';
-            _dealSelections['Pizza (12") 2 - Crust'] ??= 'Normal';
+            for (final sectionName in pizzaSections) {
+              _dealSelections['$sectionName - Crust'] ??= 'Normal';
+            }
             if (_dealSelections['Drinks - Can 1'] == null &&
                 _dealSelections['Drinks'] != null) {
               final selectedDrinks =
@@ -4793,8 +4863,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
       );
     }
 
-    // Special handling for Wednesday Special
-    if (widget.foodItem.name.toLowerCase() == 'wednesday special') {
+    // Special handling for two-pizza can deals
+    if (_isTwoPizzaCanDealName(widget.foodItem.name)) {
       return _buildWednesdaySpecialTabContent(
         _selectedDealCategory,
         dealOptions,
@@ -5574,7 +5644,8 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
     String tabName,
     Map<String, List<String>> dealOptions,
   ) {
-    const pizzaTabs = {'Pizza (12") 1', 'Pizza (12") 2'};
+    final pizzaTabs =
+        _getTwoPizzaCanDealPizzaSections(widget.foodItem.name).toSet();
     if (pizzaTabs.contains(tabName)) {
       final options = dealOptions[tabName] ?? [];
       final crustKey = '$tabName - Crust';
@@ -5790,8 +5861,11 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
   }
 
   List<String> _getDealCategories(Map<String, List<String>> dealOptions) {
-    if (widget.foodItem.name.toLowerCase() == 'wednesday special') {
-      return ['Pizza (12") 1', 'Pizza (12") 2', 'Drinks'];
+    if (_isTwoPizzaCanDealName(widget.foodItem.name)) {
+      return [
+        ..._getTwoPizzaCanDealPizzaSections(widget.foodItem.name),
+        'Drinks',
+      ];
     }
     // Return the actual deal keys as tabs (Pizza 1, Pizza (16"), Shawarma, etc.)
     return dealOptions.keys.toList();
@@ -5895,6 +5969,16 @@ class _FoodItemDetailsModalState extends State<FoodItemDetailsModal> {
         return {
           'Pizza (12") 1': wednesdayPizzaOptions,
           'Pizza (12") 2': wednesdayPizzaOptions,
+          'Drinks': drinkOptions,
+        };
+      case 'meal deal':
+        final mealDealPizzaOptions = _getTwoPizzaCanDealPizzaOptions(
+          pizzaOptions,
+        );
+        final drinkOptions = _getCanDrinkOptionsFromMenu();
+        return {
+          'Pizza (10") 1': mealDealPizzaOptions,
+          'Pizza (10") 2': mealDealPizzaOptions,
           'Drinks': drinkOptions,
         };
       default:
